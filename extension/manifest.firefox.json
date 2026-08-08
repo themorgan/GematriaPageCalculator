@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gematria Page Calculator",
-  "version": "1.0.0",
+  "version": "1.5",
   "description": "Press Ctrl+G (Cmd+G on Mac) to annotate every word on the page with its gematria value, in both English/Latin and Hebrew.",
   "icons": {
     "16": "icons/icon16.png",
