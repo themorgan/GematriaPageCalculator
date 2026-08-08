@@ -27,6 +27,9 @@ confirm this matches the ID AMO assigned on first submission before
 uploading an update — a mismatched ID creates a new listing instead of
 updating the existing one.
 
-**Screenshots:** see `../screenshots/` (none checked in yet).
+**Screenshots:** see `../screenshots/` — one checked in
+(`screenshot - exodus_32_2 - 1280x800.png`).
 
-**Icon:** see `../icon/` (placeholder pending the real artwork).
+**Icon:** see `../icon/icon128.png` (finalized artwork, exported from
+`icon-master.png`). AMO does not use the Chrome Web Store promo tile
+images in `../store-listing/`.

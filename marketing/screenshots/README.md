@@ -1,8 +1,10 @@
 # Screenshots
 
-Store listing screenshots go here (e.g. `chrome-01-exodus-32-2.png`).
+Store listing screenshots go here.
 
-None are checked in yet. The Chrome Web Store wants 1280x800 or 640x400
-PNG/JPEG; AMO accepts similar dimensions. Add the real screenshot files
-here (same channel you used to send the extension icon) and reference them
-from `../store-listing/`.
+- `screenshot - exodus_32_2 - 1280x800.png` — the extension annotating
+  Exodus 32:2 with gematria values, in both Hebrew and English/Latin.
+
+The Chrome Web Store wants 1280x800 or 640x400 PNG/JPEG; AMO accepts
+similar dimensions. Add further screenshot files here the same way and
+reference them from `../store-listing/`.
