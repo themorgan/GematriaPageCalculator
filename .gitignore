@@ -1,0 +1,4 @@
+# Intermediate unpacked build output — regenerate with ./build/build.sh.
+# The packaged .zip/.xpi in dist/ are committed as release artifacts.
+/dist/chrome/
+/dist/firefox/
