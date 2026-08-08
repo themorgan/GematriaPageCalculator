@@ -72,10 +72,16 @@ re-run the build script.
 - **Firefox**: `about:debugging#/runtime/this-firefox` → "Load Temporary
   Add-on…" → select `dist/firefox/manifest.json`.
 
-## Known placeholders
+## Marketing assets
 
-- `extension/icons/*.png` and `marketing/icon/icon-master-PLACEHOLDER.png`
-  are a generated placeholder (purple octagon, "G7"), not the real
-  published icon artwork. Swap in the real source image, regenerate the
-  four icon sizes, and rebuild.
-- `marketing/screenshots/` has no screenshots checked in yet.
+- **Icon**: finalized (purple octagon, "G7" wordmark). Master source is
+  `marketing/icon/icon-master.png` (512x512); `extension/icons/*.png` and
+  `marketing/icon/icon*.png` are the matching 16/32/48/128 exports used by
+  the manifests.
+- **Screenshots**: one checked in under `marketing/screenshots/`
+  (`screenshot - exodus_32_2 - 1280x800.png`). More can be added the same
+  way.
+- **Store promo tiles**: Chrome Web Store marquee (1400x560) and small
+  (440x280) promo tiles are checked in under `marketing/store-listing/`.
+
+See `marketing/README.md` for the full breakdown.

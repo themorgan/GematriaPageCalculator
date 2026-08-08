@@ -26,6 +26,12 @@ text of the current page to insert value labels; it requests no host
 permissions beyond running on the pages the user is already viewing, and
 sends no data anywhere.
 
-**Screenshots:** see `../screenshots/` (none checked in yet).
+**Screenshots:** see `../screenshots/` — one checked in
+(`screenshot - exodus_32_2 - 1280x800.png`).
 
-**Icon:** see `../icon/` (placeholder pending the real artwork).
+**Icon:** see `../icon/icon128.png` (finalized artwork, exported from
+`icon-master.png`).
+
+**Promo tiles:** `Gematria - marquee promo tile.png` (1400x560) and
+`Gematria - small promo title.png` (440x280) are checked in alongside this
+file, for the dashboard's optional marquee/small promo tile upload fields.

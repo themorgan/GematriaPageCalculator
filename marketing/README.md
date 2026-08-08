@@ -8,12 +8,16 @@ stay versioned with the code that shipped them.
 - `screenshots/` — listing screenshots for the Chrome Web Store / AMO
   dashboards.
 - `store-listing/` — draft listing copy (description, category, etc.) for
-  each store's dashboard.
+  each store's dashboard, plus the Chrome Web Store promo tile images.
 
 ## Status
 
-- **Icon**: `icon/icon-master-PLACEHOLDER.png` is a placeholder generated
-  for this packaging pass, not the real published icon. Replace it with
-  the actual source artwork, then regenerate `extension/icons/*.png` (see
-  the top-level README's packaging steps) and rebuild the `.zip`/`.xpi`.
-- **Screenshots**: none checked in yet — see `screenshots/README.md`.
+- **Icon**: finalized. `icon/icon-master.png` (512x512) is the source
+  artwork; `icon/icon16.png`, `icon32.png`, `icon48.png`, and
+  `icon128.png` are the exports, matching the copies under
+  `extension/icons/` that the manifests reference.
+- **Screenshots**: one checked in — see `screenshots/README.md`.
+- **Store promo tiles**: `store-listing/Gematria - marquee promo tile.png`
+  (1400x560) and `store-listing/Gematria - small promo title.png`
+  (440x280) are checked in for the Chrome Web Store dashboard's optional
+  promo image fields.
