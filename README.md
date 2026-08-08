@@ -79,8 +79,3 @@ re-run the build script.
   published icon artwork. Swap in the real source image, regenerate the
   four icon sizes, and rebuild.
 - `marketing/screenshots/` has no screenshots checked in yet.
-- The Firefox `browser_specific_settings.gecko.id` in
-  `extension/manifest.firefox.json` is set to
-  `gematria-page-calculator@westegg.com`. If the add-on is already live on
-  AMO, verify this matches the ID AMO originally assigned before
-  uploading an update.
