@@ -1,0 +1,108 @@
+{
+  "upstream": {
+    "repo": "https://github.com/alex137/BestPractice",
+    "vendored_at": "process/upstream",
+    "commit": "3ab123fa024de5bb11df4f42d5678c38b9af95d0"
+  },
+  "entries": [
+    {
+      "practice": "instructions-file",
+      "upstream_path": "templates/AGENTS.md.template",
+      "local_path": "AGENTS.md",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Instantiated with this repo's real quick-index, build workflow, and file classes. Structure kept identical to the template.",
+      "local_sha256": "6061108641ee755a13e85cbee33403d5d368ce95c3a58e05a7a9dd50eb7cbfd4"
+    },
+    {
+      "practice": "harness-claude-code-pointer",
+      "upstream_path": "templates/harness/claude-code/CLAUDE.md",
+      "local_path": "CLAUDE.md",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Verbatim one-line @AGENTS.md import.",
+      "local_sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    {
+      "practice": "harness-claude-code-settings",
+      "upstream_path": "templates/harness/claude-code/settings.json",
+      "local_path": ".claude/settings.json",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Added one repo-specific allowlist entry (./build/build.sh) beyond the template's baseline commands.",
+      "local_sha256": "71769a5aa231dad55cf19668e57523ab10ee6b56db16d23ff7e87d20bc2a9a96"
+    },
+    {
+      "practice": "harness-claude-code-hook",
+      "upstream_path": "templates/harness/claude-code/hooks/session-start.sh",
+      "local_path": ".claude/hooks/session-start.sh",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Verbatim wrapper.",
+      "local_sha256": "1718079c7b5581a9e26190311453e99cd472c3b4b4e01f0a6fd7f1e0b0aae4f0"
+    },
+    {
+      "practice": "bootstrap",
+      "upstream_path": "templates/bootstrap.sh",
+      "local_path": "tools/bootstrap.sh",
+      "granularity": "file",
+      "status": "local-only",
+      "notes": "No repo-specific apt/python setup needed yet beyond doc_lint's cmarkgfm dependency; add entries here as real sessions hit real gaps (practice 4).",
+      "local_sha256": "fbe3c717d66edd672e5ece3d765242a9ad934c237e36050cf2510b59ca4b1dc4"
+    },
+    {
+      "practice": "repo-map",
+      "upstream_path": "templates/MAP.md.template",
+      "local_path": "MAP.md",
+      "granularity": "file",
+      "status": "local-only",
+      "notes": "Fully instantiated with this repo's subject matter; not a generic artifact to export.",
+      "local_sha256": "a9e732eb065e97ce8a1c4ba70d0ff7aa2b7a2576e9a2267de22ff6c2c73b9ba3"
+    },
+    {
+      "practice": "todo-list",
+      "upstream_path": "templates/TODO.md.template",
+      "local_path": "TODO.md",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Structure and recurring check-in item kept as-is from the template.",
+      "local_sha256": "dcb0c449a24c2e27f7e0c199c0ae209719c8090a7f0ae198fd38ed3de265c0e2"
+    },
+    {
+      "practice": "glossary",
+      "upstream_path": "templates/GLOSSARY.md.template",
+      "local_path": "GLOSSARY.md",
+      "granularity": "file",
+      "status": "local-only",
+      "notes": "Fully instantiated with this repo's domain terms; not a generic artifact to export.",
+      "local_sha256": "09ed3916b6f572adb048829380d333a0791581cceac799457550ee7376c2f2dc"
+    },
+    {
+      "practice": "getting-started",
+      "upstream_path": "templates/GETTING_STARTED.md",
+      "local_path": "GETTING_STARTED.md",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Placeholders replaced with this repo's name/owner; per-assistant section structure kept intact so upstream onboarding improvements propagate on updates.",
+      "local_sha256": "ccef0f4b3f5518586cd618e98995a0583fcf54d68a4f2102c69d9ab69f7a2668"
+    },
+    {
+      "practice": "readme-agent-entry",
+      "upstream_path": "templates/README_AGENT_ENTRY.md.template",
+      "local_path": "README.md",
+      "granularity": "section",
+      "section_marker": "bestpractice-agent-entry:start",
+      "status": "synced",
+      "notes": "Inserted verbatim near the top of README.md, above the existing project description."
+    },
+    {
+      "practice": "github-actions-doc-lint",
+      "upstream_path": "templates/github-actions/doc-lint.yml.template",
+      "local_path": ".github/workflows/bestpractice-docs.yml",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "Verbatim; runs the vendored linter at process/upstream/tools/doc_lint.py.",
+      "local_sha256": "b89c8c858a5dc6f81d037ef7f58afb6974bd68af185782b3d6c4fbc43f59c4f6"
+    }
+  ]
+}

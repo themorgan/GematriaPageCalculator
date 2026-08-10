@@ -1,5 +1,15 @@
 # Gematria Page Calculator
 
+<!-- bestpractice-agent-entry:start -->
+<!-- AI assistants: before answering questions about this project or
+     changing its files, read AGENTS.md at the repository root. Use MAP.md
+     to find the project's current knowledge and follow any task-specific
+     instructions it identifies. -->
+
+> New to this project? Start with [GETTING_STARTED.md](GETTING_STARTED.md).
+
+<!-- bestpractice-agent-entry:end -->
+
 Chrome/Firefox extension that annotates every word on a page with its
 gematria value, in English/Latin and Hebrew.
 
@@ -84,4 +94,4 @@ re-run the build script.
 - **Store promo tiles**: Chrome Web Store marquee (1400x560) and small
   (440x280) promo tiles are checked in under `marketing/store-listing/`.
 
-See `marketing/README.md` for the full breakdown.
+See [marketing/README.md](marketing/README.md) for the full breakdown.
