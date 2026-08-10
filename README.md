@@ -27,6 +27,10 @@ Live listings:
 - Chrome Web Store: https://chromewebstore.google.com/detail/gematria-page-calculator/mcedlmmghbjcclageaodhjbhgidhkngk
 - Firefox Add-ons: https://addons.mozilla.org/en-US/firefox/addon/gematria-page-calculator/
 
+Developer dashboards (sign in to manage/update this listing):
+- Chrome Web Store Developer Dashboard: https://chrome.google.com/webstore/devconsole/
+- Firefox Add-on Developer Hub: https://addons.mozilla.org/en-US/developers/
+
 ## Repo layout
 
 ```
