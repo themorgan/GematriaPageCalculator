@@ -1,0 +1,201 @@
+# Repository instructions — read me first
+
+**Orientation: read `MAP.md` first** — the repository map. It covers the key
+deliverables and indexes which documents back each part of each one.
+
+## Where things are (quick index — check here BEFORE searching the repo)
+
+| Looking for… | Go to |
+|---|---|
+| Canonical names for gematria/extension concepts — use these names, don't invent new ones | [GLOSSARY.md](GLOSSARY.md) |
+| The extension source and its builder | [extension/](extension/), built by [build/build.sh](build/build.sh) |
+| Store packages ready for upload | `dist/` (generated — see [README.md](README.md)) |
+| Marketing/store-listing copy and assets | [marketing/](marketing/) |
+| Open items: analyses, verifications, decisions | [TODO.md](TODO.md) |
+| Practice layer: vendored BestPractice copy, manifest, scrub blocklist | `process/` |
+
+## Extension build workflow
+
+`extension/` is the single source of truth: one shared `content.js` plus one
+manifest per browser (`manifest.chrome.json`, `manifest.firefox.json`) — the
+extension logic is identical between browsers, only manifest metadata
+differs. `build/build.sh` assembles `dist/chrome/` and `dist/firefox/` from
+`extension/` and packages the Chrome `.zip` and Firefox `.xpi`. Never hand-edit
+anything under `dist/` — it is generated and gets wiped (`rm -rf`) on every
+build; edit `extension/` and rebuild.
+
+Bump the `version` field in **both** `extension/manifest.chrome.json` and
+`extension/manifest.firefox.json` before cutting a release, then re-run
+`./build/build.sh`.
+
+### Build-environment gotchas — do NOT rediscover these
+
+- At session start, run `bash tools/bootstrap.sh` before other work (harnesses
+  with a hook mechanism run it automatically — see `process/upstream/templates/harness/`).
+- `build/build.sh` requires the `zip` CLI on PATH to package the `.zip`/`.xpi`.
+
+## Git / workflow
+
+- Develop on a feature branch; open a PR; merge only when the user says so.
+- **Start every thread by merging latest `origin/main` into your branch**;
+  avoid two concurrent threads editing `extension/content.js` or the manifest
+  files at the same time.
+
+### Merging a thread branch (runbook — follow, don't improvise)
+
+Conflicts in shared files are EXPECTED. The fast, safe path:
+
+0. **Capture gate — before the merge, in the thread that did the work**
+   (practice 10): did this thread's work imply anything that must be
+   captured — a document update, a registry entry, a decision record? Fold
+   it now; the thread that built the rationale is the one that knows what to
+   record.
+   **0b. Export gate** (practice 14): did this thread improve a *generic*
+   practice? Fold the abstracted form into `process/upstream/` now, per
+   `process/upstream/INSTALL.md` §3, and run the scrub audit.
+1. Fetch and merge the default branch locally.
+2. Resolve by fixed per-file-class rules (practice 9):
+   - `TODO.md`: **union** of both sides — never drop an entry or a status.
+   - `GLOSSARY.md`: **append-only — keep both sides' additions.**
+   - Same content file edited on both sides (e.g. `extension/content.js`):
+     keep both sides' text; renumber/reconcile the side not yet referenced
+     elsewhere.
+   - **Renumbering is repo-wide:** when sections are renumbered, grep every
+     doc — instructions, map, glossary, TODO, not just the content file
+     itself — for the old numbers and update them in the same commit.
+   - **Generated outputs: never hand-merge.** `dist/` always loses to a
+     rebuild from `extension/`; delete and rebuild rather than resolving
+     conflicts inside it.
+3. Run the audits — **all must pass before the merge commits**:
+   `python3 process/upstream/tools/doc_lint.py` and
+   `python3 process/upstream/tools/practice_audit.py`.
+4. Commit the merge, push, land per this repo's convention.
+
+## Conventions
+
+- **Doc references are links** (practice 11): in-repo docs reference other
+  repo files as relative markdown links, never bare backticked names. New
+  text always links; a thread touching a document fixes the references in
+  the parts it touches.
+- **`≈`, not `~`, for "approximately"** — two stray tildes render as
+  strikethrough on GitHub. Links stay plain markdown: GitHub strips
+  `target=` and most other attributes from raw HTML anchors in rendered
+  docs, so an "open in new tab" link can't work there (*as of 2026-08*).
+  `python3 process/upstream/tools/doc_lint.py`
+  checks these conventions on files changed vs the default branch; run it on
+  what you touch before committing.
+- **Volatile rules carry their dates** (practice 16): a rule that depends
+  on the outside world (an external platform, someone else's algorithm, a
+  tool quirk) carries *as of / verified `<date>`* inline, and a session
+  that re-confirms it updates the date. Old + unverified in a shifting
+  domain = re-verify before relying on it.
+- **Reply convention** (practice 12): every reply that created or modified
+  files ends with a "Files touched" list — branch link + post-merge link +
+  one-line description per file — so the reader can open the work from the
+  chat.
+- **Commits are credited to the human driving the session.** Set the git
+  author to the member's name and GitHub noreply email (ask **before the
+  first commit** if you don't know who you're working for —
+  `git commit --author="Name <ID+user@users.noreply.github.com>"`), and
+  name yourself in a `Co-Authored-By:` trailer. The project's history must
+  show people's contributions as theirs, not as the agent's.
+- **Open each session by catching the member up.** At session start — and
+  any time they ask "what's new?" — fetch the latest default branch and
+  summarize, in plain language, what changed since their last activity. If
+  their in-progress branch has fallen behind, offer to bring it up to date
+  before continuing (ask, don't just do it).
+
+## Working in parallel (multi-member repos)
+
+- **Claim before you start.** When a member takes on a `TODO.md` item (or
+  any sizable change), mark the item claimed — *(claimed: NAME, date,
+  branch)* — as the branch's first commit. Before starting any work, check
+  `TODO.md` claims and the repo's open branches and PRs for overlap with
+  what your member wants; if someone is already on it, say so before
+  duplicating their work.
+- **Flag changes to the people they matter to — inferred, not
+  declared.** Before packaging changes for review, work out who has
+  stakes in the diff and name them in the PR description, requesting
+  their review instead of letting the change ride a routine merge.
+  Nobody has to articulate their sensitivities up front; two sources
+  reveal them:
+  1. **Authorship.** Commits are credited to the humans who drove them
+     (see Conventions), so the history says whose work a diff reworks —
+     substantially rewriting or re-toning text another member authored
+     gets flagged to that member by default.
+  2. **The accumulated list below,** which agents maintain from
+     evidence: when a member pushes back in review, reverts a change, or
+     objects in conversation, that session appends a one-line entry —
+     what this member wants flagged, citing the incident that showed it.
+     Members may seed entries directly, but the list grows mainly by
+     observation.
+
+  (For path-based ownership, GitHub's CODEOWNERS enforces review
+  requests natively — as of 2026-08. The list also covers concerns no
+  path expresses, like tone.)
+- **Warn your own member first.** Before proposing, compare their change
+  against the project's recorded decisions, glossary, and prevailing
+  tone. If it cuts against something already decided or established, tell
+  them — "this conflicts in spirit with X; propose anyway, or discuss?" —
+  rather than packaging it silently. Disagreement then happens in review,
+  on purpose, not by surprise.
+
+### Review sensitivities (accumulated)
+
+<!-- Maintained by agents as evidence accumulates: one line per member
+     per concern, each citing the incident that revealed it. Empty until
+     the first observation — authorship-based flagging works from day one
+     with an empty list. -->
+
+## Administrator requests you must know how to handle
+
+- **"What's waiting for me?"** (or "review pending changes") — the
+  administrator's review loop, entirely in conversation:
+  1. List the open PRs, plus any branches ahead of the default branch
+     with no PR yet. For each: a plain-language summary — what changed,
+     who drove it, and any hits against the review sensitivities or the
+     spirit check (see Working in parallel).
+  2. Point out proposals that collide with each other; offer to
+     integrate colliding proposals and show the combined result before
+     anything merges.
+  3. Take the verdict in chat — approve (merge, with required checks
+     passing), adjust-then-merge, or send back — and record the
+     reasoning in the PR conversation either way.
+  4. Merge only what the administrator has approved in conversation,
+     unless they have told you a category of change is routine for them.
+- **"Add project members"** — guide the administrator through the whole
+  thing:
+  1. Ask, in one message: the member's GitHub username (or email), what
+     they'll work on, and which AI tool they use (Claude, Codex, ChatGPT,
+     Gemini, Grok, other).
+  2. Give the exact GitHub steps to grant access — for a personal repo:
+     repository **Settings → Collaborators → Add people**. One sentence
+     on the choice: read access lets the member's assistant answer
+     questions; write access lets it propose changes (which still need
+     approval to join the project).
+  3. Generate a short personal welcome message the administrator can
+     paste into email or chat: greet the member by name, one sentence on
+     what the project is, the link to this repository's
+     [GETTING_STARTED.md](GETTING_STARTED.md) naming the section for
+     their tool, and one suggested first task drawn from `TODO.md`.
+  4. Confirm there is nothing else to install or configure — once access
+     exists, the member's Getting Started section is everything they
+     need.
+
+## Practice export — BestPractice (policy)
+
+- `process/upstream/` is a vendored copy of the public BestPractice repo
+  (https://github.com/alex137/BestPractice), tracked in this repo.
+  **Public-safe invariant:** nothing proprietary may appear under
+  `process/upstream/`, ever. `python3 process/upstream/tools/practice_audit.py`
+  enforces this against `process/scrub_blocklist.txt` (this repo has none —
+  it is already fully public) and must pass before committing anything that
+  touches `process/`.
+- This repo is already public (published to the Chrome Web Store and
+  Firefox Add-ons); there is no private vocabulary to guard, so no
+  `process/scrub_blocklist.txt` was created.
+- Export gate = merge runbook step 0b. Periodic check-in per
+  `process/upstream/INSTALL.md` §4 (recurring item in `TODO.md`).
+- `process/manifest.json` is the installed-practices registry; when a
+  practice file changes locally, export + re-baseline, or flip the entry to
+  `diverged`.
