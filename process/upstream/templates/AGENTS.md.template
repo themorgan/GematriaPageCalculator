@@ -81,6 +81,20 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
 
 ## Conventions
 
+- **Sections are ordered by the reader's frequency, not the writer's**
+  (practice 36): a document walking through instructions or rules in
+  multiple sections puts common, everyday content first and rare edge
+  cases / migration scenarios / "if the world changes" contingencies last —
+  unless the subject matter itself dictates a different order. Ask: would
+  most readers have to scroll past this section to reach the one they
+  opened the document for?
+- **PR descriptions come from the diff, not the template** (practice 39):
+  when opening a PR, write "What changed" / "Why" / "Files touched" from
+  what actually happened on this branch. Check a `## Gates` box only when
+  it is actually true for this change — an unchecked box, or a "not
+  applicable" note, is normal and expected. Never check every box, or fill
+  every field with N/A, just to make the form look complete; that looks
+  like verification and isn't.
 - **Doc references are links** (practice 11): in-repo docs reference other
   repo files as relative markdown links, never bare backticked names. New
   text always links; a thread touching a document fixes the references in
@@ -95,11 +109,22 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
 - **Volatile rules carry their dates** (practice 16): a rule that depends
   on the outside world (an external platform, someone else's algorithm, a
   tool quirk) carries *as of / verified `<date>`* inline, and a session
-  that re-confirms it updates the date. Old + unverified in a shifting
+  that re-confirms it updates the date. The date is the contributor's
+  local calendar date, not the agent's system clock — the two can
+  disagree by a day depending on time of day and timezone; ask if it
+  isn't already clear from context. Old + unverified in a shifting
   domain = re-verify before relying on it. Rules about model behavior also
   name the model they were verified on (a model upgrade = re-verify); a
   durable rule records its tenure and exceptions (*in effect since X; N
   exceptions, each under Y*) — its survival record is its authority.
+- **Outward-facing documents use the reader's words** (practice 34): in a
+  README, product page, pitch, or onboarding guide, every term that names a
+  category is either already the reader's word, replaced with a plain
+  equivalent, or glossed inline on first use — never left to a glossary the
+  reader won't open. Jargon usually arrives from the *sources* you just
+  read, so run this as a separate pass after drafting, not while writing.
+  Rule of thumb: if a term can be replaced by a plain description of five
+  words or fewer, it is jargon.
 - **Reply convention** (practice 12): every reply that created or modified
   files ends with a "Files touched" list — branch link + post-merge link +
   one-line description per file — so the reader can open the work from the

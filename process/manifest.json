@@ -2,7 +2,9 @@
   "upstream": {
     "repo": "https://github.com/alex137/BestPractice",
     "vendored_at": "process/upstream",
-    "commit": "3ab123fa024de5bb11df4f42d5678c38b9af95d0"
+    "commit": "47aabda4b44796f2c01591ec9c7e7edf6a1e404d",
+    "synced_from": "47aabda4b44796f2c01591ec9c7e7edf6a1e404d",
+    "_note": "commit = upstream hash last synced (routine upstream sync, recorded 2026-08-20; verified tree-identical)."
   },
   "entries": [
     {
@@ -11,8 +13,8 @@
       "local_path": "AGENTS.md",
       "granularity": "file",
       "status": "synced",
-      "notes": "Instantiated with this repo's real quick-index, build workflow, and file classes. Structure kept identical to the template.",
-      "local_sha256": "6061108641ee755a13e85cbee33403d5d368ce95c3a58e05a7a9dd50eb7cbfd4"
+      "notes": "Instantiated with this repo's real quick-index, build workflow, and file classes. Structure kept identical to the template. 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): propagated the new practice-36 (section ordering), practice-39 (PR-description), and practice-34 (outward-facing documents) Conventions bullets, plus the practice-16 date-source clarification, verbatim.",
+      "local_sha256": "abc6e491f046331c598d9235fd73c1017d1d77923ed14b0460a0f334bb1ca2d3"
     },
     {
       "practice": "harness-claude-code-pointer",
@@ -47,8 +49,8 @@
       "local_path": "tools/bootstrap.sh",
       "granularity": "file",
       "status": "local-only",
-      "notes": "No repo-specific apt/python setup needed yet beyond doc_lint's cmarkgfm dependency; add entries here as real sessions hit real gaps (practice 4).",
-      "local_sha256": "fbe3c717d66edd672e5ece3d765242a9ad934c237e36050cf2510b59ca4b1dc4"
+      "notes": "No repo-specific apt/python setup needed yet beyond doc_lint's cmarkgfm dependency; add entries here as real sessions hit real gaps (practice 4). 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): propagated the new practice-13 upstream-freshness notice (checkin.py fresh) verbatim.",
+      "local_sha256": "1e7eaf321878de65b484da21e71f28b879d5166a95fc41638027aebf1143cd86"
     },
     {
       "practice": "repo-map",
@@ -83,8 +85,8 @@
       "local_path": "GETTING_STARTED.md",
       "granularity": "file",
       "status": "synced",
-      "notes": "Placeholders replaced with this repo's name/owner; per-assistant section structure kept intact so upstream onboarding improvements propagate on updates.",
-      "local_sha256": "ccef0f4b3f5518586cd618e98995a0583fcf54d68a4f2102c69d9ab69f7a2668"
+      "notes": "Placeholders replaced with this repo's name/owner; per-assistant section structure kept intact so upstream onboarding improvements propagate on updates. 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): appended the new practice-37 \"Automatic checks installed for this project\" subsection (doc-lint Actions check + PR template) verbatim.",
+      "local_sha256": "bc248dbab79683bce04806328c96017c29bf4e8d69e118ff4ee2c641483e6a40"
     },
     {
       "practice": "readme-agent-entry",
@@ -103,6 +105,24 @@
       "status": "synced",
       "notes": "Verbatim; runs the vendored linter at process/upstream/tools/doc_lint.py.",
       "local_sha256": "b89c8c858a5dc6f81d037ef7f58afb6974bd68af185782b3d6c4fbc43f59c4f6"
+    },
+    {
+      "practice": "gitignore",
+      "upstream_path": "templates/gitignore.template",
+      "local_path": ".gitignore",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "New template introduced upstream 2026-08-20 (practice 8, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: merged the baseline ignores into this repo's pre-existing .gitignore (which only covered the /dist/chrome/ and /dist/firefox/ build output) rather than replacing it, per the template's own merge instruction.",
+      "local_sha256": "9b1793924637a1683a9a1cad3041bab1b73ccf001757c375d7e8c20bd5ad0989"
+    },
+    {
+      "practice": "pr-template",
+      "upstream_path": "templates/pull_request_template.md.template",
+      "local_path": ".github/pull_request_template.md",
+      "granularity": "file",
+      "status": "synced",
+      "notes": "New template introduced upstream (practice 39, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: copied verbatim, stripping only the template's own top install-instruction comment, same treatment as the readme-agent-entry marker block.",
+      "local_sha256": "dfb6553508415eee3ca84de0c79ad2930f95371e912bfb7c97b7c36e9b88efd4"
     }
   ]
 }

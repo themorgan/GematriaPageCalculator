@@ -23,6 +23,7 @@ that skips them in this repo of all places is the joke writing itself.
 | Phone / ChatGPT / Grok workflows + assistant reliability status | [MOBILE.md](MOBILE.md) |
 | CI checks for shell-less agents (install, require) | [GITHUB_ACTIONS.md](GITHUB_ACTIONS.md) |
 | Upstream open items / roadmap | [TODO.md](TODO.md) |
+| GitAround — the reading view this work spun out | [alex137/GitAround](https://github.com/alex137/GitAround), a separate product since 2026-08-14; a branch here still staging it under proposals/ is superseded, and its documents live there now |
 | Slide-deck engine + deck conventions | [deck/](deck/) — engine [build_deck.py](deck/build_deck.py), practice in [deck/README.md](deck/README.md) |
 | Portable audits | [tools/](tools/) — [doc_lint.py](tools/doc_lint.py), [practice_audit.py](tools/practice_audit.py), [checkin.py](tools/checkin.py) |
 | Skeletons dependent repos instantiate | [templates/](templates/) (+ per-agent adapters in [templates/harness/](templates/harness/)) |
@@ -57,7 +58,15 @@ that skips them in this repo of all places is the joke writing itself.
   never bare backticked filenames. Use `≈`, not `~`, for "approximately".
 - **Volatile rules carry their dates** (practice 16): anything asserted
   here about an external platform or tool carries *as of / verified
-  `<date>`* inline.
+  `<date>`* inline, in the contributor's local calendar date, not the
+  agent's system clock.
+- **Outward-facing documents use the reader's words** (practice 34): this
+  repo's README, [SETUP.md](SETUP.md), and
+  [templates/GETTING_STARTED.md](templates/GETTING_STARTED.md) are read by
+  people who are not developers. Terms that name a category are the
+  reader's word, a plain equivalent, or glossed inline — never left to a
+  glossary. Jargon arrives from the sources a session just read, so run
+  the check as a separate pass after drafting.
 - **Built decks are delivered** ([deck/README.md](deck/README.md)
   convention 3): a session that builds a deck attaches the HTML into the
   conversation as a viewable file in the same reply, and only ever sends
