@@ -3,11 +3,18 @@
 name: BestPractice documentation checks
 
 on:
-  pull_request:
-    paths:
-      - "**/*.md"
-      - "process/upstream/tools/doc_lint.py"
-      - ".github/workflows/bestpractice-docs.yml"
+  # push only, deliberately -- matching the fix applied 2026-09-15 across
+  # this account and to the upstream template (alex137/BestPractice,
+  # templates/github-actions/doc-lint.yml.template). Unlike the other repos
+  # in this pass this repo is PUBLIC, so the fork-PR case below is a real
+  # possibility rather than a formality -- but as of this fix no PR here
+  # has ever come from a fork, and the dual trigger was in the meantime
+  # double-firing every commit to an open PR and again on merge, seconds
+  # apart, on the same tree, for no benefit.
+  #
+  # PUT `pull_request:` BACK IF A PR EVER ARRIVES FROM A FORK -- a fork's
+  # pushes do not fire `push` in the repo being contributed to, so
+  # `pull_request:` is the only trigger that would check it.
   push:
     branches:
       - main
