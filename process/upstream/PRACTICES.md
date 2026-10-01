@@ -1,9 +1,41 @@
-# The practice catalog
+---
+title: The practice catalog (pre-fork)
+kind: record
+status: superseded
+opened: 2026-08-01
+closed: 2026-08-31
+superseded_by: practices/
+audience: anyone reading this repo's practice history
+summary: The single-file, numbered catalogue that phase 1 converted into practices/. Frozen at that conversion; kept for its prose and its numbering, not maintained.
+---
 
-Each practice: the **rule**, **why** (the abstracted incident that motivated
-it — every one of these was learned the expensive way in a real repo), and
-**install** (what a dependent repo does about it). Templates referenced here
-live in `templates/`; tools in `tools/`.
+# The practice catalog (pre-fork)
+
+> **SUPERSEDED, and frozen at 53 practices since 2026-08-31.** This file was
+> the *source* for phase 1's conversion into one file per practice, and it
+> stopped being the catalogue the moment that conversion landed. **The live
+> catalogue is [practices/](practices/)**, indexed by [MAP.md](MAP.md); read
+> a rule with `python3 tools/precedent_show.py SLUG`. Roughly twenty
+> practices minted since the conversion have never appeared here and never
+> will.
+>
+> **Why it is kept rather than deleted.** Every entry here carries prose the
+> per-practice files were split out of, and the numbering (`## 12.`) is cited
+> by `source_practice_number` in every converted file and by
+> [spec/CHANGES_TO_TELL_ALEX.md](spec/CHANGES_TO_TELL_ALEX.md). It is a record, not a
+> leftover — which is exactly the distinction
+> [decommission-deletes-files](practices/decommission-deletes-files.md) draws
+> between a file with no remaining job and one whose job is to be read later.
+>
+> **Do not add a practice here.** Add a file under [practices/](practices/).
+> `tools/verify_harness.py` fails if this banner is removed while the file is
+> still behind the catalogue, so the stale-and-silent state this document
+> spent a month in cannot recur.
+
+Each practice below: the **rule**, **why** (the abstracted incident that
+motivated it — every one of these was learned the expensive way in a real
+repo), and **install** (what a dependent repo does about it). Templates
+referenced here live in `templates/`; tools in `tools/`.
 
 ## 1. The repo is the memory; sessions are ephemeral
 
@@ -92,7 +124,7 @@ matters as much as the check: a gate that lives only in a merge runbook
 binds only the sessions that run the runbook — a PR merged through the
 hosting platform's web UI skips it entirely (a dependent repo's first
 member merges bypassed the capture and export gates exactly this way,
-2026-08). A required CI check ([GITHUB_ACTIONS.md](GITHUB_ACTIONS.md)) is
+2026-08). A required CI check ([GITHUB_ACTIONS.md](documentation/GITHUB_ACTIONS.md)) is
 the form that binds every path to the default branch.
 
 **Install.** [tools/doc_lint.py](tools/doc_lint.py) and
@@ -225,6 +257,17 @@ renderer.
 its post-merge location, with a one-line description. The reader must be able
 to open the work from the chat, not merely learn it exists.
 
+**Rendered files get a rendered-view link, not just a repo link.** A
+repository link to an HTML file or an image shows source or a raw blob — the
+one form of the file the reader did *not* want. When the session's surface
+offers hosted private previews (an artifact/paste service the harness
+provides), a touched HTML render or picture's entry also carries that
+rendered-view link, published from the same file path each time so the link
+stays stable across revisions — one preview per file, re-published on
+meaningful change, never a new one per reply. Files that are per-recipient
+send records are excluded: a hosted preview is a distribution channel, and
+those files' distribution is governed by their own send policy.
+
 **Install.** Convention in
 [templates/AGENTS.md.template](templates/AGENTS.md.template).
 
@@ -233,18 +276,30 @@ to open the work from the chat, not merely learn it exists.
 **Rule.** Environment setup that sessions need (packages, dependencies,
 submodule init) lives in a session-start hook — idempotent, fast when cached,
 warning loudly on failure. Routine safe commands the agent runs constantly go
-in a permissions allowlist so sessions don't stall on prompts.
+in a permissions allowlist so sessions don't stall on prompts. Where the
+harness also supports a hook at the *other* end of a turn, the same
+discipline applies in reverse: don't rely on the agent remembering to check
+its own git hygiene before stopping — a stop hook that blocks on
+uncommitted, untracked, or unpushed work makes that guarantee automatic
+instead.
 
 **Why.** The gotchas of practice 4, applied: writing the fix down is good;
 having it apply itself is better. The hook is where "install the one package
-whose absence cost two sessions" lives as code.
+whose absence cost two sessions" lives as code — and where "don't end a
+session with unpushed work sitting in the tree" lives as code too, rather
+than a habit the agent has to remember on its own each time.
 
 **Install.** [templates/bootstrap.sh](templates/bootstrap.sh) →
 `tools/bootstrap.sh` (harness-neutral; all real setup lives here), wired in
 per-harness via [templates/harness/](templates/harness/README.md): a hook
 that runs it automatically where the harness supports one (hard guarantee),
 an instructions-file directive where it doesn't (soft guarantee), plus a
-permission allowlist where the harness has that concept.
+permission allowlist where the harness has that concept. Where the harness
+also supports a blocking stop/teardown hook (Claude Code does; see
+[templates/harness/claude-code/hooks/stop-git-check.sh](templates/harness/claude-code/hooks/stop-git-check.sh)),
+install that too — some managed environments already provide an equivalent
+check outside the repo, but this makes the same guarantee travel with the
+practice layer for the ones that don't.
 
 **The bootstrap also checks upstream freshness — detection automated, the
 take deliberate.** A dependent repo learns its practice layer is stale only
@@ -1455,58 +1510,6 @@ three survive each other: a document can be correctly framed, honestly
 labelled, and still unreadable because of its vocabulary. Three separate
 passes, not one.
 
-## 35. Build/buy: decompose before deciding, and keep the verdict supplier-independent
-
-**Rule.** A build-or-buy question almost always arrives at the wrong
-granularity — *"should we build this ourselves or get it from them?"* — and
-answering it as posed produces a yes/no about a supplier when what was needed
-was a map. Two moves, in order.
-
-**First, decompose the thing being procured, and give each part its own
-verdict.** The parts usually disagree, and the disagreement is the answer. The
-diagnostic is blunt: **if your answer is a single yes/no, you probably have not
-checked whether the thing has parts with different answers.** In the origin
-case a four-way split turned "wrong supplier" into "right supplier, wrong
-layer" — which is a usable answer, where a flat no would have closed a door
-worth keeping open.
-
-**Second, rest the verdict on ownership arguments rather than capability
-arguments, then check that it survives being wrong about the supplier.**
-The distinction is what makes a decision durable:
-
-- **Ownership arguments** — what recurring cost the choice imposes per unit
-  shipped, what compounding asset it starves, what it does to the thing your
-  strategy names as your advantage — hold no matter how good the supplier turns
-  out to be.
-- **Capability arguments** — *"they can't do this part"* — invert the moment the
-  supplier improves, or the moment your read of them proves wrong. And your read
-  is usually a desk read of their own marketing: in the origin case the
-  supplier's product documentation was literally unreachable from the working
-  environment, so the capability picture came entirely from press releases.
-
-Label each argument as one or the other while writing. A recommendation built
-on capability has a shelf life measured in the supplier's release cadence.
-
-**Why.** The failure this prevents is not choosing wrongly between two known
-options — it is answering a question whose premise (that the thing is one
-thing) was never checked, and then defending the answer with the most available
-evidence, which is whatever the supplier says about themselves.
-
-**Install.** Write the decomposition as a table with one verdict per part
-before writing any prose. State, next to each argument, whether it is about
-ownership or capability. Then name the **revisit triggers** that would reverse
-the decision, and make the cheapest one *a question to ask* rather than an
-assumption to hold — a decision resting on an unpriced assumption about someone
-else's pricing is one conversation away from being confirmed or overturned, and
-leaving that conversation unhad is a choice, not a limitation.
-
-**Related.** Practice 28 (frame from the audience's question) is the adjacent
-move at the artifact level; this one operates on the decision itself, and the
-two compose — the audience's question is often posed at the wrong granularity
-too. Practice 25's adversarial pass will confirm every claim in a
-wrongly-decomposed analysis, so the decomposition has to be challenged
-separately.
-
 ## 40. An option you invented is not a baseline — check the source architecture first
 
 **The practice.** Before costing or optimising a trade between two configurations,
@@ -1704,3 +1707,559 @@ default rather than the upsell.
 **Related:** practice 42(b) — compute the term whose direction is the point,
 rather than reasoning about which way it goes; here the term is the cost of the
 cautious option, and the reasoning was backwards.
+
+## 44. Two named check levels: a fast one for every commit, a full one before merge
+
+**Rule.** A repo of any size ends up wanting two different things when it
+says "check this": a fast, cheap sanity pass a session runs constantly
+without thinking about it, and a slower, complete audit that gates a merge.
+Give the two levels fixed, distinct names in the repo's own
+[GLOSSARY.md](templates/GLOSSARY.md.template) — a plain pair like *light
+check* and *deep check* reads well, but any repo-chosen pair is fine — so a
+person or a session can ask for one or the other unambiguously ("run the
+light check before you commit that" vs. "this needs a deep check before we
+merge") instead of re-describing what "check" means every time.
+
+**Why.** Without named levels, "run the checks" is ambiguous between two
+very different costs, and the drift goes one of two ways: sessions run the
+expensive audit so often that it gets skipped when time is short, or they
+run only the cheap pass and the expensive one quietly stops happening
+before merges. Naming the two levels separately keeps both cadences
+legible: the fast one stays cheap enough to run on every commit path with
+no friction, the full one stays a deliberate, named gate that is obviously
+missing if it's skipped.
+
+**Install.** This repo's own [tools/doc_lint.py](tools/doc_lint.py) is
+already the fast pass — it scans only the markdown a session touched — and
+[tools/practice_audit.py](tools/practice_audit.py) is already the full one
+— the public-safe scrub, baseline-hash checks, and everything else that
+needs the whole repo. Naming them is the only step this practice adds: pick
+the repo's own pair of names, add both to `GLOSSARY.md` with what each one
+actually runs, and reference the names (not just the script paths) in the
+merge runbook (practice 9) and in any CI wiring (practice 6). A repo that
+adds its own extra fast checks (secret-shaped strings, conflict markers,
+JSON/YAML syntax) folds them into the "light" name rather than inventing a
+third level — two named levels is the right number for almost every repo.
+
+## 45. A standing merge-authorization keyword
+
+**Rule.** A repo can adopt one short, fixed word or phrase that, said as
+its own final sentence in an otherwise-ordinary message, means "commit and
+merge what we just agreed on, using this repo's usual conventions, without
+asking again." Document the exact word, and the exact rule for what counts
+as "standing alone" (its own line, or set off by a preceding
+sentence-ending punctuation mark; case-insensitive), in the repo's
+`GLOSSARY.md` next to the other terms that mean something specific here.
+Treat an ambiguous case — the word appears, but as part of a longer
+sentence, or its standalone status is genuinely unclear — as *not*
+authorization: ask, rather than assume.
+
+**Why.** "Merge only when the user says so" (practice 9's authorization
+default) is the right default, but typed out in full every time it's
+invoked, it adds friction to the single most common approval a working
+session asks for. A one-word standing trigger removes that friction
+without weakening the default: it is still the human choosing, in the
+moment, to say the word: the rule only fixes what a specific short
+utterance is understood to authorize, so an agent never has to guess
+whether "sounds good" or "yes" meant "and merge it" too. The strict
+standalone-sentence test is what keeps the keyword from misfiring inside
+ordinary language that happens to contain the same word for an unrelated
+reason.
+
+**Install.** Pick a word (or short phrase) that reads naturally as a
+one-word reply and isn't likely to appear as ordinary language at the end
+of an unrelated sentence — "go" or "merge" are typical choices. Add it to
+`GLOSSARY.md` with the standalone-sentence rule spelled out, and cross-link
+it from the merge runbook (practice 9) and from the "administrator
+requests" section of `AGENTS.md`, so a session encountering the word for
+the first time in a thread already knows where the rule lives instead of
+inferring it from context.
+
+## 46. Tabular documents ship a sortable render from one shared renderer
+
+**Rule.** When a document's tables have multiple columns a reader might want
+to sort — a trade study, a parameter sweep, a comparison matrix — the
+markdown alone is not the finished product. Ship an HTML render delivering
+the behavior contract below. The source document remains the source of
+record (with its generated tables kept live by the doc↔model sync of
+practice 33); the render is a committed build product, rebuilt after any
+edit.
+
+**The behavior contract.** This is what the reference implementation
+([tools/doc_html.py](tools/doc_html.py)) delivers on every table, and what
+any reimplementation on another stack must match — it is the spec a reader
+of this practice is entitled to assume when a repo says "practice 46
+render":
+
+1. **Multi-column sort** — click a header to sort; shift-click (or a
+   Multi-sort toggle) adds secondary keys; clicking a key again reverses
+   it; marks on the headers show direction and key order.
+2. **Numeric-aware sort keys** — cells sort numerically through the
+   notation documents actually use: approximation marks (≈/≤/≥), any
+   Unicode currency symbol, thousands separators, leading zeros, bare
+   decimals, magnitude suffixes (k, M — recognized on currency amounts
+   only, since a bare "M" is usually a unit), trailing units; empty and
+   em-dash cells sort last. The same key drives the frontier axis
+   pull-down (item 8), so a column ranks exactly as it sorts.
+3. **A filter dropdown on every column** — no column is left without
+   one. The panel offers what the column supports: a multi-select
+   checkbox list of distinct values where the set is usefully small
+   (2–60; any checked subset keeps its rows, none checked = "All", the
+   default), plus on **value columns** a comparator — pick </≤/=/≥/>
+   and type a threshold in the displayed units (cells that don't parse
+   never pass) — and on text columns too varied to enumerate a
+   contains match. A column's constraints AND together, the button
+   shows the active selection, and filters compose with each other and
+   with sorts. Multi-select is the point — comparing two named
+   alternatives side by side is the most common filtering ask a
+   comparison table gets; the comparator serves the "under $X /
+   over Y t" ask value columns get. A value column is one whose cells
+   *lead* with a number (the practice-46 item-12 test): "Rotax 916"
+   contains a digit but is a name. On a text column that is a frontier
+   ordinal axis (item 8), the dropdown's value rows list in the axis's
+   current best→worst order and each carries a ⠿ grip that drags the
+   row to re-rank — the same order the frontier picker edits, editable
+   from whichever panel the reader has open; the checkbox still
+   filters, only the grip drags.
+4. **Active columns pin in place and stay visible** — sorted and filtered
+   columns stick at the viewport's left edge as the table scrolls past
+   them, without being moved from their positions; the header row stays on
+   screen under vertical scroll. The reader's working columns never leave
+   the viewport, and nothing rearranges itself. (Revised from an
+   automatic move-to-left-edge behavior, which field use found confusing —
+   the table reorganizing on every sort click; movement is the reader's
+   act, not a side effect.)
+5. **Draggable column order** — drag a header to move a column; dragging
+   is the only way columns move. Implement every drag (this and the
+   ordinal value lists of item 8) with **pointer events, never native
+   HTML5 drag-and-drop**: hosted artifact viewers run renders in
+   sandboxed frames where native DnD never fires (verified 2026-08-28),
+   and pointer events also work on touch. Two traps: put the
+   move/up listeners on the **document**, and do **not** pointer-capture
+   the dragged element — re-inserting it in the DOM (the reorder itself)
+   implicitly releases capture and kills the drag after its first swap.
+   Gate the header drag behind a small movement threshold so plain
+   clicks still sort.
+6. **One Reset** — clears sorts AND filters and restores the original row
+   and column order.
+7. **Live row count** — "N of M rows" tracks filtering.
+7b. **Alternate-value views (optional)** — a cell may carry one
+   `<span data-view="NAME">` per view of the same quantity (e.g. two
+   pricing bases); the first view named is the default, and each
+   further view gets a checkbox that swaps every such cell at once,
+   re-sorting on the visible values (filters clear, since their value
+   sets changed). Sorting, filtering, and the row count always read
+   the ACTIVE view's text, never the concatenation.
+8. **Frontier axis pull-down** — where a Frontier column exists
+   (practice 47), the render opens showing frontier rows only, and the
+   control is an axis pull-down that works on any such table with no
+   per-document wiring: the printed ✓/— marks (the model's own
+   computation, per practice 47) are the default view; the picker
+   offers **every** other column as an axis and recomputes the marks
+   client-side on a custom pick. A numeric column takes a reader-set
+   better-direction (↓/↑); a **text column ranks as an ordinal axis
+   by its value list, which the reader drags into best→worst order**
+   (default: the column's sorted order; each value row carries a ⠿
+   grip icon marking the drag affordance) — only a text column with too
+   many distinct values to order is listed as not rankable. An "All
+   rows" entry clears the filter. A generating model may curate the
+   picker with an invisible frontier spec beside its table — fixed
+   directions for the columns it names, input tags (informational,
+   still selectable), the default axes, a partition column judged
+   separately (format in the renderer's docstring) — but the spec
+   refines the pull-down, never gates it: unnamed columns are still
+   offered.
+9. **Header definitions round-trip** — a header links to its definition
+   note and shows it as a mouse-over tooltip; the note's return link lands
+   back on the exact header cell it defines, not merely the table's
+   section.
+10. **The render is the versioned product** — it carries its build
+    timestamp in the page header; the source carries none (version control
+    is the history).
+11. **Page mechanics** — source-file includes are expanded; relative repo
+    links are rewritten to the hosted view; wide tables scroll inside
+    their own container rather than the page.
+12. **Decimal-aligned numeric columns** — in a column whose cells lead
+    with a number (approximation marks, ×, or a currency symbol may
+    precede it), each cell is padded so the number's integer end — and
+    hence its decimal point — sits at one x-position down the column.
+    The prefix is pixel-measured (markup-safe), so bold text, links,
+    and proportional-width symbols align exactly, and trailing
+    annotations don't disturb the line-up; a bare decimal (".45") has
+    an empty integer part, so its point lands on the same line as
+    "0.45"'s. Columns whose digits appear only inside text (part
+    codes, composite cells) are left alone.
+
+**The load-bearing half is singularity.** All table behavior — CSS, JS, sort
+semantics, numeric-aware sort keys — lives in **one** shared renderer with a
+registry of the documents it renders ([tools/doc_html.py](tools/doc_html.py)
+is the reference implementation). A functionality change is made there and
+only there, and the no-argument invocation rebuilds every registered render,
+so the change manifests in every table at once. The test for a new
+capability follows: it must manifest on every registered render **from the
+engine alone** — a host or per-document declaration may refine it, never
+gate it, or the "change once, upgrade everywhere" property is silently lost
+for every table that lacks the declaration. Per-document build scripts
+may survive as documented entry points, but as thin wrappers importing the
+shared `render()` — never as forks of the CSS/JS. The failure this kills is
+the same one practice 33 kills for numbers: N copied renderers drift
+independently, and the oldest copy is the one a reader eventually trusts.
+
+**Singularity crosses the repo boundary.** In a dependent repo, the
+vendored copy of the renderer **is** the implementation and the repo's own
+file is a thin host shim supplying only its document registry — the general
+engine/shim rule is practice 50; this renderer is its strongest case, since
+a spec-only export of "multi-sort with pinning and filters" reimplemented
+from prose differs in a hundred details.
+
+**Why sortable matters enough to be a rule.** A wide cross-product table
+(say, 4 loads × 3 price points × 9 altitudes) is written in one canonical
+order, but every reader arrives with a different question — cheapest rows
+first, group by one factor, find the regime boundary in another. Static
+markdown forces the writer to guess one question and answer only it; a
+sortable render answers all of them without another build. The cheap test:
+if you catch yourself emitting the same table twice in different orders, the
+document wanted this practice.
+
+**Install.** One renderer module (markdown → styled HTML, tables enhanced by
+a small dependency-free script), one registry entry per document, renders
+committed next to their sources, a line in each source pointing readers at
+the render. Numeric sort keys must survive the units and approximations your
+documents actually use (currency suffixes, ≈/≤/≥, thousands separators) —
+extend the key parser when a new format appears, in the shared module, once.
+
+**Related.** Practice 33 (documents track their models; transformations live
+in code) supplies the live tables this renders; practice 12 (conventions
+harden into audits) suggests the natural follow-on check — a registered
+document whose render is stale fails the gate.
+
+## 47. A permutation table carries a frontier column
+
+A configuration study whose table is the cross-product of its input axes
+(engine × layout × variant × objective, load × price × altitude, …) produces
+more rows than any reader will scan, and most of them are dominated — some
+other row is at least as good on every output the reader ranks by. Three
+rules:
+
+1. **The optimization outputs are the reader's choice, so when they are
+   ambiguous, ask** — before building, put the question to the owner: *which
+   outputs should the best-of selection rank on?* A frontier computed on
+   axes the author guessed answers the author's question, not the reader's.
+   When the axes are obvious from the document's own framing (a cost study
+   ranks on cost), proceed and name them.
+2. **One full table, with a Frontier column — never a pruned table beside an
+   appendix.** Every row appears once; a **Frontier** column marks whether
+   the row is Pareto-non-dominated on the stated outputs (name them beside
+   the table, state the count "N of M"). The discipline is in the word
+   *dominated*: a — row must be beaten or matched on every stated axis by
+   some ✓ row, never merely unfashionable — the marking is a computation the
+   model performs and can assert, not an editorial choice. Two tables of the
+   same rows are two copies that drift; one table with a computed column
+   cannot.
+3. **The render toggles — and lets the reader re-rank.** The sortable
+   render (practice 46) opens showing frontier rows only and carries a
+   control to show all rows — the reader gets the compressed view first
+   and the full matrix one click later, from the same table. That
+   control is the axis pull-down of practice 46 item 8: the reader
+   picks which output columns form the frontier and the render
+   recomputes the marks, because rule 1's real point is that the axes
+   are the reader's choice — the stated defaults answer the document's
+   framing, and the pull-down answers everyone else's. The printed
+   column stays the model's computation on the stated default axes; a
+   reader's custom pick is a view, recomputed from the displayed
+   values, never silently written back into the source.
+
+**Why this is a rule and not taste.** The full matrix invites the reader to
+do the dominance analysis in their head, badly; the frontier column does it
+once, correctly, in code. And a frontier computed by the model is
+regenerated by the model — an editorially curated "interesting rows" table
+silently rots as the numbers move (the drift practice 33 exists to kill, in
+row-selection form).
+
+**Related.** Practice 44 (sortable render) carries the toggle and the
+per-column value filters; practice 33 keeps the table regenerating from the
+model.
+
+## 48. A document does not remember its past; the index does
+
+Current-state documents (the no-revision-history rule) still need
+*provenance* — a reader landing on a fresh document that replaced an older
+one deserves to know the lineage, and the older document's readers deserve a
+pointer forward. Neither note belongs in the documents themselves: the fresh
+document opens clean (no "successor to…", no inherited framing debt), and
+the superseded one is not edited into a museum label. **Provenance lives in
+the repository index**: the index row for the new document names what it
+succeeded, the row for the old one names what superseded it, and where the
+evolution itself carries lessons worth keeping, they go in a dedicated
+evolution-notes document the index points to. Commit messages carry the
+rest.
+
+**Why the index and not the document.** A document is read for its content;
+an index is read for orientation — lineage is orientation. Provenance notes
+inside documents also invert the current-state rule's economics: they start
+accurate and decay (the successor gets its own successor; the note never
+updates), whereas index rows are touched every time the map is maintained.
+
+**Related.** The current-state rule (git is the history) this completes;
+practice 41 (index what you write) supplies the index rows this rides on.
+
+## 49. Deliverables look like their output; the record doc holds everything else
+
+A reader-facing document is the finished product: it contains what its
+audience needs and nothing about how it was made. Everything else — the
+claims-to-source table, the verification log, decision provenance ("who
+chose this and when"), retired-alternative lore, open verify-later items,
+notes about the document itself — is real and worth keeping, and lives in a
+**paired record document** (`*_record.md`, or the diligence record where one
+exists), linked once from the deliverable's footer and from the index. Three
+rules:
+
+1. **If it is not intended to travel with the text, it goes in another
+   document.** The test is the reader: would the audience the document is
+   written for act on this line? Apparatus that exists for future verifiers
+   and future maintainers is record-doc content by definition.
+2. **A verify-later flag is a prompt, not a label: go verify now.** The
+   inclination to write "[verify]" marks the exact moment verification is
+   cheapest — the claim and its context are in hand. Only an externally
+   blocked item (an unreachable primary source, a needed field measurement)
+   may remain open, listed in the record's open tail — never flagged in the
+   deliverable.
+3. **A decision cited anywhere names its decider and date** — in the record
+   doc. "Per a user decision" in a deliverable is doubly wrong: it is
+   process residue, and it is unattributed.
+
+**Why a lint check and not a rule.** This practice failed as prose four
+times in one repo — the leak recurs because the author writes apparatus at
+the moment of doing the work, in the file that is open, and nothing objects.
+The portable `doc_lint` therefore carries a residue check (check 6): a
+changed deliverable containing verify-later flags, verification/claims
+apparatus, unattributed decision references, or retirement lore fails the
+gate; record-class files (by name pattern) are exempt. The written rule says
+why; the check is what holds.
+
+**Related.** The current-state rule (git is the history) and practice 48
+(provenance lives in the index) bound what a deliverable may remember;
+practices 24–25 (quote discipline, adversarial pass) generate exactly the
+apparatus this practice routes into the record doc.
+
+## 50. Exported tools are one engine plus host shims
+
+A practice that ships tooling (a renderer, a lint, a sync gate) crosses the
+repo boundary as **code plus config**, split on one line: **domain-neutral
+mechanism lives in the vendored upstream tree and is the single
+implementation; everything host-specific — registries, vocabulary, index
+names, scan scopes — lives in a thin shim in the host repo** that loads the
+vendored module, sets its configuration attributes, and delegates. The
+practice text carries the behavior contract (the numbered spec of what the
+tool delivers), which is also what lets a host on a different stack
+reimplement deliberately rather than accidentally.
+
+**The rule of thumb for what goes where:** if a change would be wanted by
+every repo using the tool, it is engine — edit the vendored file, and it
+ships upstream at the next check-in; if only this repo would want it, it is
+config — edit the shim. A new check, a new interaction, a bug fix: engine.
+A new document registered, a new stopword, a different default branch:
+shim.
+
+**Why not a fork.** A host that copies the tool and edits its copy is
+running two implementations synced by hand. The vendoring audit's drift
+hashes will nag, but every improvement is edited twice, and the copies
+diverge the first time someone forgets. (Origin: the first dependent repo
+maintained renderer, lint, and sync-gate forks in lockstep through one day
+of heavy feature work — every change patched twice — then collapsed all
+three to shims; behavior was verified identical before and after, the
+renderer's output byte-for-byte, and ~1,400 lines of duplicate
+implementation disappeared. The collapse also surfaced a latent bug: the
+exported sync-gate copy referenced a config name no one had ever defined,
+because nothing had ever executed it.)
+
+**Why not spec-only.** A tool's value is its accumulated behavioral detail
+— the numeric sort keys that survive currency suffixes, the filter that
+survives a column move, the false-positive guards on a check. A dependent
+repo reimplementing from prose gets a different-in-a-hundred-ways tool and
+re-learns every lesson. Spec and code are not competitors: the spec is the
+contract, the vendored code is the reference implementation, and a repo
+that can run it should never be writing its own.
+
+**Install.** Vendored tool with module-level configuration attributes and
+sane defaults; host shim of a dozen lines (load via an explicit file path
+under a distinct module name to avoid shadowing, set attributes, delegate
+to the engine's entry point); the manifest entry notes shim status so the
+vendoring audit tracks the engine, not the shim. Every host-side runbook
+keeps invoking the shim path — the restructure changes no workflows.
+
+**Related.** Practice 44 (shared renderer) and practice 19 (generated-block
+sync) are the worked examples; practice 33's "transformations live in code"
+is the same instinct one level up; the check-in flow of the vendoring
+playbook is how engine changes propagate.
+
+## 51. Every quantity kind prints through one formatter
+
+A reader comparing two table cells must never have to normalize precision
+in their head. **Declare one formatter per quantity kind** — tonnage,
+volume, money-rate, speed, distance, whatever the domain's comparable
+quantities are — **in a single module, and route every emitter that
+prints the kind through it.** Never an inline format string: an inline
+`f"{x:.1f} t"` is a second, silently divergent copy of the kind's
+precision policy, and the divergence prints as "2 t" in one cell and
+"2.0 t" in the next.
+
+The formatter object carries the kind's **whole** policy: decimal places,
+any threshold above which values print as thousands-separated integers,
+approximation marking, unit affixes.
+
+**The underlying rule — representation is a property of the comparison
+set, not of the individual value.** Every recurrence of this defect class
+has the same shape: the format was computed from one value at a time (a
+per-value threshold, per-value significant figures, two "kinds" that in
+fact share columns), and any function from a single value to a string can
+break set-consistency the moment the set spans it. Choose the
+representation once, from the whole set of values that will be compared
+together, and apply it to every member. Three policy rules with teeth:
+
+- **Pick precision from the estimate's own noise.** Tenths the model
+  cannot resolve are false precision; a kind whose values are rough
+  estimates prints coarse everywhere, not just where someone remembered.
+- **Check thresholds against the comparison pairs.** A threshold is safe
+  only if no two values a reader will compare side by side fall on
+  opposite sides of it — a policy that prints one cell as an integer and
+  its row-mate with a decimal has recreated the original defect inside
+  the formatter.
+- **Currency uses the money convention: one fixed decimal count across
+  the compared set.** Significant figures are honest about noise but
+  print $16 beside $1.4 beside $0.030 — three shapes for one kind, and
+  money is the kind readers subconsciously column-align. Fix the decimal
+  count for the whole set (verify it still separates every pair actually
+  compared; widen it if not), and accept the mild over-precision on the
+  large values as the cost of alignment.
+
+**Origin.** A competitive-comparison table printed an incumbent's
+capacity as "2 t" beside the fleet's own "2.0 t" in the same row — the
+principal flagged it as proof the table was not being read the way a
+reader would. The first fix — two ad-hoc helpers inside that one table's
+emitter — immediately straddled its own threshold: integers at 100 put
+"110" beside "97.8" in the same row, the same defect in new clothes. A
+third pass moved the money kind to per-value significant figures — honest
+about noise, and still wrong: $16, $1.4, and $0.030 are three shapes of
+one kind. Only then did the class close, with the set-level rule above:
+every fix until it had computed the format from a single value, and the
+requirement was never a property of single values.
+
+**Engine.** `tools/table_fmt.py` (`Qty`): the mechanism — threshold
+precision, separators, approximation and affixes — as a tiny class. A
+host repo's shim declares its kinds once (practice 50) and its emitters
+import the shim. Adopting emitters must reproduce byte-identical output
+where the policy is unchanged — the generated-block drift gate
+(practice 19) is the proof.
+
+**The formatter↔renderer seam is checked, not remembered.** The sortable
+render parses these printed strings back to numbers for sorting,
+frontier ranking, and decimal alignment — so the formatter's output
+grammar and the renderer's parse grammar are one contract with two
+implementations, and nothing about a new notation looks broken until a
+table silently mis-sorts it. The engine therefore ships `parse_key()`
+(the Python mirror of the renderer's numeric-key grammar; the two are
+extended together) and `roundtrip_check()`: every registered kind
+formats sample values and the parse must recover the printed value —
+the expectation derived from the kind's own declared affixes, so it is
+independent of the parser — plus canned grammar pins for the forms that
+drift silently (the unit-vs-money "M", the bare decimal). A host shim
+exposes this as `self_check()` wired into the repo's audit runner, so a
+notation the tables would mis-sort fails at commit time, not in the
+browser.
+
+**Related.** Practice 44 (the render layer these cells land in);
+practice 33 (transformations live in code — this is its formatting
+corner); practice 50 (how the engine crosses the repo boundary).
+
+## 52. A computation that books a transfer names both sides of the ledger
+
+When a model charges one party for what another receives — work for
+kinetic energy, spend for inventory, a debit for a credit — the
+plausibility check everyone naturally runs is *"does the charge equal
+the recipient's gain?"* That check is the trap, not the verification:
+**the recipient-side ledger balances by construction.** Charging a
+force over the recipient's displacement always yields exactly the
+recipient's gain; charging a spend against the goods received always
+matches the goods. What that one-sided check can never see is the
+term between the parties — dissipation, friction, spoilage, fees —
+which the payer also pays, over the **payer's own path**.
+
+The rule: any closed-form gate or feasibility formula that books a
+transfer must **(a) name its sources and sinks explicitly** — every
+account the quantity can come from and every account it can land in —
+and **(b) carry a property self-check asserting the whole-system
+inventory closes**, sources equal to sinks within the model's stated
+noise. Where an independent integrator or simulation exists, calibrate
+the closed form against it and assert the band; where none exists, a
+one-line back-of-envelope inventory (is the payer's total available
+even of the right order against the sink side?) belongs in the
+derivation's comment.
+
+**Why review misses it.** Two compounding effects, both observed in
+the origin incident. First, the wrong length is usually the *salient*
+one: the mechanism's narrative stars one displacement (the relative
+motion, the visible stroke), and that is the length at hand when the
+formula is written — while the work integral belongs on the payer's
+displacement. Second, direction-of-motion bias: when the erroneous
+formula lands inside a commit that is correcting a known error in the
+*opposite* direction, the overshoot wears the correction's clothes —
+big new numbers read as the fix working. Neither reviewer instinct
+(does the charge match the gain? does the change move the right way?)
+catches a factor hidden in the dissipation term.
+
+**Origin.** A feasibility gate charged a hauling agent's energy cost
+as force × the *load's* displacement rather than the agent's own
+path — exactly half, the other half leaving through a dissipative
+element between them. The halved charge equaled the load's
+kinetic-energy gain to the digit, so the one-sided check passed; the
+published capability ceiling came out ~2× optimistic (compounded by a
+missing geometric completion condition the same 1-D framing hid) and
+survived its thread's otherwise-careful review because it arrived in
+a commit raising ceilings a doctrine reread had shown were wrongly
+zero. It was caught a day later only when an independent
+trajectory integrator's whole-system energy balance refused to close —
+and a three-line inventory then showed the payer's entire available
+energy was ~3× short of the sink side at the published ceiling. The
+correct accounting had existed in the program's own prose for weeks,
+written down and executable nowhere — the same lesson as the
+model-audit practice, recurring: prose does not fail a build; a
+ledger assertion does.
+
+## 53. A TODO is a handoff, not a parking lot
+
+**Rule.** Before writing an open item, ask: *could this session finish it
+now?* If yes, do the work — the inclination to queue an agent-doable item is
+the signal to do it, not to file it. An item may be queued only for a stated
+reason, written into the item itself:
+
+- **blocked-on** — a named external input: a decision (with its owner named),
+  a resource, an event, an artifact that does not exist yet; or
+- **out-of-scope** — genuinely too large or too tangential for the current
+  session, in which case the item must carry the context a cold session
+  needs: why it matters, the intended approach, and the pointers.
+
+"Would enlarge this turn" is not a reason; it is the moment the context is
+cheapest. A sweep that finds an open item with neither reason either does it
+in the sweeping session or closes it as not worth doing.
+
+**Why.** A queued item sheds context every day it waits. The session that
+noticed the need holds the reasoning, the file locations, and the half-formed
+approach — and almost none of that survives into a one-line queue entry, so
+deferral converts cheap work into expensive work, and often into work never
+done. The catalog already outlaws deferral for two special cases — capture
+happens in the thread that created the need (practice 10), and the
+inclination to write a verify-later marker means go verify now (practice
+49) — because both learned that the queue is where context goes to die. This
+generalizes the same insight to ordinary work: the typed TODO exists to hand
+work *across a genuine boundary* (to a human decision, to hardware, to a
+session with the right scope), not to spare the current session effort.
+Origin: a session queued two follow-up items from its own build — both
+labeled agent-doable, one of them a half-hour mechanical change — and the
+owner asked why work needing no input from them was parked at all. Both
+items, done later, cost more to re-orient into than they would have cost to
+finish on the spot.
+
+**Install.** The TODO template's header (practice 1) carries the compressed
+rule, so every new item is written against it; the periodic sweep enforces
+the stated-reason requirement on the backlog.

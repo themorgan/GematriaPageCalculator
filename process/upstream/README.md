@@ -1,138 +1,205 @@
-# BestPractice
+# Precedent: Your Team's Rules, Suggested by AI While You Work
 
-**Keep the project's memory in GitHub, and let people work with that
-memory through AI conversations.**
+*Humans should do what humans do best, and leave the rest to the
+machines. ([Humans at our
+Best](philosophy/HUMANS_AT_OUR_BEST.md))*
 
-BestPractice helps people work together with AI assistants on a shared
-project without losing decisions, repeating work, passing around outdated
-files, or overwriting each other's changes. Members work by opening an AI
-agent with access to the project: they ask questions about what the
-project knows, discuss ideas, and implement updates with the AI's help —
-and the administrator green-lights changes, also with AI help, before
-they join the shared project. The output of every AI conversation becomes
-part of the project, so nothing is lost in chat history.
+Attempts to Describe Precedent in <40 words:
 
-**It captures intention, not just text.** Most writing tools keep the
-sentence you landed on and lose the reasoning that got you there.
-Working a decision through in conversation with an AI does the
-opposite: the back-and-forth that produces the wording is itself part
-of what gets saved, so the *why* behind a change stays on record, not
-just the *what*. That also moves your attention to where it belongs —
-the assistant carries the mechanics of drafting, formatting, and
-editing, so you spend your time thinking through the problem, not
-producing the document that describes it. It's a tighter loop than the
-usual way of writing with an LLM: instead of asking for a draft and
-then editing it yourself afterward, you think out loud with the
-assistant and the document is what falls out of that conversation.
+- **Humans collaborate** and **AI pattern matches**.
+- **All is lost when you close** a Claude/ChatGPT/AI Assistant Session. It
+  should be smartly shared and learned from.
+- AI watches you collaborate, and **suggests (and can enforce)** patterns,
+  protocols, rules.
+- You work; **AI uses github to remember**, organize, and suggest protocols.
+- **Three insights together:** AI intermediates & improves ALL work, you
+  don't write ANYTHING yourself + AI organizes work as you do it in
+  Github + AI finds & suggests rules based on what each of you decides or
+  pushes.
 
-**It is an alternative to Google-Docs-style collaboration.** A shared
-live document lets everyone make tiny edits at once — but the unwritten
-rule is that everyone pauses while one person makes a big change, big
-edits trample each other, and the document never remembers who decided
-what, or why. Here there is no pause: every person (and every AI thread)
-works at full speed on a private copy, changes join the shared project
-through review, every change is credited to the person who drove it with
-the reason recorded — and the system itself notices which teammates a
-change matters to, and flags them.
+The **three biggest frustrations** of working with people and/or AI
+are solved by Precedent:
 
-Think of a hospital chart at shift change: clinicians rotate, but the
-chart carries every observation, every decision, and the reasoning behind
-it — if it isn't in the chart, it didn't happen — so the incoming doctor
-picks up the patient cold and nothing learned on the last shift is lost
-in the handover. BestPractice gives your project that chart.
+1. **Nobody notices patterns** — and even when someone does, enforcing
+   it costs real time and attention, every single time.
+2. **Nobody remembers why a decision was made, even a small one** — and
+   on the rare occasion someone does, they've forgotten why it mattered
+   enough to decide.
+3. **People forget even the big details, the why, and the how.** And
+   when one person does remember, your team is permanently dependent on
+   that one person.
 
-Behind the scenes, the project lives in a GitHub repository. GitHub is a
-system originally built for programmers that keeps the current files,
-earlier versions, decisions, open questions, and change history together
-— the same durable memory for every person and every new AI session.
-BestPractice adapts it so you don't need to be a programmer to get those
-advantages for your project; you just need a few ground rules, captured
-in [Git, minimally](GIT.md). Changes are safe by construction: each
-change happens on its own working copy, is checked automatically, and
-joins the shared project only when it is approved.
+Or when AI realizes the above, it keeps it to itself. So Precedent
+solves this by approaching human/AI collaboration from a different
+angle:
 
-The main shift is that you stop using the general-purpose chat apps —
-ChatGPT, the ordinary Claude chat, and their workplace versions — and use
-**Claude Code** instead. Claude has automated the setup that used to
-require a programmer: it connects to your project's repository out of the
-box, on desktop and on a phone. We expect OpenAI and Grok to add the same
-kind of experience soon (they have not, as of 2026-08); until then,
-unless you want to set up a programming environment yourself, these
-documents assume you are a Claude Code user. Members who prefer other
-assistants still have supported paths — see the members' page below and
-[MOBILE.md](MOBILE.md).
+- **Human collaboration comes first.** The tool exists to make people
+  working together better, not to route around them.
+- **The AI Assistant sits between ALL work requests you make (even tiny
+  ones) and the work that remains to be done** — pushing back on ideas
+  to strengthen them and keeping the record of how a decision was reached,
+  not just the decision itself.
+- **The AI Assistant watches what's happening and proposes the rules
+  around it on the fly** — generated from a team's own history, and put
+  up for approval, never landed unapproved: problems happen once, but
+  then rules are made for the future.
 
-## Built for many hands
+Learn more about it: [Reasons Why](philosophy/REASONS_WHY.md),
+[Our Philosophy](philosophy/OUR_PHILOSOPHY.md), [Core
+Pillars](philosophy/CORE_PILLARS.md).
 
-The collaboration problems a shared document can't solve are handled by
-conventions the assistants follow automatically:
+## What This Looks Like in Practice
 
-- **No duplicated work.** When a member takes on a to-do item, their
-  assistant claims it under their name — and warns anyone else's
-  assistant before it starts overlapping work.
-- **Nothing lands by surprise.** Before proposing a change, the
-  assistant works out who it matters to — from who wrote the affected
-  text, and who has pushed back on similar changes before — and requests
-  that person's review. Routine changes merge routinely; sensitive ones
-  find their reviewer. Nobody has to declare their sensitivities up
-  front; the system learns them from the project's own history.
-- **Authors keep the credit.** Changes are recorded as the member's
-  work, with the AI as co-author, so the project's history shows
-  people's contributions as theirs.
-- **Every conversation starts caught up.** Each new session opens with a
-  plain-language summary of what changed since that member last worked.
+Next time you're brainstorming or working through a problem with your
+team try this instead of a chat window or a shared doc: open a GitHub
+repo for the project, and work through it with
+Claude Code attached to that repo.
 
-Your side of the loop is conversational too: say *"what's waiting for
-me?"* and your assistant summarizes each pending proposal, integrates
-any that collide, and merges on your word. The administrator section at
-the end of the members' Getting Started page teaches it in full.
+Here's what you'll actually see:
 
-## What your members will see
+1. **The AI Assistant pushes back on you**, instead of just typing
+   whatever you say.
+2. **When you explain why you disagreed with it, it writes that down** —
+   as a rule, a "Practice," committed to the repo, not left sitting in the
+   chat.
+3. **The next time the same situation comes up, it enforces the rule and
+   cites it**, instead of the two of you relitigating the same argument.
+4. **Every decision cites the decisions and preferences that came before
+   it**, the reasoning behind it, and an audit trail back to the
+   conversation that produced it.
+5. **The people on the team guide, correct, and build up the ruleset** —
+   and it lives in your own GitHub repo, not locked inside one AI
+   provider or held in one person's head.
 
-Members receive one link: to the project's own Getting Started page,
-which opens with the short case for working this way and then gives
-specific instructions for each kind of AI user — Claude, Codex, ChatGPT,
-Gemini, and Grok. **[Read the sample here.](templates/GETTING_STARTED.md)**
-Installing BestPractice creates a version of that page adapted to your
-project, and improvements projects make to their onboarding pages flow
-back into BestPractice for everyone ([INSTALL.md](INSTALL.md) §4).
+Learn more about it: [The Working
+Loop](philosophy/THE_WORKING_LOOP.md), [The Talmudic
+Method](philosophy/THE_TALMUDIC_METHOD.md), [Ten Things to Know About How
+Precedent Works](documentation/TEN_THINGS.md).
 
-## Installing BestPractice on your project
+## Why This Matters
 
-1. **Set up a GitHub repository** for your project — brand-new or one
-   that already has your files in it
-   ([how, and why GitHub](GIT.md)).
-2. **Open the repository in Claude Code or Codex** (for Claude: go to
-   [claude.ai/code](https://claude.ai/code) and start a session on the
-   repository) and paste:
+- **Plain text and git are the source of truth.** Every rule, every
+  document, and the reasoning behind each one lives in your own GitHub
+  repository — nothing sits in a chat log or a memory feature only one
+  person can see.
+- **No proprietary format, no vendor lock-in.** This is open source, built
+  on a platform you already control your own data in. Nothing here can
+  shut down and take your project's memory with it.
+- **Enforcement instead of vigilance.** The rules that matter are backed
+  by small programs that fail loudly, so a project set up this way can
+  check a convention instead of hoping someone remembers it.
+- **Every decision carries its reasoning and an audit trail.** Not just
+  what was decided, but why, with a link back to the conversation that
+  produced it — nobody has to dig through chat history to find out.
+- **Good push back at every moment is invaluable.** Every idea gets
+  tested before it lands.
+- **Your real practice turned into enforced protocols avoids that
+  endless grating frustration of no one knowing the expected
+  standards.** Everyone works from the same rules.
 
-   > Follow the instructions at
-   > https://github.com/alex137/BestPractice/blob/main/SETUP.md
+Learn more about it: [What This Is (and Why Explore Using
+Precedent)](documentation/WHY_PRECEDENT.md), [Ten Things to Know About How
+Precedent Works](documentation/TEN_THINGS.md), [Core
+Pillars](philosophy/CORE_PILLARS.md).
 
-   The agent asks you two questions about your project, installs
-   everything, walks you through what it created, and turns on the
-   automatic checks. You approve; it goes live.
-3. **Say "Add project members."** The agent guides you through granting
-   access on GitHub, then writes a personal welcome message — with the
-   Getting Started link and a suggested first task — for you to paste
-   into email or chat.
+## How
 
-That is the whole setup.
+Precedent can be seen as "Google Docs/Slides meets software" — work
+through the ideas and challenges together, iterating together, and
+patterns and rules emerge that you keep in your open system.
 
-## Everything else
+- **Start a repo, not a doc — then vendor-in Precedent.** Spin the repo up
+  for the idea the same way you'd start a shared doc, then bring
+  Precedent's practice engine into it — that's what turns everything below
+  from a wish into something that actually happens.
+- **Everyone works through their own AI.** Every teammate connects their
+  AI Assistant to that same repo and works through it — nobody opens the
+  files directly.
+- **You brainstorm and direct it together.** The team argues the idea out
+  with their AI Assistants and gives it direction; the repo is what
+  catches everything that comes out of that.
+
+Learn more about it: [Company Building
+Rules](philosophy/COMPANY_BUILDING_RULES.md), [AI Governance to
+Co-Create](philosophy/AI_GOVERNANCE_TO_COCREATE.md), [How to Use This
+Day to Day](documentation/DAILY_HABITS.md).
+
+## The Philosophy Behind This
+
+The three ideas above aren't just this project's engineering choices —
+they're one working expression of a broader philosophy about how people
+and AI should work together. **That fuller argument lives in
+[philosophy/](philosophy/)**, starting at
+[philosophy/README.md](philosophy/README.md). It is argument and
+observation: none of it binds work anywhere else in this repository, which
+is what [practices/](practices/) is for.
+
+Here are the [core pillars](philosophy/CORE_PILLARS.md) of [our
+philosophy](philosophy/OUR_PHILOSOPHY.md):
+
+- **Human-led for human collaboration.** A person sets the direction,
+  decides what "right" looks like, and owns the outcome while the agents
+  do the producing.
+- **Focus on whys and problems.** Every request opens with the problem
+  and the reason behind it, not a prescribed fix, so the AI Assistant
+  spends its effort solving the actual problem instead of executing a
+  guess.
+- **Rules emerge from precedents decided, person-approved.** The rules
+  that govern how the work gets done are extracted automatically, as a
+  side effect of doing the work, rather than written up separately
+  afterward.
+- **Chat and voice messages as the primary human entry point.** A
+  person's way of touching any document here is to talk to their AI
+  Assistant and have it make the change, never to open the file and edit
+  it directly.
+
+The individual pages, if you want to go deeper on any one idea:
+[Reasons Why](philosophy/REASONS_WHY.md),
+[The Talmudic Method](philosophy/THE_TALMUDIC_METHOD.md),
+[Company Building Rules](philosophy/COMPANY_BUILDING_RULES.md),
+[AI Governance to Co-Create](philosophy/AI_GOVERNANCE_TO_COCREATE.md), and
+[Humans at Our Best](philosophy/HUMANS_AT_OUR_BEST.md).
+
+## Get Started
+
+**New here?** [Ten Things to Know About How Precedent
+Works](documentation/TEN_THINGS.md) is the one page to read first, then
+[What This Is (and Why Explore Using
+Precedent)](documentation/WHY_PRECEDENT.md) for the fuller pitch, and
+the how-to guide for your situation: [if you write
+code](documentation/FOR_DEVELOPERS.md), or [if you
+don't](documentation/FOR_EVERYONE_ELSE.md). If a word like "individual set" or
+"pre-staging" trips you up, [Our Language](documentation/OUR_LANGUAGE.md)
+is the short list of what each one means.
+
+**Already set up?** [How to Use This Day to Day](documentation/DAILY_HABITS.md)
+has the daily habits and the phrases your AI Assistant is guaranteed to
+recognize. Installing on your own project doesn't require writing any
+code yourself: open a session on your project with an AI Assistant and
+paste it [SETUP.md](SETUP.md), which runs the whole install as a
+conversation.
+
+## Get Up and Running!
+
+To get going, vendor in Precedent to a repo, connect that repo to your
+favorite AI via their coding platform — and go!
+
+Learn more about it: [the guide for adopting
+it](documentation/ADOPTING.md), [SETUP.md](SETUP.md).
+
+## Manually Install
 
 Hand installation, updates, and contributing improvements back:
-[INSTALL.md](INSTALL.md). The working method, for power users:
-[METHOD.md](METHOD.md). Phone and per-assistant setups:
-[MOBILE.md](MOBILE.md). Automatic repository checks:
-[GITHUB_ACTIONS.md](GITHUB_ACTIONS.md). The full practice catalog:
-[PRACTICES.md](PRACTICES.md). Slide decks built from plain files:
-[deck/](deck/). Git in eight ideas: [GIT.md](GIT.md). Open items and
-roadmap: [TODO.md](TODO.md). Repository index for agents:
-[AGENTS.md](AGENTS.md).
-
-A separate project grew out of this one:
-**[GitAround](https://github.com/alex137/GitAround)**, a way to read a
-project and follow what is changing in it from a browser, for people who
-would rather not work through GitHub's own screens. It is a proposal
-looking for feedback, not something you can install yet.
+[INSTALL.md](INSTALL.md). What each person sets on each machine:
+[documentation/PER_MACHINE_SETUP.md](documentation/PER_MACHINE_SETUP.md) —
+most people, working on Claude Code on the web, only need
+[documentation/CLOUD_SETUP.md](documentation/CLOUD_SETUP.md). The working
+method, for power users:
+[documentation/METHOD.md](documentation/METHOD.md). Phone and
+per-assistant setups: [documentation/MOBILE.md](documentation/MOBILE.md).
+Automatic repository checks:
+[documentation/GITHUB_ACTIONS.md](documentation/GITHUB_ACTIONS.md). Git in
+eight ideas: [documentation/GIT.md](documentation/GIT.md). Open items and roadmap:
+[todo/TODO.md](todo/TODO.md). Repository index for agents:
+[AGENTS.md](AGENTS.md). The pitch and how-to guides for people outside
+the project: [documentation/](documentation/).
