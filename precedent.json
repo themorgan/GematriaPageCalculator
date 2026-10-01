@@ -50,5 +50,39 @@
       "reason": "That hook serves practice-set repositories; this is a consuming repo, and tools/bootstrap.sh (from templates/bootstrap.sh) clones the shared sets precedent.json declares (spec/MIGRATING_EXISTING_INSTALLS.md step 8). Declined at the 2026-10-01 migration."
     }
   ],
-  "staging_branch": "staging"
+  "staging_branch": "staging",
+  "kept_template_divergences": {
+    "AGENTS.md ## Where things are (quick index — check here BEFORE searching the repo)": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "35da8028a5533b2d895bb32a5e15325bde12973c81c4b3b76ee5ab23ec58e423"
+    },
+    "AGENTS.md ### Two check levels": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "fa9278f49f069060855d981c72fd1ca74769bf191b8d12ea0a59bc51db9a833f"
+    },
+    "AGENTS.md ### Build-environment gotchas — do NOT rediscover these": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "01f1c4f690e67e5201d09c688c3b2cf62121d759e21f88ce5aa9990b7f06ec00"
+    },
+    "AGENTS.md ## Git / workflow": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "0b0d3b4471b96309e80cca88f7308e60f775ae5acc8feac23deb20695196e708"
+    },
+    "AGENTS.md ### Merging a thread branch (runbook — follow, don't improvise)": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "52660f763b5e3dbab8f85eaae6f4e75793f934676fbbee04363bc526924cff44"
+    },
+    "AGENTS.md ## Administrator requests you must know how to handle": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "494c0639e010cfa3aff35711b4be0c22ac10715d2946cffc2415741066e6b246"
+    },
+    "AGENTS.md ## Practice sources — Precedent loader (policy)": {
+      "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
+      "template_sha256": "de58606f8e0f5ed5c8fc46dcff2e005df62dcc5632d2de50e9a3a5a7a78e7a6b"
+    },
+    "GETTING_STARTED.md": {
+      "reason": "Instantiated from the current template on 2026-10-01 with this repo's values; the flagged line is the template's own instantiation comment with <upstream-docs> filled in as process/upstream, and the CI paragraph is the installer's github_ci_workflows-off text.",
+      "template_sha256": "05baf0b7d516d5009fd8c78a1e23c1e2a0ed14d672dd0d2b7c5f2e5fba5979d3"
+    }
+  }
 }

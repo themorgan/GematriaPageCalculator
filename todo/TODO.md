@@ -11,7 +11,7 @@ as_of: 2026-10-01
 
 | Item | What | Age | Disposition | Blocked on |
 |---|---|---|---|---|
-| [`todo-2026-08-10-bestpractice-check-in`](todo-2026-08-10-bestpractice-check-in.md) | BestPractice check-in: | 52d | wait |  |
+| [`todo-2026-08-10-bestpractice-check-in`](todo-2026-08-10-bestpractice-check-in.md) | Update Vendors: | 52d | wait |  |
 
 ## Unblocked Work
 
@@ -19,7 +19,7 @@ as_of: 2026-10-01
 
 | Item | What | Age |
 |---|---|---|
-| [`todo-2026-08-10-bestpractice-check-in`](todo-2026-08-10-bestpractice-check-in.md) | BestPractice check-in: | 52d |
+| [`todo-2026-08-10-bestpractice-check-in`](todo-2026-08-10-bestpractice-check-in.md) | Update Vendors: | 52d |
 
 ## Open Decisions
 

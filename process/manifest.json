@@ -4,7 +4,7 @@
     "vendored_at": "process/upstream",
     "commit": "f8d6d7abfed476aa0ca69de95b5e97deec9887e6",
     "synced_from": "f8d6d7abfed476aa0ca69de95b5e97deec9887e6",
-    "_note": "commit = upstream hash last synced (Update Vendors + loader migration, 2026-10-01, recorded 2026-10-01; verified tree-identical)."
+    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-01; verified tree-identical)."
   },
   "entries": [
     {
@@ -41,7 +41,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Verbatim wrapper.",
-      "local_sha256": "1718079c7b5581a9e26190311453e99cd472c3b4b4e01f0a6fd7f1e0b0aae4f0"
+      "local_sha256": "2c16cad048d761c0f10c2c0f51884ec0465dd58868be77c65b20c6c27af5f883"
     },
     {
       "practice": "bootstrap",
@@ -113,7 +113,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "New template introduced upstream (practice 39, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: copied verbatim, stripping only the template's own top install-instruction comment, same treatment as the readme-agent-entry marker block.",
-      "local_sha256": "dfb6553508415eee3ca84de0c79ad2930f95371e912bfb7c97b7c36e9b88efd4"
+      "local_sha256": "f9292be467ab7e9706aa69f74a73cbd015256e350af9f1411a0b7acf9a27a42c"
     }
   ]
 }

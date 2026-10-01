@@ -16,14 +16,13 @@ closed:            null
 ---
 ## What
 
-- [ ] **BestPractice check-in:** review `diverged` entries in
-  `process/manifest.json` and the vendored tree's accumulated changes;
-  propose upstream per `process/upstream/INSTALL.md` §4 (scrub audit first).
+- [ ] **Update Vendors:** take the current Precedent catalogue and engine
+  when it suits the project (say `Update Vendors` to an assistant;
+  the procedure is [process/upstream/INSTALL.md](../process/upstream/INSTALL.md) §2).
 
-Since the 2026-10-01 migration onto the loader, a generic improvement goes
-upstream as an ordinary pull request against BestPractice (AGENTS.md merge
-runbook step 0b); this recurring review still catches anything that was
-folded into the vendored tree without one.
+Reworded at the 2026-10-01 migration onto the loader, from the classic
+install's recurring BestPractice check-in, to the wording upstream's
+installer writes for a loader install.
 
 ## How It Closes
 

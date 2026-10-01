@@ -341,7 +341,6 @@ concluding it is new, grep for it —
 `session-bootstrap`) so it applies itself. The bullets below are standing
 instructions for this repo, not gotchas.
 
-- `build/build.sh` requires the `zip` CLI on PATH to package the `.zip`/`.xpi`.
 
 <!-- INSTALL.md §0 step 3 / §1 step 9: if the administrator answered yes to a
      team and/or individual practice source, add the bullet below (drop
