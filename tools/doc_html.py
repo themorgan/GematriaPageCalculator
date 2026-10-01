@@ -1,0 +1,1743 @@
+#!/usr/bin/env python3
+"""doc_html -- the ONE sortable-table HTML renderer for repo documents
+(practice: tabular-shared-renderer).
+
+Convention: any document whose tables have multiple columns a reader might
+want to sort ships an HTML render built from the .md by THIS module -- the
+.md stays the source of record -- doc_sync keeps its generated tables live
+(practice: docs-track-models) -- the .html is the committed reading
+product. Table behavior
+(multi-column sort, pinned sort columns, sticky headers, numeric-aware sort
+keys) lives HERE and only here, so a functionality change upgrades every
+table in the repo at once: edit CSS/JS below, run `python3 tools/doc_html.py`
+(no args = rebuild everything in DOCS), commit the renders.
+
+    python3 tools/doc_html.py                # rebuild all registered docs
+    python3 tools/doc_html.py path/to/doc.md # render one (registered or not)
+    python3 tools/doc_html.py --list         # show the registry
+
+Behavior contract (the full spec is tabular-shared-renderer's numbered list
+(practice: tabular-shared-renderer); this module is its reference
+implementation): multi-column sort (click; shift-
+click or Multi-sort adds keys; re-click reverses; header marks show key
+order) with numeric-aware keys (approximation marks, any Unicode currency
+symbol with k/M magnitude suffixes on currency amounts, thousands
+separators, leading zeros, bare decimals, units; em-dash empties last);
+decimal-aligned numeric columns (cells leading with a number are padded
+so the integer end / decimal point lines up down the column, measured
+markup-safe with Range rects); a filter dropdown on EVERY column --
+value checkboxes when 2-60 distinct values (MULTI-select: any checked
+subset keeps its rows, none checked = All), plus on value columns a
+</≤/=/≥/> comparator against a typed threshold (displayed units; empty
+cells never pass), and a contains match on text columns too varied to
+enumerate; constraints AND together and the button shows the active
+selection; on a text column that is a frontier ordinal axis the
+dropdown's value rows carry ⠿ grips and drag to edit the same
+best→worst ranking the frontier picker uses; sorted and filtered columns pin
+where they sit and stay visible under horizontal scroll, with sticky
+headers -- column movement is user-driven only (drag a header); optional alternate-value views (per-cell data-view spans, a
+checkbox per extra view swapping every such cell, sort/filter on
+the active view); one Reset
+clearing sorts AND
+filters and restoring row/column order; a live "N of M rows" count;
+a frontier axis pull-down on every table with a Frontier column
+(practice: permutation-frontier-column; see below); header
+cells link their definition notes with mouse-over tooltips, and each
+note's return link lands back on the header cell it defines; the build
+timestamp renders in the page header, in the reader's local time (the
+.html is the versioned product; the source carries none); includes expanded, relative repo links
+rewritten to the hosted view, wide tables scrolling in their own
+container.
+
+Frontier axis pull-down (practice: permutation-frontier-column): every table with a Frontier
+column gets it, from the engine alone -- no per-document or per-model
+wiring. The printed ✓/— marks are the default view (permutation-frontier-column
+already makes them the generating model's own full-precision computation,
+so the default frontier's semantics arrive as table data); the pull-down
+lets the reader pick which columns form the frontier instead, and the
+page recomputes the marks from the displayed values. EVERY non-frontier
+column is offered: on a numeric column the reader sets the axis's
+better-direction (↓/↑); a TEXT column is an ordinal axis ranked by its
+value list, which the reader drags into best→worst order (default: the
+column's sorted order). Only a text column with too many distinct
+values to order (>60) is listed as not rankable. A generating model MAY
+curate the picker by preceding its table with an invisible spec
+comment:
+
+    <!--frontier: default=Price:min,Cargo:max|rank=Span:min,...
+        |inputs=A,B,C|partition=P-->
+
+`default=` names the printed marks' axes as label:direction pairs
+(labels are header-cell text; min = lower is better, max = higher);
+`rank=` other columns whose directions the model fixes; `inputs=`
+columns tagged "(input)" in the picker (still selectable -- the tag is
+information, not a gate); `partition=` a column whose distinct values
+are judged as separate frontiers. Columns the spec does not name are
+still offered, with reader-set direction or ordering. The renderer
+attaches the spec to the table as a data-frontier attribute. The spec
+refines the pull-down; it never gates it -- and that is the general
+rule for this module: a new table capability must manifest on every
+registered render from the engine alone, with host or model
+declarations as optional refinement, never as a prerequisite.
+
+Host configuration: fill DOCS with (repo-relative .md, title) pairs. Link
+rewriting targets the repo's own hosted-view URL, detected from the git
+remote; override LINK_BASE if detection does not fit your host. When a
+registered document's render is itself hosted somewhere (an artifact URL,
+a pages deployment), record it in RENDER_URLS (repo-relative .md path ->
+render URL): a cross-reference from one render to a document that has a
+render then lands on the RENDERED page — sortable tables and all —
+instead of the hosted source view. Unregistered targets keep the
+source-view fallback, which is also the .md's role as source of record.
+
+Per-document build scripts may keep documented entry points, but as thin
+wrappers importing render() from here -- never as forks of the CSS/JS.
+
+Requires: pip install markdown.
+"""
+
+import pathlib
+import html as html_mod  # heading_slug unescapes entities the render emits
+import os
+import re
+import sys
+from pathlib import Path
+
+import markdown
+
+import subprocess
+import datetime
+
+# practice: one-formatter-per-quantity -- every moment in time this project
+# writes down comes from ONE module, in the person's zone, carrying its
+# offset. Never a bare datetime.date.today(): that is the container's UTC.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+
+
+def find_root(start):
+    """Git toplevel containing this file (the renderer lives in the repo it
+    serves)."""
+    r = subprocess.run(["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+                       capture_output=True, text=True)
+    return Path(r.stdout.strip()) if r.returncode == 0 else Path(start).parents[1]
+
+
+ROOT = find_root(Path(__file__).resolve().parent)
+
+
+
+def _declared_base_branch(root):
+    """The branch this repo's work is measured against, as DECLARED in
+    precedent.json's `base_branch` -- not inferred from `origin/HEAD`.
+
+    Those are two different questions with usually the same answer, which is
+    why asking the wrong one survives so long. `origin/HEAD` answers "what
+    does GitHub show first"; callers here mean "what lineage does this work
+    belong to". They diverge the moment a repo pins its work to a branch
+    that is not the configured default -- BestPractice's own
+    `precedent-beta-v01` -- and then every inference is quietly wrong with
+    nothing failing. Returns None when undeclared or unreadable, so callers
+    fall back to the old inference rather than breaking (fail-gracefully).
+    Enforced by precedent_check.py's `declared-base-branch`.
+    """
+    try:
+        import json as _json, pathlib as _pathlib
+        v = _json.loads((_pathlib.Path(root) / 'precedent.json')
+                        .read_text(encoding='utf-8')).get('base_branch')
+        return v if isinstance(v, str) and v.strip() else None
+    except Exception:
+        return None
+
+def _default_branch():
+    """Same logic as doc_lint.py's default_branch(), duplicated rather than
+    imported because this module is meant to be dropped into a host repo on
+    its own. `origin/HEAD` is the authoritative source; 'main'/'master' are
+    a fallback for a clone where it was never set. Without this, every
+    relative link this module rewrites hardcoded '/blob/master/' -- silently
+    a dead link on any repo (this one included) whose default branch is
+    'main', which is the actual default on GitHub since 2020."""
+    declared = _declared_base_branch(ROOT)
+    if declared:
+        return declared
+    r = subprocess.run(["git", "-C", str(ROOT), "symbolic-ref",
+                       "refs/remotes/origin/HEAD"],
+                       capture_output=True, text=True)
+    head = r.stdout.strip()
+    if head:
+        return head.rsplit("/", 1)[-1]
+    for cand in ("main", "master"):
+        r = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify",
+                           "--quiet", f"origin/{cand}"],
+                           capture_output=True, text=True)
+        if r.stdout.strip():
+            return cand
+    return "main"
+
+
+def _link_base():
+    """Hosted-view base URL for rewriting relative repo links, from the git
+    remote (GitHub-shaped hosts); override LINK_BASE for others."""
+    r = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
+                       capture_output=True, text=True)
+    url = r.stdout.strip()
+    if url.startswith("git@"):
+        url = url.replace(":", "/", 1).replace("git@", "https://", 1)
+    if url.endswith(".git"):
+        url = url[:-4]
+    return f"{url}/blob/{_default_branch()}/" if url else ""
+
+
+LINK_BASE = _link_base()
+
+# Registry: (repo-relative source .md, page title). Output = same stem, .html.
+# Host repos fill this in.
+DOCS = [
+    ('spec/PREFORK_AUDIT.md', 'Pre-Fork Catalogue Audit'),
+]
+
+# Hosted-render registry: repo-relative .md path -> URL of that document's
+# hosted render. Cross-links between renders resolve here first (see the
+# module docstring); host repos fill this in beside DOCS.
+RENDER_URLS = {}
+
+# Composite renders: a page a host builder assembles from several registered
+# documents (repo-relative .html path -> {"sources": [.md paths], "url":
+# hosted URL or None}). The staleness check below treats each one like a
+# DOCS entry with several sources.
+COMPOSITE_RENDERS = {}
+
+# The publish ledger: a JSON file (repo-relative .html path -> sha256 of the
+# render when its hosted copy was last published), kept by `--published`.
+# None disables the republish half of `--stale`. Why a ledger and not a
+# timestamp or a git comparison: nothing in the repository records that a
+# hosted copy was refreshed, so the only way a check can know a render's
+# artifact is behind it is a hash written down at publish time.
+RENDER_LEDGER = None
+
+CSS = """
+.renderstamp { display: block; color: var(--muted); font-size: 12px; margin: -0.6rem 0 1.6rem; }
+td span[data-view] { display: none; }
+td span[data-view].von { display: inline; }
+.viewtoggle { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; cursor: pointer; user-select: none; }
+.filterrow .fbtn { width: 100%; max-width: 160px; font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--hairline); border-radius: 4px; cursor: pointer; padding: 1px 5px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filterrow .fbtn.on { color: var(--accent, #2563eb); border-color: var(--accent, #2563eb); }
+.filterrow td { padding: 2px 4px; background: var(--head-bg); }
+.fpanel { position: fixed; z-index: 60; background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.18); padding: 6px 8px; max-height: 260px; overflow-y: auto; font-size: 12px; min-width: 150px; max-width: 320px; }
+.fpanel label { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; padding: 1px 2px; }
+.fpanel label.fall { border-bottom: 1px solid var(--hairline); margin-bottom: 4px; padding-bottom: 3px; }
+.fpanel input { margin-right: 6px; }
+.fpanel .fnote { color: var(--muted); border-top: 1px solid var(--hairline); margin-top: 4px; padding-top: 3px; white-space: normal; max-width: 300px; }
+.fpanel .fcmp { display: flex; gap: 4px; align-items: center; margin: 2px 0 4px; }
+.fpanel .fcmp select, .fpanel .fcmp input, .fpanel input[type="text"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; padding: 1px 4px; }
+.fpanel .fcmp input { width: 90px; }
+.fpanel input[type="text"] { width: 100%; margin: 2px 0 4px; }
+.fpanel .ordlist { margin: 0 0 4px 20px; border-left: 2px solid var(--hairline); padding-left: 6px; }
+.fpanel .orditem { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: grab; touch-action: none; user-select: none; padding: 1px 4px; border: 1px solid transparent; border-radius: 3px; white-space: nowrap; max-width: 260px; }
+.fpanel .orditem .ordtext { overflow: hidden; text-overflow: ellipsis; }
+.fpanel .grip { color: var(--muted); flex: none; font-size: 11px; letter-spacing: 1px; cursor: grab; touch-action: none; }
+.fpanel .flist label { display: flex; align-items: center; gap: 6px; }
+.fpanel .flist input { margin-right: 0; }
+.fpanel .flist .ftext { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.fpanel .flist label.dragging { border: 1px solid var(--accent); background: var(--hover); border-radius: 3px; }
+.fpanel .orditem:hover { border-color: var(--accent); background: var(--stripe); }
+.fpanel .orditem.dragging { border-color: var(--accent); background: var(--hover); cursor: grabbing; }
+thead th.dragging { background: var(--hover); }
+.fpanel .dirbtn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--hairline); border-radius: 3px; margin-left: 4px; padding: 0 4px; cursor: pointer; }
+.fpanel .dirbtn:hover { border-color: var(--accent); }
+.rowcount { color: var(--muted); margin-left: 0.5rem; }
+:root {
+  --ground: #F7F6F2; --surface: #FFFFFF; --ink: #22262B; --muted: #66707A;
+  --accent: #2A5E8C; --hairline: #DCD9D1; --stripe: rgba(42, 94, 140, 0.05);
+  --head-bg: #EEECE5; --hover: rgba(42, 94, 140, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #15181B; --surface: #1C2024; --ink: #E7E4DD; --muted: #9AA3AC;
+    --accent: #7FB2DE; --hairline: #2E343A; --stripe: rgba(127, 178, 222, 0.06);
+    --head-bg: #22272C; --hover: rgba(127, 178, 222, 0.16);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #15181B; --surface: #1C2024; --ink: #E7E4DD; --muted: #9AA3AC;
+  --accent: #7FB2DE; --hairline: #2E343A; --stripe: rgba(127, 178, 222, 0.06);
+  --head-bg: #22272C; --hover: rgba(127, 178, 222, 0.16);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 16px/1.55 "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+main { max-width: 1500px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+h1, h2, h3 {
+  font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  font-weight: 600; line-height: 1.15; text-wrap: balance; color: var(--ink);
+}
+h1 { font-size: 2.3rem; margin: 0.4rem 0 0.2rem; }
+nav.contents { margin: 0.8rem 0 1.2rem; padding: 0.6rem 1rem; border-left: 3px solid var(--rule, #c8c8c8); }
+nav.contents .contents-label { font-weight: 600; display: block; margin-bottom: 0.2rem; }
+nav.contents ol { margin: 0; padding-left: 1.2rem; }
+p.contents-back { font-size: 0.85rem; margin: 0.4rem 0 1.6rem; }
+h2 { font-size: 1.55rem; margin: 2.4rem 0 0.6rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.25rem; }
+h3 { font-size: 1.2rem; margin: 1.8rem 0 0.5rem; }
+p, ul, ol { max-width: 72ch; }
+li { margin: 0.3rem 0; }
+a { color: var(--accent); }
+code { font: 0.86em ui-monospace, "Cascadia Mono", Menlo, monospace;
+       background: var(--stripe); padding: 0.08em 0.3em; border-radius: 3px; }
+hr { border: 0; border-top: 1px solid var(--hairline); margin: 2.5rem 0 1.5rem; }
+.tablewrap { overflow-x: auto; margin: 1rem 0 0.5rem; }
+/* Wide tables break out of the reading column to the viewport edge:
+   a permutation table wants the whole window, the prose does not. */
+.tablewrap.bleed { width: calc(100vw - 2rem); position: relative;
+  left: 50%; margin-left: calc(-50vw + 1rem); }
+table {
+  border-collapse: collapse; background: var(--surface);
+  font-size: 0.8rem; line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--hairline);
+}
+th, td { padding: 0.32rem 0.55rem; border: 1px solid var(--hairline);
+         text-align: left; vertical-align: top; }
+tbody tr:nth-child(even) { background: var(--stripe); }
+thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--head-bg); color: var(--ink);
+  font-family: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  font-size: 0.78rem; letter-spacing: 0.02em;
+  cursor: pointer; user-select: none; white-space: normal; min-width: 4.5rem;
+}
+thead th:hover { background: var(--hover); }
+thead th .sortmark { color: var(--accent); font-size: 0.7rem; white-space: nowrap; }
+td.pinned, th.pinned { position: sticky; background: var(--head-bg); }
+td.pinned { z-index: 1; }
+th.pinned { z-index: 3; }
+td.pinned { box-shadow: 1px 0 0 var(--hairline); }
+.sortbar { display: flex; gap: 0.6rem; align-items: center;
+  font-size: 0.75rem; color: var(--muted); margin: 0.9rem 0 -0.5rem; }
+.sortbar button {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--hairline); border-radius: 4px;
+  padding: 0.1rem 0.55rem; cursor: pointer; }
+.sortbar button[aria-pressed="true"] {
+  background: var(--accent); color: var(--ground); border-color: var(--accent); }
+.sortbar button:hover { border-color: var(--accent); }
+caption, .tablehint {
+  font-size: 0.78rem; color: var(--muted); text-align: left;
+  max-width: 72ch; margin: 0.2rem 0 0;
+}
+/* narrow tables (requirements, launch means) read at prose width */
+table.narrow { font-size: 0.9rem; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+"""
+
+JS = """
+(function () {
+  function cellText(cell) {
+    // Alternate-value views: a cell may hold one <span data-view=...>
+    // per view; only the active (.von) span's text is the cell's
+    // value for sorting, filtering, and display.
+    if (cell.querySelector) {
+      var sp = cell.querySelector("span[data-view].von");
+      if (sp) return sp.textContent;
+      sp = cell.querySelector("span[data-view]");
+      if (sp) return sp.textContent;
+    }
+    return cell.textContent;
+  }
+  function keyOf(cell) {
+    var t = cellText(cell).trim();
+    if (t === "—" || t === "") return { n: -Infinity, s: "" };
+    // k/M magnitude suffixes are recognized on CURRENCY amounts only
+    // (any Unicode currency symbol, \\p{Sc}): a bare "58 M" is a unit
+    // (megajoules), not money. Leading zeros and bare decimals (".59")
+    // parse as their values. This grammar is mirrored by parse_key in
+    // tools/table_fmt.py (the formatter↔renderer seam contract) —
+    // extend BOTH together.
+    var kmatch = /\\p{Sc}\\s*[\\d.,]+k(?![A-Za-z0-9])/u.test(t);
+    var mmatch = /\\p{Sc}\\s*[\\d.,]+\\s*M(?![A-Za-z0-9])/u.test(t);
+    var m = t.replace(/[,≈≤≥]/g, "").match(/-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)/);
+    if (m) {
+      var v = parseFloat(m[0]);
+      if (kmatch) v *= 1000;
+      if (mmatch) v *= 1000000;
+      return { n: v, s: t.toLowerCase() };
+    }
+    return { n: null, s: t.toLowerCase() };
+  }
+  document.querySelectorAll("table").forEach(function (tbl) {
+    var head = tbl.tHead;
+    if (!head || !tbl.tBodies.length) return;
+    var hrow = head.rows[0];
+    var original = Array.prototype.slice.call(tbl.tBodies[0].rows);
+    // Alternate-value views: a cell may carry one <span data-view=X>
+    // per view; the first view named is the default, each further
+    // view gets a checkbox that swaps every such cell's value (and
+    // re-sorts; filters clear, since their values changed).
+    var viewNames = [];
+    tbl.querySelectorAll("span[data-view]").forEach(function (sp) {
+      if (viewNames.indexOf(sp.dataset.view) < 0) viewNames.push(sp.dataset.view);
+    });
+    function setView(name) {
+      tbl.querySelectorAll("span[data-view]").forEach(function (sp) {
+        sp.classList.toggle("von", sp.dataset.view === name);
+      });
+    }
+    if (viewNames.length) setView(viewNames[0]);
+    var ncols = hrow.cells.length;
+    // Stamp every cell with its ORIGINAL column index; all later logic is
+    // keyed on these, so physically reordering columns never confuses it.
+    Array.prototype.forEach.call(hrow.cells, function (c, i) { c.dataset.col = i; });
+    original.forEach(function (r) {
+      Array.prototype.forEach.call(r.cells, function (c, i) { c.dataset.col = i; });
+    });
+    // Header labels captured before sort marks are appended: the frontier
+    // spec names columns by this text.
+    var colByLabel = {};
+    Array.prototype.forEach.call(hrow.cells, function (c) {
+      colByLabel[c.textContent.trim()] = +c.dataset.col;
+    });
+    function cellOf(row, col) {
+      for (var k = 0; k < row.cells.length; k++) {
+        if (+row.cells[k].dataset.col === col) return row.cells[k];
+      }
+      return null;
+    }
+    function colMeta(col) {
+      // A column's distinct displayed values (sorted numeric-aware, on
+      // the active view) and whether it reads as a VALUE column (most
+      // non-empty cells parse numerically). Shared by the filters and
+      // the frontier picker so both see the same column kind.
+      var vals = {}, filled = 0, numeric = 0;
+      original.forEach(function (r) {
+        var c = cellOf(r, col);
+        if (!c) return;
+        var t = cellText(c).trim();
+        vals[t] = 1;
+        if (t === "" || t === "—") return;
+        filled++;
+        // A value cell LEADS with a number (same test as the decimal
+        // aligner) -- "Rotax 916" contains a digit but is a name.
+        var k = keyOf(c);
+        if (alignLeadRe.test(t) && k.n !== null && isFinite(k.n)) numeric++;
+      });
+      var names = Object.keys(vals).sort(function (a, b) {
+        var ka = keyOf({ textContent: a }), kb = keyOf({ textContent: b });
+        if (ka.n !== null && kb.n !== null && ka.n !== kb.n) return ka.n - kb.n;
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+      return { names: names,
+               numeric: filled > 0 && numeric * 2 >= filled };
+    }
+    // Decimal alignment: in a column where cells LEAD with a number
+    // (approx marks, ×, or a currency symbol allowed in front), pad each
+    // cell left so the end of that number's integer digits — hence its
+    // decimal point, when it has one — sits at one x-position down the
+    // column. The prefix is measured with a Range rect, so markup
+    // (bold, links) and proportional-width symbols measure exactly and
+    // the DOM is never rewritten; trailing annotations don't disturb
+    // the alignment. Columns with digits only inside text (part codes,
+    // composite cells) don't qualify.
+    var alignLeadRe = /^[-≈≤≥~×±]*\\s*\\p{Sc}?\\s*[\\d.]/u;
+    function alignSplit(cell) {
+      // [textNode, offset] just past the leading number's integer
+      // digits (i.e., before its decimal point), or null. A bare
+      // decimal (".45") has an empty integer part: the split lands at
+      // the point itself, so "$.45" and "$0.45" align their points to
+      // the same line.
+      var walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      var nodes = [], all = "", node;
+      while ((node = walker.nextNode())) {
+        nodes.push(node);
+        all += node.nodeValue;
+      }
+      var m = all.match(/\\d[\\d,]*|(?=\\.\\d)/);
+      if (!m) return null;
+      var end = m.index + m[0].length;
+      for (var i = 0, pos = 0; i < nodes.length; i++) {
+        var len = nodes[i].nodeValue.length;
+        if (end <= pos + len) return [nodes[i], end - pos];
+        pos += len;
+      }
+      return null;
+    }
+    function alignColumns() {
+      // Rows must be visible to measure; hide states are restored after.
+      var saved = original.map(function (r) { return r.style.display; });
+      original.forEach(function (r) { r.style.display = ""; });
+      for (var ci = 0; ci < ncols; ci++) {
+        var cands = [], filled = 0;
+        original.forEach(function (r) {
+          var c = cellOf(r, ci);
+          var t = c ? c.textContent.trim() : "";
+          if (t === "" || t === "—") return;
+          filled++;
+          if (alignLeadRe.test(t)) cands.push(c);
+        });
+        if (cands.length < 2 || cands.length < filled * 0.8) continue;
+        var maxw = 0, items = [];
+        cands.forEach(function (c) {
+          var sp = alignSplit(c);
+          if (!sp) return;
+          var range = document.createRange();
+          range.setStart(c, 0);
+          range.setEnd(sp[0], sp[1]);
+          var w = range.getBoundingClientRect().width;
+          items.push([c, w]);
+          if (w > maxw) maxw = w;
+        });
+        items.forEach(function (it) {
+          var c = it[0];
+          if (c._basePad === undefined) {
+            c._basePad = parseFloat(getComputedStyle(c).paddingLeft) || 0;
+          }
+          c.style.paddingLeft = (c._basePad + maxw - it[1]) + "px";
+        });
+      }
+      original.forEach(function (r, i) { r.style.display = saved[i]; });
+      pin();
+    }
+    var baseOrder = [];
+    for (var bi = 0; bi < ncols; bi++) baseOrder.push(bi);
+    var sorts = [];   // [{col: original index, dir}]
+    var multi = false, frontierOnly = false;
+    var resetFrontier = null;  // set when the frontier axis picker exists
+
+    var bar = document.createElement("div");
+    bar.className = "sortbar";
+    var multiBtn = document.createElement("button");
+    multiBtn.textContent = "Multi-sort";
+    multiBtn.setAttribute("aria-pressed", "false");
+    multiBtn.title = "When on, each header click ADDS a sort key instead of replacing (same as shift-click)";
+    multiBtn.addEventListener("click", function () {
+      multi = !multi;
+      multiBtn.setAttribute("aria-pressed", String(multi));
+    });
+    var resetBtn = document.createElement("button");
+    resetBtn.textContent = "Reset";
+    resetBtn.title = "Clear sorts and filters; restore the original row and column order and the default frontier view";
+    var label = document.createElement("span");
+    label.textContent = "Sort: click a header · shift-click or Multi-sort adds keys · sorted/filtered columns pin in place while scrolling · drag a header to move a column";
+    var count = document.createElement("span");
+    count.className = "rowcount";
+    bar.appendChild(multiBtn);
+    bar.appendChild(resetBtn);
+    bar.appendChild(label);
+    var wrap = tbl.closest(".tablewrap") || tbl;
+    // A table wider than the reading column takes the whole window
+    // (the .bleed breakout); narrow tables stay in the column.
+    if (wrap !== tbl && tbl.scrollWidth > wrap.clientWidth + 4) {
+      wrap.classList.add("bleed");
+    }
+    wrap.parentNode.insertBefore(bar, wrap);
+
+    // Per-column filters: EVERY column gets a button (no distinct-value
+    // gate). The panel offers what the column supports: multi-select
+    // value checkboxes (2-60 distinct values), a </≤/=/≥/> comparator
+    // with a threshold on value columns, and a contains match on text
+    // columns too varied to enumerate. Constraints AND together.
+    // filterState maps column id -> {vals:{value:1}, op:"", num:NaN, sub:""}.
+    var filterState = {};
+    function filterActive(st) {
+      return !!st && (Object.keys(st.vals).length > 0 ||
+                      st.op !== "" || st.sub !== "");
+    }
+    function clearFilters() {
+      Object.keys(filterState).forEach(function (col) {
+        var st = filterState[col];
+        Object.keys(st.vals).forEach(function (k) { delete st.vals[k]; });
+        st.op = ""; st.num = NaN; st.sub = "";
+      });
+    }
+    var openPanel = null, suppressClose = false;
+    function closePanel() {
+      if (openPanel) { openPanel.remove(); openPanel = null; }
+    }
+    document.addEventListener("click", function (e) {
+      if (suppressClose) { suppressClose = false; return; }
+      if (openPanel && !openPanel.contains(e.target)) closePanel();
+    });
+    window.addEventListener("resize", closePanel);
+    // Ordinal-axis plumbing shared by the frontier picker and the
+    // filter dropdowns: a text column's reader-set best→worst value
+    // order lives on its axis object (a.order), so dragging in either
+    // panel edits the same ranking. applyFrontierRef is set once the
+    // frontier controls exist.
+    var applyFrontierRef = null;
+    function ordAxisFor(col) {
+      if (!spec) return null;
+      for (var i = 0; i < spec.rank.length; i++) {
+        if (spec.rank[i].col === col && spec.rank[i].kind === "ord") {
+          return spec.rank[i];
+        }
+      }
+      return null;
+    }
+    function wireOrdDrag(handle, row, list, a) {
+      // Drag `row` (grabbed by `handle`) among its siblings in `list`
+      // to reorder a.order. POINTER events on the document, no pointer
+      // capture (native DnD never fires in sandboxed viewers, and a
+      // captured element loses capture when the reorder re-inserts it).
+      row._val = row._val === undefined ? null : row._val;
+      handle.addEventListener("pointerdown", function (ev) {
+        if (ev.button !== 0 && ev.pointerType === "mouse") return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        row.classList.add("dragging");
+        var moved = false;
+        function over(e) {
+          var sc = list.closest(".fpanel");
+          if (sc) {
+            var sr = sc.getBoundingClientRect();
+            if (e.clientY < sr.top + 14) sc.scrollTop -= 8;
+            else if (e.clientY > sr.bottom - 14) sc.scrollTop += 8;
+          }
+          var el = document.elementFromPoint(e.clientX, e.clientY);
+          var tgt = null;
+          while (el && el !== list) {
+            if (el.parentNode === list && el._val != null) { tgt = el; break; }
+            el = el.parentNode;
+          }
+          if (!tgt || tgt === row) return;
+          var fi = a.order.indexOf(row._val), ti = a.order.indexOf(tgt._val);
+          if (fi < 0 || ti < 0 || fi === ti) return;
+          a.order.splice(fi, 1);
+          a.order.splice(ti, 0, row._val);
+          if (fi < ti) list.insertBefore(row, tgt.nextSibling);
+          else list.insertBefore(row, tgt);
+          moved = true;
+        }
+        function up() {
+          row.classList.remove("dragging");
+          document.removeEventListener("pointermove", over);
+          document.removeEventListener("pointerup", up);
+          document.removeEventListener("pointercancel", up);
+          if (moved) {
+            suppressClose = true;  // release outside the panel must not close it
+            if (axisOn && axisOn[a.label] && applyFrontierRef) applyFrontierRef();
+          }
+        }
+        document.addEventListener("pointermove", over);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+      });
+    }
+    function makeGrip() {
+      var grip = document.createElement("span");
+      grip.className = "grip";
+      grip.textContent = "⠿";  // drag-pad affordance
+      return grip;
+    }
+    var fr = head.insertRow(-1);
+    fr.className = "filterrow";
+    Array.prototype.forEach.call(hrow.cells, function (th) {
+      var cell = fr.insertCell(-1);
+      cell.dataset.col = th.dataset.col;
+      var col = +th.dataset.col;
+      var st = (filterState[col] = { vals: {}, op: "", num: NaN, sub: "" });
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fbtn";
+      btn.textContent = "All";
+      btn.title = "Filter this column: check values, or compare against a number";
+      btn._sync = function () {
+        var parts = [];
+        if (st.op !== "") parts.push(st.op + " " + st.num);
+        if (st.sub !== "") parts.push("~" + st.sub);
+        var picked = Object.keys(st.vals);
+        if (picked.length === 1) parts.push(picked[0]);
+        else if (picked.length > 1) parts.push(picked.length + " values");
+        var t = parts.length ? parts.join(" · ") : "All";
+        btn.textContent = t.length > 30 ? t.slice(0, 29) + "…" : t;
+        btn.classList.toggle("on", filterActive(st));
+      };
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (openPanel && openPanel._btn === btn) { closePanel(); return; }
+        closePanel();
+        var meta = colMeta(col);
+        var p = document.createElement("div");
+        p.className = "fpanel";
+        p._btn = btn;
+        p.addEventListener("click", function (ev) { ev.stopPropagation(); });
+        var boxes = [];
+        function update() {
+          btn._sync();
+          allCb.checked = !filterActive(st);
+          refilter();
+        }
+        var allLab = document.createElement("label");
+        allLab.className = "fall";
+        var allCb = document.createElement("input");
+        allCb.type = "checkbox";
+        allCb.checked = !filterActive(st);
+        allCb.addEventListener("change", function () {
+          Object.keys(st.vals).forEach(function (k) { delete st.vals[k]; });
+          st.op = ""; st.num = NaN; st.sub = "";
+          boxes.forEach(function (b) { b.checked = false; });
+          if (p._cmpSel) { p._cmpSel.value = ""; p._cmpIn.value = ""; }
+          if (p._subIn) p._subIn.value = "";
+          update();
+        });
+        allLab.appendChild(allCb);
+        allLab.appendChild(document.createTextNode("All"));
+        p.appendChild(allLab);
+        if (meta.numeric) {
+          // Comparator: keep rows whose value satisfies op threshold
+          // (thresholds in the displayed units; empty cells never pass).
+          var row = document.createElement("div");
+          row.className = "fcmp";
+          var sel = document.createElement("select");
+          ["", "<", "≤", "=", "≥", ">"].forEach(function (op) {
+            var o = document.createElement("option");
+            o.value = op; o.textContent = op === "" ? "·" : op;
+            sel.appendChild(o);
+          });
+          sel.value = st.op;
+          var inp = document.createElement("input");
+          inp.type = "number"; inp.step = "any";
+          inp.placeholder = "value";
+          if (st.op !== "") inp.value = String(st.num);
+          function syncCmp() {
+            var v = parseFloat(inp.value);
+            if (sel.value !== "" && isFinite(v)) { st.op = sel.value; st.num = v; }
+            else { st.op = ""; st.num = NaN; }
+            update();
+          }
+          sel.addEventListener("change", syncCmp);
+          inp.addEventListener("input", syncCmp);
+          row.appendChild(sel);
+          row.appendChild(inp);
+          p.appendChild(row);
+          p._cmpSel = sel; p._cmpIn = inp;
+        }
+        if (meta.names.length >= 2 && meta.names.length <= 60) {
+          // On a text column that is a frontier ordinal axis, the value
+          // rows double as the ranking: they list in the axis's current
+          // best→worst order and each carries a ⠿ grip that drags the
+          // row to re-rank (the same order the Frontier picker edits).
+          // The checkbox still filters; only the grip drags.
+          var ax = ordAxisFor(col);
+          var namesList = meta.names;
+          if (ax) {
+            var inOrd = {};
+            ax.order.forEach(function (v) { inOrd[v] = 1; });
+            namesList = ax.order.slice();
+            meta.names.forEach(function (v) { if (!inOrd[v]) namesList.push(v); });
+          }
+          var flist = document.createElement("div");
+          flist.className = "flist";
+          namesList.forEach(function (v) {
+            var lab = document.createElement("label");
+            lab.title = v;
+            var cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.checked = !!st.vals[v];
+            cb.addEventListener("change", function () {
+              if (cb.checked) st.vals[v] = 1; else delete st.vals[v];
+              update();
+            });
+            boxes.push(cb);
+            lab.appendChild(cb);
+            var tx = document.createElement("span");
+            tx.className = "ftext";
+            tx.textContent = v === "" ? "(empty)" : v;
+            lab.appendChild(tx);
+            if (ax && ax.order.indexOf(v) >= 0) {
+              lab._val = v;
+              var grip = makeGrip();
+              grip.title = "Drag to set this column's best→worst order (top = best; drives the Frontier picker)";
+              grip.addEventListener("click", function (e) {
+                e.preventDefault();  // a grip click must not toggle the checkbox
+                e.stopPropagation();
+              });
+              lab.appendChild(grip);
+              wireOrdDrag(grip, lab, flist, ax);
+            }
+            flist.appendChild(lab);
+          });
+          p.appendChild(flist);
+          if (ax) {
+            var onote = document.createElement("div");
+            onote.className = "fnote";
+            onote.textContent = "⠿ drag sets this column's best→worst " +
+              "ranking (top = best) — the order the Frontier picker uses.";
+            p.appendChild(onote);
+          }
+        } else if (!meta.numeric && meta.names.length > 60) {
+          var subIn = document.createElement("input");
+          subIn.type = "text";
+          subIn.placeholder = "contains…";
+          subIn.value = st.sub;
+          subIn.addEventListener("input", function () {
+            st.sub = subIn.value.trim();
+            update();
+          });
+          p.appendChild(subIn);
+          p._subIn = subIn;
+        } else if (meta.names.length > 60) {
+          var note = document.createElement("div");
+          note.className = "fnote";
+          note.textContent = meta.names.length +
+            " distinct values — use the comparison above.";
+          p.appendChild(note);
+        }
+        var r = btn.getBoundingClientRect();
+        p.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 330)) + "px";
+        p.style.top = (r.bottom + 2) + "px";
+        document.body.appendChild(p);
+        openPanel = p;
+      });
+      cell.appendChild(btn);
+    });
+
+    function posMap() {
+      var m = {};
+      Array.prototype.forEach.call(hrow.cells, function (c) { m[+c.dataset.col] = c.cellIndex; });
+      return m;
+    }
+    function activePositions() {
+      // Visual positions (cellIndex) of sorted or filtered columns, left
+      // to right. Columns are never moved automatically -- the user
+      // drags them where wanted; active ones just pin where they sit.
+      var sortSet = {};
+      sorts.forEach(function (s) { sortSet[s.col] = 1; });
+      var pos = [];
+      Array.prototype.forEach.call(hrow.cells, function (th, i) {
+        if (sortSet[+th.dataset.col] ||
+            filterActive(filterState[+th.dataset.col])) pos.push(i);
+      });
+      return pos;
+    }
+    function pin() {
+      tbl.querySelectorAll(".pinned").forEach(function (c) {
+        c.classList.remove("pinned"); c.style.left = "";
+      });
+      var left = 0;
+      activePositions().forEach(function (i) {
+        var w = hrow.cells[i].getBoundingClientRect().width;
+        [hrow.cells[i], fr.cells[i]].concat(
+          Array.prototype.map.call(tbl.tBodies[0].rows, function (r) { return r.cells[i]; })
+        ).forEach(function (cell) {
+          if (!cell) return;
+          cell.classList.add("pinned");
+          cell.style.left = left + "px";
+        });
+        left += w;
+      });
+    }
+    function reorder() {
+      // Apply the user-driven (drag) column order only; sorting and
+      // filtering never move columns.
+      [hrow, fr].concat(original).forEach(function (row) {
+        baseOrder.forEach(function (c) {
+          for (var k = 0; k < row.cells.length; k++) {
+            if (+row.cells[k].dataset.col === c) { row.appendChild(row.cells[k]); break; }
+          }
+        });
+      });
+      pin();
+    }
+    function marks() {
+      Array.prototype.forEach.call(hrow.cells, function (th) {
+        var old = th.querySelector(".sortmark");
+        if (old) old.remove();
+        var idx = sorts.findIndex(function (s) { return s.col === +th.dataset.col; });
+        if (idx >= 0) {
+          var mark = document.createElement("span");
+          mark.className = "sortmark";
+          mark.textContent = " " + (sorts[idx].dir > 0 ? "▲" : "▼")
+            + (sorts.length > 1 ? String(idx + 1) : "");
+          th.appendChild(mark);
+        }
+      });
+    }
+    function passes(row) {
+      if (frontierOnly) {
+        for (var i = 0; i < hrow.cells.length; i++) {
+          if (/^frontier/i.test(hrow.cells[i].textContent.trim())) {
+            var t = row.cells[i].textContent.trim();
+            if (t === "" || t === "—") return false;
+            break;
+          }
+        }
+      }
+      for (var c = 0; c < fr.cells.length; c++) {
+        var st = filterState[+fr.cells[c].dataset.col];
+        if (!filterActive(st) || !row.cells[c]) continue;
+        var t = cellText(row.cells[c]).trim();
+        if (Object.keys(st.vals).length && !st.vals[t]) return false;
+        if (st.op !== "") {
+          var k = keyOf(row.cells[c]);
+          var v = k.n;
+          if (v === null || !isFinite(v)) return false;
+          var eps = 1e-9 * (1 + Math.abs(st.num));
+          if (st.op === "<" && !(v < st.num - eps)) return false;
+          if (st.op === "≤" && !(v <= st.num + eps)) return false;
+          if (st.op === "=" && !(Math.abs(v - st.num) <= eps)) return false;
+          if (st.op === "≥" && !(v >= st.num - eps)) return false;
+          if (st.op === ">" && !(v > st.num + eps)) return false;
+        }
+        if (st.sub !== "" &&
+            t.toLowerCase().indexOf(st.sub.toLowerCase()) < 0) return false;
+      }
+      return true;
+    }
+    function refilter() {
+      var shown = 0;
+      Array.prototype.forEach.call(tbl.tBodies[0].rows, function (r) {
+        var ok = passes(r);
+        r.style.display = ok ? "" : "none";
+        if (ok) shown++;
+      });
+      count.textContent = shown + " of " + original.length + " rows";
+      pin();
+    }
+    function apply() {
+      var body = tbl.tBodies[0];
+      var rows = Array.prototype.slice.call(body.rows);
+      var m = posMap();
+      rows.sort(function (a, b) {
+        for (var i = 0; i < sorts.length; i++) {
+          var c = m[sorts[i].col], d = sorts[i].dir;
+          var ka = keyOf(a.cells[c]), kb = keyOf(b.cells[c]), r = 0;
+          if (ka.n !== null && kb.n !== null) r = ka.n - kb.n;
+          else r = ka.s < kb.s ? -1 : ka.s > kb.s ? 1 : 0;
+          if (r) return r * d;
+        }
+        return 0;
+      });
+      rows.forEach(function (r) { body.appendChild(r); });
+      marks(); refilter();
+    }
+    resetBtn.addEventListener("click", function () {
+      sorts = [];
+      closePanel();
+      clearFilters();
+      Array.prototype.forEach.call(fr.cells, function (c) {
+        if (c.firstChild && c.firstChild._sync) c.firstChild._sync();
+      });
+      baseOrder = [];
+      for (var i = 0; i < ncols; i++) baseOrder.push(i);
+      var body = tbl.tBodies[0];
+      original.forEach(function (r) { body.appendChild(r); });
+      if (resetFrontier) resetFrontier();
+      marks(); reorder(); refilter();
+    });
+    // Frontier controls (practice: permutation-frontier-column). Any table with a Frontier column
+    // gets the axis pull-down, from the engine alone: the printed ✓/—
+    // marks (the generating model's own full-precision computation) are
+    // the default view, so no table metadata is required. On a custom
+    // pick the Pareto set is recomputed here, from the DISPLAYED
+    // (rounded) values, and the marks are rewritten to match. Every
+    // non-frontier column is offered: numeric axes take a reader-set
+    // better-direction (↓/↑), text columns rank as ordinal axes by a
+    // reader-draggable value order; an optional data-frontier spec (see
+    // the module docstring) curates that -- fixed directions, input
+    // tags, default axes, a partition column judged separately -- but
+    // never gates it.
+    var fscan = -1;
+    Array.prototype.forEach.call(hrow.cells, function (th, i) {
+      if (fscan < 0 && /^frontier/i.test(th.textContent.trim())) fscan = i;
+    });
+    function parseSpec(txt) {
+      var s = { rank: [], defaults: [], inputs: [], partition: null,
+                generic: false };
+      txt.split("|").forEach(function (part) {
+        var eq = part.indexOf("=");
+        if (eq < 0) return;
+        var key = part.slice(0, eq).trim(), val = part.slice(eq + 1).trim();
+        if (key === "inputs") {
+          s.inputs = val.split(",").map(function (v) { return v.trim(); });
+        } else if (key === "partition") {
+          s.partition = val;
+        } else if (key === "default" || key === "rank") {
+          val.split(",").forEach(function (v) {
+            var c = v.lastIndexOf(":");
+            if (c < 0) return;
+            var ax = { label: v.slice(0, c).trim(),
+                       dir: v.slice(c + 1).trim() };
+            if (colByLabel[ax.label] === undefined) return;
+            ax.col = colByLabel[ax.label];
+            s.rank.push(ax);
+            if (key === "default") s.defaults.push(ax.label);
+          });
+        }
+      });
+      return s;
+    }
+    function augmentSpec(s, fCol) {
+      // EVERY non-frontier column is offered, spec or no spec (the spec
+      // refines -- fixed directions, default axes, input tags -- never
+      // gates). Spec-named axes keep their fixed directions; every other
+      // numeric column gets a reader-set ↓/↑ (default: lower is
+      // better); a TEXT column becomes an ordinal axis ranked by its
+      // value list, which the reader drags into best→worst order (only
+      // one too varied to enumerate stays unrankable). Spec-declared
+      // inputs are tagged in the list but stay selectable.
+      var named = {};
+      s.rank.forEach(function (a) {
+        named[a.label] = 1;
+        a.kind = "num";
+        a.fixed = true;
+      });
+      s.unrankable = [];
+      Array.prototype.forEach.call(hrow.cells, function (th) {
+        var col = +th.dataset.col;
+        if (col === fCol) return;
+        var label = th.textContent.trim();
+        if (named[label]) return;
+        var meta = colMeta(col);
+        var ax = { label: label, col: col, fixed: false,
+                   isInput: s.inputs.indexOf(label) >= 0 };
+        if (meta.numeric) {
+          ax.kind = "num";
+          ax.dir = "min";
+        } else {
+          var order = meta.names.filter(function (v) {
+            return v !== "" && v !== "—";
+          });
+          if (order.length < 1 || order.length > 60) {
+            s.unrankable.push(label);
+            return;
+          }
+          ax.kind = "ord";
+          ax.order = order;
+          ax.order0 = order.slice();
+        }
+        s.rank.push(ax);
+      });
+      return s;
+    }
+    var spec = null;
+    if (fscan >= 0) {
+      var fCol = +hrow.cells[fscan].dataset.col;
+      spec = tbl.dataset.frontier ? parseSpec(tbl.dataset.frontier)
+        : { rank: [], defaults: [], inputs: [], partition: null,
+            generic: true };
+      augmentSpec(spec, fCol);
+    }
+    if (spec && spec.rank.length) {
+      frontierOnly = true;
+      var frOrig = original.map(function (r) {
+        var c = cellOf(r, fCol);
+        return c ? c.textContent : "";
+      });
+      var axisOn = {};
+      spec.defaults.forEach(function (l) { axisOn[l] = 1; });
+      function selAxes() {
+        return spec.rank.filter(function (a) { return axisOn[a.label]; });
+      }
+      function isDefaultSel() {
+        var on = selAxes();
+        return on.length === spec.defaults.length &&
+          spec.defaults.every(function (l) { return axisOn[l]; });
+      }
+      var AXWORST = 9e15;  // missing/unparseable: worst on any axis
+      function axVal(cell, a) {
+        if (!cell) return AXWORST;
+        var t = cellText(cell).trim();
+        if (t === "" || t === "—") return AXWORST;
+        if (a.kind === "ord") {
+          // Ordinal axis: the reader-ordered value list IS the scale
+          // (position 0 = best).
+          var i = a.order.indexOf(t);
+          return i < 0 ? AXWORST : i;
+        }
+        var k = keyOf(cell);
+        if (k.n === null || !isFinite(k.n)) return AXWORST;
+        return a.dir === "max" ? -k.n : k.n;  // normalized: smaller = better
+      }
+      function computeFrontier(sel) {
+        var pcol = spec.partition !== null ? colByLabel[spec.partition] : undefined;
+        var vals = original.map(function (r) {
+          return sel.map(function (a) {
+            return axVal(cellOf(r, a.col), a);
+          });
+        });
+        var part = original.map(function (r) {
+          var c = pcol !== undefined ? cellOf(r, pcol) : null;
+          return c ? c.textContent.trim() : "";
+        });
+        original.forEach(function (r) { r._onfr = true; });
+        for (var i = 0; i < original.length; i++) {
+          for (var j = 0; j < original.length; j++) {
+            if (i === j || part[i] !== part[j]) continue;
+            var better = false, worse = false;
+            for (var a = 0; a < sel.length; a++) {
+              var eps = 1e-9 * (1 + Math.min(Math.abs(vals[i][a]), 1e12));
+              if (vals[j][a] < vals[i][a] - eps) better = true;
+              else if (vals[j][a] > vals[i][a] + eps) worse = true;
+            }
+            if (better && !worse) { original[i]._onfr = false; break; }
+          }
+        }
+      }
+      var axBtn = document.createElement("button");
+      axBtn.title = "Choose the columns the frontier is computed on " +
+        "(inputs are identified in the list but not rankable)";
+      function frSync() {
+        var n = selAxes().length;
+        axBtn.textContent = !frontierOnly ? "All rows ▾"
+          : "Frontier: " + (isDefaultSel() ? "default ▾"
+            : n + (n === 1 ? " axis ▾" : " axes ▾"));
+        axBtn.setAttribute("aria-pressed", String(frontierOnly));
+      }
+      function applyFrontier() {
+        if (isDefaultSel()) {
+          original.forEach(function (r, i) {
+            var c = cellOf(r, fCol);
+            if (c) c.textContent = frOrig[i];
+          });
+        } else {
+          computeFrontier(selAxes());
+          original.forEach(function (r) {
+            var c = cellOf(r, fCol);
+            if (c) c.textContent = r._onfr ? "✓" : "—";
+          });
+        }
+        frSync(); refilter();
+      }
+      applyFrontierRef = applyFrontier;
+      resetFrontier = function () {
+        Object.keys(axisOn).forEach(function (k) { delete axisOn[k]; });
+        spec.defaults.forEach(function (l) { axisOn[l] = 1; });
+        spec.rank.forEach(function (a) {
+          if (!a.fixed && a.kind === "num") a.dir = "min";
+          if (a.kind === "ord") a.order = a.order0.slice();
+        });
+        frontierOnly = true;
+        applyFrontier();
+      };
+      axBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (openPanel && openPanel._btn === axBtn) { closePanel(); return; }
+        closePanel();
+        var p = document.createElement("div");
+        p.className = "fpanel";
+        p._btn = axBtn;
+        p.addEventListener("click", function (ev) { ev.stopPropagation(); });
+        var allLab = document.createElement("label");
+        allLab.className = "fall";
+        var allCb = document.createElement("input");
+        allCb.type = "checkbox";
+        allCb.checked = !frontierOnly;
+        allCb.addEventListener("change", function () {
+          frontierOnly = !allCb.checked;
+          applyFrontier();
+        });
+        allLab.appendChild(allCb);
+        allLab.appendChild(document.createTextNode("All rows (no frontier filter)"));
+        p.appendChild(allLab);
+        function ordList(a) {
+          // The ordinal axis's value list, best first; drag a value to
+          // re-rank -- the order is the axis (the same order the
+          // column's filter dropdown edits). Drag mechanics: wireOrdDrag.
+          var list = document.createElement("div");
+          list.className = "ordlist";
+          a.order.forEach(function (v) {
+            var it = document.createElement("div");
+            it.className = "orditem";
+            var tx = document.createElement("span");
+            tx.className = "ordtext";
+            tx.textContent = v;
+            it.appendChild(tx);
+            it.appendChild(makeGrip());
+            it.title = "Drag to re-rank (top = best)";
+            it._val = v;
+            wireOrdDrag(it, it, list, a);
+            list.appendChild(it);
+          });
+          return list;
+        }
+        spec.rank.forEach(function (a) {
+          var lab = document.createElement("label");
+          var cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = !!axisOn[a.label];
+          var sub = null;  // ordinal value list, shown while checked
+          cb.addEventListener("change", function () {
+            if (cb.checked) { axisOn[a.label] = 1; frontierOnly = true; }
+            else delete axisOn[a.label];
+            if (sub) sub.hidden = !cb.checked;
+            allCb.checked = !frontierOnly;
+            applyFrontier();
+          });
+          lab.appendChild(cb);
+          var tag = a.isInput ? " (input)" : "";
+          if (a.kind === "ord") {
+            lab.title = "Text column — ranked by its value order below (top = best)";
+            lab.appendChild(document.createTextNode(a.label + tag + " ⇅"));
+            p.appendChild(lab);
+            sub = ordList(a);
+            sub.hidden = !cb.checked;
+            p.appendChild(sub);
+          } else if (a.fixed) {
+            lab.title = a.dir === "max" ? "Higher is better" : "Lower is better";
+            lab.appendChild(document.createTextNode(
+              a.label + tag + " " + (a.dir === "max" ? "↑" : "↓")
+              + (spec.defaults.indexOf(a.label) >= 0 ? " (default)" : "")));
+            p.appendChild(lab);
+          } else {
+            // Reader-set direction: a small ↓/↑ toggle per axis.
+            lab.appendChild(document.createTextNode(a.label + tag + " "));
+            var dirBtn = document.createElement("button");
+            dirBtn.type = "button";
+            dirBtn.className = "dirbtn";
+            dirBtn.textContent = a.dir === "max" ? "↑" : "↓";
+            dirBtn.title = "Better-direction for this axis: ↓ lower is better, ↑ higher — click to flip";
+            dirBtn.addEventListener("click", function (ev) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              a.dir = a.dir === "max" ? "min" : "max";
+              dirBtn.textContent = a.dir === "max" ? "↑" : "↓";
+              if (axisOn[a.label]) applyFrontier();
+            });
+            lab.appendChild(dirBtn);
+            p.appendChild(lab);
+          }
+        });
+        if (spec.unrankable.length || spec.partition) {
+          var note = document.createElement("div");
+          note.className = "fnote";
+          note.textContent =
+            (spec.unrankable.length
+              ? "Not rankable (too many distinct values): " +
+                spec.unrankable.join(", ") + ". "
+              : "")
+            + (spec.partition
+              ? "Each " + spec.partition + " value is judged separately."
+              : "");
+          p.appendChild(note);
+        }
+        var note2 = document.createElement("div");
+        note2.className = "fnote";
+        note2.textContent = (spec.generic
+          ? "No axes picked = the document's printed marks. "
+          : "Default marks are the model's, at full precision. ")
+          + "A pick recomputes ✓/— from the values shown; " +
+          "↓/↑ sets a number column's better-direction, and a text " +
+          "column ranks by its value order (drag, top = best).";
+        p.appendChild(note2);
+        var r = axBtn.getBoundingClientRect();
+        p.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 330)) + "px";
+        p.style.top = (r.bottom + 2) + "px";
+        document.body.appendChild(p);
+        openPanel = p;
+      });
+      bar.insertBefore(axBtn, multiBtn);
+      frSync();
+    }
+    if (viewNames.length > 1) {
+      var vLab = document.createElement("label");
+      vLab.className = "viewtoggle";
+      vLab.title = "Swap the alternate-value cells between " +
+        viewNames.join(" and ");
+      var vCb = document.createElement("input");
+      vCb.type = "checkbox";
+      vCb.addEventListener("change", function () {
+        setView(viewNames[vCb.checked ? 1 : 0]);
+        clearFilters();
+        Array.prototype.forEach.call(fr.cells, function (c) {
+          if (c.firstChild && c.firstChild._sync) c.firstChild._sync();
+        });
+        closePanel();
+        apply();
+      });
+      vLab.appendChild(vCb);
+      vLab.appendChild(document.createTextNode(" " + viewNames[1]));
+      bar.insertBefore(vLab, multiBtn);
+    }
+    bar.appendChild(count);
+    Array.prototype.forEach.call(hrow.cells, function (th) {
+      th.tabIndex = 0;
+      th.title = "Click to sort; shift-click (or Multi-sort) adds this as a secondary key · drag to move this column";
+      function onSort(ev) {
+        if (th._justDragged) return;
+        var col = +th.dataset.col;
+        var found = sorts.findIndex(function (s) { return s.col === col; });
+        if ((ev.shiftKey || multi) && sorts.length) {
+          if (found >= 0) sorts[found].dir *= -1;
+          else sorts.push({ col: col, dir: 1 });
+        } else {
+          sorts = [{ col: col, dir: found === 0 ? -sorts[0].dir : 1 }];
+        }
+        apply();
+      }
+      th.addEventListener("click", onSort);
+      th.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onSort(ev); }
+      });
+      // Column move by POINTER drag (native HTML5 DnD is blocked in
+      // sandboxed viewers): a real drag starts only past a small
+      // movement threshold, so plain clicks still sort; the column
+      // relocates live as the pointer crosses other headers.
+      th.addEventListener("pointerdown", function (ev) {
+        if (ev.button !== 0 && ev.pointerType === "mouse") return;
+        var sx = ev.clientX, sy = ev.clientY, dragging = false;
+        // Listeners on document, no pointer capture: reorder() moves
+        // the th in the DOM, and a captured element loses its capture
+        // (and the drag) the moment it is re-inserted.
+        function move(e) {
+          if (!dragging &&
+              Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 6) {
+            dragging = true;
+            th.classList.add("dragging");
+          }
+          if (!dragging) return;
+          var el = document.elementFromPoint(e.clientX, e.clientY);
+          var tgt = el && el.closest ? el.closest("th") : null;
+          if (!tgt || tgt === th || tgt.parentNode !== hrow) return;
+          var from = +th.dataset.col, to = +tgt.dataset.col;
+          var fi = baseOrder.indexOf(from), ti = baseOrder.indexOf(to);
+          if (fi < 0 || ti < 0) return;
+          baseOrder.splice(fi, 1);
+          baseOrder.splice(ti, 0, from);
+          reorder(); refilter();
+        }
+        function up() {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          document.removeEventListener("pointercancel", up);
+          th.classList.remove("dragging");
+          if (dragging) {
+            th._justDragged = true;
+            setTimeout(function () { th._justDragged = false; }, 0);
+          }
+        }
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+      });
+    });
+    alignColumns();
+    refilter();
+    if (document.fonts && document.fonts.ready) {
+      // Web fonts change glyph widths; re-measure once they are in.
+      document.fonts.ready.then(alignColumns);
+    }
+  });
+})();
+"""
+
+INCLUDE_RE = re.compile(r"<!--include:([\w./-]+)-->")
+
+
+INCLUDED = set()      # resolved paths of files included into the current render
+
+
+def expand_includes(md_text, src_dir):
+    """Replace <!--include:file.md--> markers with the named file's markdown,
+    headings demoted one level (its H1 becomes an H2 of the including
+    document) and its Numbers-by footer kept. Included files are recorded
+    so a link to one of them resolves to its in-page anchor."""
+    link_re = re.compile(r"\]\(([^)\s]+)\)")
+    INCLUDED.clear()
+
+    def sub(m):
+        inc_path = (src_dir / m.group(1))
+        INCLUDED.add(inc_path.resolve())
+        inc = inc_path.read_text(encoding="utf-8")
+        inc_dir = inc_path.parent
+
+        def relink(lm):
+            # The included file's relative links are written for ITS
+            # directory; re-base them on the including document's so
+            # they resolve wherever the text is rendered.
+            href = lm.group(1)
+            if href.startswith(("http://", "https://", "#", "mailto:")):
+                return lm.group(0)
+            path, frag = (href.split("#", 1) + [""])[:2]
+            rel = os.path.relpath((inc_dir / path).resolve(), src_dir.resolve())
+            return f"]({rel}{'#' + frag if frag else ''})"
+        out = []
+        for line in inc.splitlines():
+            if line.startswith("#"):
+                line = "#" + line
+            out.append(link_re.sub(relink, line))
+        return "\n".join(out)
+    return INCLUDE_RE.sub(sub, md_text)
+
+
+def rewrite_links(body, src_dir):
+    """Relative .md/.py links -> the target's hosted RENDER when it has one
+    (RENDER_URLS), else GitHub master URLs (path-resolved)."""
+    def sub(m):
+        href = m.group(1)
+        if href.startswith(("http://", "https://", "#", "mailto:")):
+            return m.group(0)
+        path, frag = (href.split("#", 1) + [""])[:2]
+        frag = f"#{frag}" if frag else ""
+        target = (src_dir / path).resolve()
+        if target in INCLUDED and frag:
+            return f'href="{frag}"'   # the included text is on this page
+        try:
+            rel = target.relative_to(ROOT).as_posix()
+        except ValueError:
+            return m.group(0)
+        if rel in RENDER_URLS:
+            return f'href="{RENDER_URLS[rel]}{frag}"'
+        if not LINK_BASE:
+            return m.group(0)
+        return f'href="{LINK_BASE}{rel}{frag}"'
+    return re.sub(r'href="([^"]+)"', sub, body)
+
+
+def _wire_frontier_specs(body):
+    """Attach each <!--frontier: ...--> spec comment (see the module
+    docstring) to the table that follows it as a data-frontier attribute
+    the table script reads. Run after the tablewrap wrapping."""
+    def sub(m):
+        spec = html_mod.escape(" ".join(m.group(1).split()), quote=True)
+        return f'<div class="tablewrap"><table data-frontier="{spec}">'
+    return re.sub(
+        r'<!--frontier:\s*(.*?)\s*-->\s*<div class="tablewrap"><table>',
+        sub, body, flags=re.S)
+
+
+def _wire_note_backlinks(body):
+    """Point each note's ↩ link back at the header cell it defines.
+
+    Header cells link their notes ([Label](#note-x "tip")); the note's ↩
+    return link, written in the markdown as a jump to the table section,
+    is rewritten to land on the exact header cell: the FIRST th linking
+    #note-x gains id th-note-x, and the ↩ following <a id="note-x"> is
+    retargeted to it."""
+    seen = set()
+
+    def th_id(m):
+        note = m.group(2)
+        if note in seen:
+            return m.group(0)
+        seen.add(note)
+        return f'<th id="th-{note}">{m.group(1)}'
+
+    body = re.sub(r'<th>(<a href="#(note-[\w-]+)")', th_id, body)
+
+    def back(m):
+        note = m.group(2)
+        if note not in seen:
+            return m.group(0)
+        return f'{m.group(1)}<a href="#th-{note}">{m.group(3)}</a>'
+
+    return re.sub(
+        r'(<a id="(note-[\w-]+)"></a>.*?)<a href="[^"]*">(↩[^<]*)</a>',
+        back, body, flags=re.S)
+
+
+def heading_slug(text):
+    """GitHub's heading-anchor slug: lowercase, punctuation dropped (letters,
+    digits, spaces, hyphens and underscores survive), spaces to hyphens.
+    Duplicates get -1, -2 ... in document order (see _add_heading_ids).
+    The markdown source's in-document links (`[x](#slug)`) are written
+    against this rule because GitHub renders them that way; the render
+    must give every heading the same id or every such link is dead in the
+    HTML product (it was, until 2026-09-07: doc_lint's anchor check now
+    guards both sides)."""
+    t = re.sub(r"<[^>]+>", "", text)
+    t = html_mod.unescape(t).strip().lower()
+    t = re.sub(r"[^\w\s-]", "", t)
+    return re.sub(r"\s", "-", t)
+
+
+_HEADING_RE = re.compile(r"<h([1-6])>(.*?)</h\1>", re.S)
+
+
+def _add_heading_ids(body):
+    """Stamp every heading with its GitHub slug as id (duplicates
+    suffixed -1, -2 ... as GitHub does)."""
+    seen = {}
+
+    def sub(m):
+        slug = heading_slug(m.group(2))
+        n = seen.get(slug, 0)
+        seen[slug] = n + 1
+        if n:
+            slug = f"{slug}-{n}"
+        return f'<h{m.group(1)} id="{slug}">{m.group(2)}</h{m.group(1)}>'
+
+    return _HEADING_RE.sub(sub, body)
+
+
+_H2_RE = re.compile(r'<h2 id="([^"]+)">(.*?)</h2>', re.S)
+CONTENTS_MIN_SECTIONS = 3
+
+
+def _wire_contents(body):
+    """A contents block at the top and a way back to it from the end of
+    every section, so a long document is not scrolled. If the source
+    carries its own `## Contents` section (a static list, so the markdown
+    reads the same on a plain renderer), only the back-links are added;
+    otherwise a contents list of the H2 headings is generated after the
+    title. Documents with fewer than CONTENTS_MIN_SECTIONS sections get
+    nothing."""
+    heads = _H2_RE.findall(body)
+    if len(heads) < CONTENTS_MIN_SECTIONS:
+        return body
+    has_own = any(hid == "contents" for hid, _ in heads)
+    if not has_own:
+        items = "".join(f'<li><a href="#{hid}">{txt}</a></li>' for hid, txt in heads)
+        nav = f'<nav class="contents" id="contents"><span class="contents-label">Contents</span><ol>{items}</ol></nav>\n'
+        m = re.search(r"</time>\n?|</h1>\n?", body)
+        body = body[:m.end()] + nav + body[m.end():] if m else nav + body
+    back = '<p class="contents-back"><a href="#contents">↑ Contents</a></p>\n'
+    # a back-link before every H2 after the contents block, and one at the end
+    out, first = [], True
+    pos = 0
+    for m in _H2_RE.finditer(body):
+        hid = m.group(1)
+        if hid == "contents" or first:
+            first = False if hid != "contents" else first
+            if hid == "contents":
+                first = True   # the section after the contents block gets no back-link before it
+            continue
+        out.append(body[pos:m.start()])
+        out.append(back)
+        pos = m.start()
+    out.append(body[pos:])
+    return "".join(out) + back
+
+
+# Rewrites the build stamp into the reader's local time (zone abbreviated
+# as the browser names it); leaves the UTC text alone if anything fails.
+STAMP_JS = r"""(function(){
+  var t = document.querySelector('time.renderstamp');
+  if (!t) return;
+  var d = new Date(t.getAttribute('datetime'));
+  if (isNaN(d)) return;
+  var p = function(n){ return String(n).padStart(2, '0'); };
+  var tz = '';
+  try {
+    tz = new Intl.DateTimeFormat(undefined, {timeZoneName: 'short'})
+      .formatToParts(d).filter(function(x){ return x.type === 'timeZoneName'; })
+      .map(function(x){ return x.value; })[0] || '';
+  } catch (e) {}
+  t.textContent = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + (tz ? ' ' + tz : '');
+})();"""
+
+
+# A page may carry its own stylesheet on top of the house one: a line
+# `<!--doc-style: FILE.css-->` in the source (FILE relative to it) appends
+# FILE after the base CSS, so a page with its own layout -- a slide deck, a
+# poster -- keeps everything else the renderer gives every page (the build
+# stamp, the sortable tables, the publish ledger, the stale check) instead of
+# reproducing it. Origin: a generated slide deck was first written as a
+# hand-built HTML page and lost the build stamp every other page carries.
+DOC_STYLE_RE = re.compile(r"<!--\s*doc-style:\s*([^\s>]+)\s*-->")
+
+
+def _page_styles(md_text, base_dir):
+    """The <style> blocks for the page's own stylesheets, in source order."""
+    out = []
+    for name in DOC_STYLE_RE.findall(md_text):
+        css_path = (Path(base_dir) / name).resolve()
+        if not css_path.is_file():
+            sys.exit(f"doc_html FAIL: doc-style names {name}, which is not a file next to the source")
+        out.append(f"\n<style>{css_path.read_text(encoding='utf-8')}</style>")
+    return "".join(out)
+
+
+def render(src, out_path, title):
+    """Render one markdown document to its sortable-table HTML product."""
+    src, out_path = Path(src), Path(out_path)
+    # Graceful degradation, not a crash: DOCS is a hand-maintained registry, and a
+    # document renamed out from under it (or a path typed on the command
+    # line) used to surface as a bare FileNotFoundError naming a path and
+    # no remedy.
+    if not src.is_file():
+        sys.exit(f"doc_html FAIL: no such document: {src}. If it was renamed "
+                 f"or removed, update the DOCS registry in tools/doc_html.py; "
+                 f"`--list` prints what is registered.")
+    md_text = expand_includes(src.read_text(encoding="utf-8"), src.parent)
+    page_css = _page_styles(md_text, src.parent)
+    body = markdown.markdown(md_text, extensions=["tables"])
+    body = _add_heading_ids(body)
+    body = _wire_contents(body)
+    body = rewrite_links(body, src.parent)
+    body = _wire_note_backlinks(body)
+    # wide-table wrapper + prose-width class for the small tables
+    body = body.replace("<table>", '<div class="tablewrap"><table>')
+    body = body.replace("</table>", "</table></div>")
+    body = _wire_frontier_specs(body)
+    # the build stamp: a <time> carrying the instant in UTC, which the
+    # page rewrites into the reader's local time on load (the UTC text is
+    # what a reader with scripts off, or a text extract, sees).
+    # practice: timestamps-carry-offset -- the instant is timezone-aware
+    # UTC; the reader-local rendering happens client-side.
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    body = body.replace(
+        "</h1>",
+        f'</h1>\n<time class="renderstamp" datetime="{now.isoformat()}">'
+        f'{now.strftime("%Y-%m-%d %H:%M UTC")}</time>', 1)
+    out = f"""<title>{title}</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet"
+ href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>{CSS}</style>{page_css}
+<main>
+{body}
+</main>
+<script>{JS}</script>
+<script>{STAMP_JS}</script>
+"""
+    out_path.write_text(out, encoding="utf-8")
+    n_tables = body.count("<table>")
+    # Graceful degradation, not a crash: relative_to() raises for any
+    # absolute path outside the repo, and rendering to one is legitimate --
+    # a scratch directory, a comparison build. The file is already written
+    # by this point, so raising here fails AFTER the work succeeded.
+    try:
+        shown = out_path.relative_to(ROOT) if out_path.is_absolute() else out_path
+    except ValueError:
+        shown = out_path
+    print(f"wrote {shown}: {len(out):,} bytes, {n_tables} tables sortable")
+
+
+def build_all():
+    for rel, title in DOCS:
+        src = ROOT / rel
+        render(src, src.with_suffix(".html"), title)
+
+
+# ---------------------------------------------------------------------------
+# Staleness: renders behind their sources, hosted copies behind their renders.
+# Origin (2026-09-24): a model gained two sections of new results, the
+# document and its render were rebuilt, and the hosted composite page that
+# readers actually open was not — the person noticed ("you updated the model
+# but not the artifact") and asked for the check to be mechanical. Two halves:
+#   render stale   — a source .md changed against the base branch (or is
+#                    newer on disk than the .html) and the .html did not;
+#   publish stale  — the .html's hash is not the one in RENDER_LEDGER,
+#                    for a render that has a hosted URL.
+# `--stale` prints both lists and exits 1 when either is non-empty, so a
+# stop hook can refuse to end a turn on it; `--published REL...` records the
+# hashes after the hosted copies are refreshed.
+# ---------------------------------------------------------------------------
+def _sha256(path):
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _changed_vs_base():
+    """Repo-relative paths changed against the declared base branch
+    (committed on this branch, staged, or unstaged), plus untracked files.
+    Empty when the base cannot be resolved (a detached checkout with no
+    remote), never an error."""
+    base = _default_branch()
+    out = set()
+    for args in (["diff", "--name-only", f"origin/{base}...HEAD"],
+                 ["diff", "--name-only", "HEAD"],
+                 ["ls-files", "--others", "--exclude-standard"]):
+        r = subprocess.run(["git", "-C", str(ROOT)] + args,
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            out.update(l.strip() for l in r.stdout.splitlines() if l.strip())
+    return out
+
+
+def _render_units():
+    """Every render with its sources and hosted URL: DOCS entries first,
+    then the composites."""
+    units = []
+    for rel, _title in DOCS:
+        units.append((str(Path(rel).with_suffix(".html")), [rel],
+                      RENDER_URLS.get(rel)))
+    for html_rel, spec in COMPOSITE_RENDERS.items():
+        units.append((html_rel, list(spec.get("sources", ())),
+                      spec.get("url")))
+    return units
+
+
+def _ledger():
+    import json
+    if RENDER_LEDGER is None:
+        return None
+    p = Path(RENDER_LEDGER)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def stale():
+    """(renders behind their sources, hosted copies behind their renders):
+    two lists of (html_rel, reason)."""
+    changed = _changed_vs_base()
+    ledger = _ledger()
+    behind, unpublished = [], []
+    for html_rel, sources, url in _render_units():
+        html = ROOT / html_rel
+        if not html.exists():
+            behind.append((html_rel, "no render on disk"))
+            continue
+        moved = [s for s in sources if s in changed]
+        if moved and html_rel not in changed:
+            behind.append((html_rel, "source changed on this branch, render not: "
+                           + ", ".join(moved)))
+        else:
+            newer = [s for s in sources if (ROOT / s).exists()
+                     and (ROOT / s).stat().st_mtime > html.stat().st_mtime + 1]
+            if newer:
+                behind.append((html_rel, "source newer on disk than the render: "
+                               + ", ".join(newer)))
+        if url and ledger is not None:
+            have = ledger.get(html_rel)
+            if have != _sha256(html):
+                unpublished.append((html_rel, url if have else
+                                    f"{url} (never recorded as published)"))
+    return behind, unpublished
+
+
+def record_published(html_rels):
+    """Write the current hash of each named render into the ledger."""
+    import json
+    if RENDER_LEDGER is None:
+        raise SystemExit("RENDER_LEDGER is not configured")
+    p = Path(RENDER_LEDGER)
+    led = _ledger()
+    known = {u[0] for u in _render_units()}
+    for rel in html_rels:
+        rel = str(Path(rel).with_suffix(".html"))
+        if rel not in known:
+            raise SystemExit(f"{rel}: not a registered render")
+        led[rel] = _sha256(ROOT / rel)
+    p.write_text(json.dumps(dict(sorted(led.items())), indent=2) + "\n",
+                 encoding="utf-8")
+    print(f"recorded {len(html_rels)} render(s) as published in {p.relative_to(ROOT)}")
+
+
+def report_stale():
+    """Print the two lists; True when both are empty."""
+    behind, unpublished = stale()
+    for rel, why in behind:
+        print(f"RENDER STALE   {rel}: {why}")
+    for rel, where in unpublished:
+        print(f"UNPUBLISHED    {rel}: republish to {where}, then --published {rel}")
+    if not behind and not unpublished:
+        print("renders and hosted copies are current")
+    return not behind and not unpublished
+
+
+if __name__ == "__main__":
+    # `--help` is what anyone types first; this one used to answer with a
+    # traceback, because it treated the flag as a document path to render.
+    # See the same guard in the other tools here (2026-09-06).
+    if any(a in ("--help", "-h") for a in sys.argv[1:]):
+        print((__doc__ or "").strip())
+        sys.exit(0)
+    if "--list" in sys.argv:
+        for rel, title in DOCS:
+            print(f"  {rel}  ->  {Path(rel).with_suffix('.html')}  ({title})")
+    elif "--stale" in sys.argv:
+        sys.exit(0 if report_stale() else 1)
+    elif "--published" in sys.argv:
+        record_published(sys.argv[sys.argv.index("--published") + 1:])
+    elif len(sys.argv) > 1:
+        src = Path(sys.argv[1]).resolve()
+        rel = str(src.relative_to(ROOT))
+        title = dict(DOCS).get(rel, src.stem.replace("_", " ").title())
+        render(src, src.with_suffix(".html"), title)
+    else:
+        build_all()

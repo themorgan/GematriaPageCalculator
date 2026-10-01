@@ -1,4 +1,0 @@
-# Fixture stub -- see ../README.md.
-service: orders-api
-replicas: 2
-image: orders-api:latest

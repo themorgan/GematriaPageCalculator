@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "base_branch": "main",
+  "_base_branch_comment": [
+    "The branch this project's work is measured against -- what",
+    "\"changed files\" means, and which branch generated links point at."
+  ],
+  "visibility": "public",
+  "_visibility_comment": [
+    "public: this repository's tracked files are a publication (it is",
+    "published to the Chrome Web Store and Firefox Add-ons), so the",
+    "generated loader block leaves out every PRIVATE-level source."
+  ],
+  "sources": [
+    {"level": "universal", "name": "precedent", "path": "process/upstream"},
+    {"level": "shared", "name": "precedent-shared-repo-maintenance", "path": "../precedent-shared-repo-maintenance"},
+    {"level": "shared", "name": "precedent-shared-writing", "path": "../precedent-shared-writing"},
+    {"level": "shared", "name": "precedent-shared-working-style", "path": "../precedent-shared-working-style"},
+    {"level": "repo-local", "name": "local", "path": "local"}
+  ],
+  "_sources_comment": [
+    "Declared at the 2026-10-01 migration onto the Precedent loader, as Morgan",
+    "chose them. The individual set is never declared here: it resolves",
+    "through the user-level config the session hook writes."
+  ],
+  "landing_branch": "pre-staging"
+}
