@@ -49,5 +49,6 @@
       "path": ".claude/hooks/precedent-universal-catalogue.sh",
       "reason": "That hook serves practice-set repositories; this is a consuming repo, and tools/bootstrap.sh (from templates/bootstrap.sh) clones the shared sets precedent.json declares (spec/MIGRATING_EXISTING_INSTALLS.md step 8). Declined at the 2026-10-01 migration."
     }
-  ]
+  ],
+  "staging_branch": "staging"
 }
