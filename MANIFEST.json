@@ -1,0 +1,1480 @@
+{
+  "adapters": [
+    {
+      "executable": true,
+      "path": ".claude/hooks/precedent-paths.sh",
+      "sha256_16": "40eeef958d299297",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/precedent-universal-catalogue.sh",
+      "sha256_16": "a4236891c3507eb6",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/reply-gate.sh",
+      "sha256_16": "c4cd0508c1aebba2",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/session-start.sh",
+      "sha256_16": "2c16cad048d761c0",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/stop-git-check.sh",
+      "sha256_16": "2eb82867222db8a3",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/stop-reply-check.sh",
+      "sha256_16": "ccae7637b2e62283",
+      "source": "precedent"
+    }
+  ],
+  "checks": [
+    {
+      "path": "tools/checks/tests/run_all.sh",
+      "sha256_16": "8108c9a5875b6512",
+      "source": "(generated)"
+    }
+  ],
+  "excluded_engine_dev": [
+    "cross-source-rollout",
+    "new-hook-joins-the-registry",
+    "parallel-artifact-ledger",
+    "routing-audit"
+  ],
+  "generated_at_utc": "2026-10-01T15:27:52+00:00",
+  "generated_by": "tools/precedent_materialize.py",
+  "note": "DERIVED ARTIFACT -- never hand-edit. Regenerate by re-running precedent_materialize.py with the same --repo/--user-config; this file records exactly what produced the snapshot so drift is visible, per generated-artifact-provenance.",
+  "practices": [
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6381cab807569bd1",
+      "slug": "acronyms-glossary",
+      "source": "precedent",
+      "source_sha256_16": "6381cab807569bd1"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b86fc9326bbba3c6",
+      "slug": "act",
+      "source": "precedent",
+      "source_sha256_16": "b86fc9326bbba3c6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "61f9eb49c6c11bee",
+      "slug": "affordance-is-shared",
+      "source": "precedent",
+      "source_sha256_16": "61f9eb49c6c11bee"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b2faed3d79126f34",
+      "slug": "archive-status-check",
+      "source": "precedent",
+      "source_sha256_16": "b2faed3d79126f34"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "65f578e0ec8cd0bb",
+      "slug": "attach-never-clone-individual",
+      "source": "precedent",
+      "source_sha256_16": "65f578e0ec8cd0bb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "277bae5ef2d9c8fb",
+      "slug": "attach-the-original",
+      "source": "precedent",
+      "source_sha256_16": "277bae5ef2d9c8fb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "730101486d5fa833",
+      "slug": "automation-issues",
+      "source": "precedent",
+      "source_sha256_16": "730101486d5fa833"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "26984d25f523ff1a",
+      "slug": "base-branch-is-the-record",
+      "source": "precedent",
+      "source_sha256_16": "26984d25f523ff1a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e1ab0a4b39f885d0",
+      "slug": "bold-key-phrases",
+      "source": "precedent",
+      "source_sha256_16": "e1ab0a4b39f885d0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "40d2e2c7f321f831",
+      "slug": "brainstorm-holds-commits",
+      "source": "precedent",
+      "source_sha256_16": "40d2e2c7f321f831"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "10f980c975df6561",
+      "slug": "branch-delete-links",
+      "source": "precedent",
+      "source_sha256_16": "10f980c975df6561"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d87b24377f17fb66",
+      "slug": "build-buy-decompose",
+      "source": "precedent",
+      "source_sha256_16": "d87b24377f17fb66"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "75c5ca3f7cd7cb71",
+      "slug": "capture-gate",
+      "source": "precedent",
+      "source_sha256_16": "75c5ca3f7cd7cb71"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0510fd146f0c2a8f",
+      "slug": "catalogue-carries-stories",
+      "source": "precedent",
+      "source_sha256_16": "0510fd146f0c2a8f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "49d26a2b123551b6",
+      "slug": "change-updates-its-docs",
+      "source": "precedent",
+      "source_sha256_16": "49d26a2b123551b6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "11ed97593dbb9e24",
+      "slug": "check-source-architecture",
+      "source": "precedent",
+      "source_sha256_16": "11ed97593dbb9e24"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "04bcb37f0a49ba1f",
+      "slug": "checkable-gets-checked",
+      "source": "precedent",
+      "source_sha256_16": "04bcb37f0a49ba1f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d92e22f85255018d",
+      "slug": "checks-carry-a-declared-decline",
+      "source": "precedent",
+      "source_sha256_16": "d92e22f85255018d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7a93cbd8b34c20e4",
+      "slug": "checks-follow-the-tier",
+      "source": "precedent",
+      "source_sha256_16": "7a93cbd8b34c20e4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4bff24b34ff1157d",
+      "slug": "checks-plant-their-state",
+      "source": "precedent",
+      "source_sha256_16": "4bff24b34ff1157d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1e05eade7b94d789",
+      "slug": "chief-of-staff",
+      "source": "precedent",
+      "source_sha256_16": "1e05eade7b94d789"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "545c886deef3bed7",
+      "slug": "ci-commits-carry-identity",
+      "source": "precedent",
+      "source_sha256_16": "545c886deef3bed7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "907692caca33f9fa",
+      "slug": "ci-workflow-approved",
+      "source": "precedent",
+      "source_sha256_16": "907692caca33f9fa"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "142c550df9616a42",
+      "slug": "cite-the-incident",
+      "source": "precedent",
+      "source_sha256_16": "142c550df9616a42"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3630a0fee80b677e",
+      "slug": "code-cites-practice",
+      "source": "precedent",
+      "source_sha256_16": "3630a0fee80b677e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2484c65d7f7c55c0",
+      "slug": "computed-numbers-in-scripts",
+      "source": "precedent",
+      "source_sha256_16": "2484c65d7f7c55c0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f3485fd370099560",
+      "slug": "consider",
+      "source": "precedent",
+      "source_sha256_16": "f3485fd370099560"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "93ea2d08678bbec0",
+      "slug": "constants-are-risk-inputs",
+      "source": "precedent",
+      "source_sha256_16": "93ea2d08678bbec0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "71884b1957a5cf90",
+      "slug": "control-asserts-which-failure",
+      "source": "precedent",
+      "source_sha256_16": "71884b1957a5cf90"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bccc770eddeb4285",
+      "slug": "convention-to-audit",
+      "source": "precedent",
+      "source_sha256_16": "bccc770eddeb4285"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7e53618141ab6cfb",
+      "slug": "current-rule-governs",
+      "source": "precedent",
+      "source_sha256_16": "7e53618141ab6cfb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3f83c23408f97e3f",
+      "slug": "dated-list-runs-forward",
+      "source": "precedent",
+      "source_sha256_16": "3f83c23408f97e3f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a3071c1895e6dea3",
+      "slug": "debut",
+      "source": "precedent",
+      "source_sha256_16": "a3071c1895e6dea3"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e0ce9203fc6b2eb2",
+      "slug": "decision-strength",
+      "source": "precedent",
+      "source_sha256_16": "e0ce9203fc6b2eb2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "18bf6daa4cd50469",
+      "slug": "declared-default-is-applied",
+      "source": "precedent",
+      "source_sha256_16": "18bf6daa4cd50469"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c4ceea3c7ed974e2",
+      "slug": "declared-pronouns",
+      "source": "precedent",
+      "source_sha256_16": "c4ceea3c7ed974e2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d0695f080dd8d0bd",
+      "slug": "decommission-deletes-files",
+      "source": "precedent",
+      "source_sha256_16": "d0695f080dd8d0bd"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ed8802d4286b7772",
+      "slug": "deliverables-look-like-output",
+      "source": "precedent",
+      "source_sha256_16": "ed8802d4286b7772"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ea20d9cb52b755cf",
+      "slug": "diagnosis-is-measured",
+      "source": "precedent",
+      "source_sha256_16": "ea20d9cb52b755cf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b2cf864e83b232c7",
+      "slug": "disclose-landing",
+      "source": "precedent",
+      "source_sha256_16": "b2cf864e83b232c7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dc86cf3b3be34d5f",
+      "slug": "doc-references-are-links",
+      "source": "precedent",
+      "source_sha256_16": "dc86cf3b3be34d5f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0ba30d31aa982523",
+      "slug": "docs-are-current-state",
+      "source": "precedent",
+      "source_sha256_16": "0ba30d31aa982523"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "37d634f6f2bb5b0d",
+      "slug": "docs-track-models",
+      "source": "precedent",
+      "source_sha256_16": "37d634f6f2bb5b0d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b42504f8d4edc966",
+      "slug": "document-status-header",
+      "source": "precedent",
+      "source_sha256_16": "b42504f8d4edc966"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e78d2662a8224e11",
+      "slug": "dont-race-another-window",
+      "source": "precedent",
+      "source_sha256_16": "e78d2662a8224e11"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cbfbcbc2cb6ef9f4",
+      "slug": "durable-fix",
+      "source": "precedent",
+      "source_sha256_16": "cbfbcbc2cb6ef9f4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4e0447ae59e76a17",
+      "slug": "engine-plus-host-shims",
+      "source": "precedent",
+      "source_sha256_16": "4e0447ae59e76a17"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6169dc8571afd210",
+      "slug": "environment-gotchas",
+      "source": "precedent",
+      "source_sha256_16": "6169dc8571afd210"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "007e87cb60c5290c",
+      "slug": "fail-gracefully",
+      "source": "precedent",
+      "source_sha256_16": "007e87cb60c5290c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dafdcea4125916c4",
+      "slug": "fence-block-for-paste",
+      "source": "precedent",
+      "source_sha256_16": "dafdcea4125916c4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "00b9d64382fe49bf",
+      "slug": "filename-separator",
+      "source": "precedent",
+      "source_sha256_16": "00b9d64382fe49bf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ec75a8f54051a10d",
+      "slug": "findings-return-through-repo",
+      "source": "precedent",
+      "source_sha256_16": "ec75a8f54051a10d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f3656745f67a49af",
+      "slug": "fix-the-original",
+      "source": "precedent",
+      "source_sha256_16": "f3656745f67a49af"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "155c29c80b8f5bf9",
+      "slug": "fixture-owns-its-state",
+      "source": "precedent",
+      "source_sha256_16": "155c29c80b8f5bf9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7b7270565499af87",
+      "slug": "frame-from-audience-question",
+      "source": "precedent",
+      "source_sha256_16": "7b7270565499af87"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "39348020566c7d60",
+      "slug": "fresh-before-write",
+      "source": "precedent",
+      "source_sha256_16": "39348020566c7d60"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "82ed43875dfe6fb7",
+      "slug": "full-practice-audit",
+      "source": "precedent",
+      "source_sha256_16": "db54e751105efe0c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6cb9364f8d56892d",
+      "slug": "gate-ledger",
+      "source": "precedent",
+      "source_sha256_16": "6cb9364f8d56892d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "995c0ab0e9cff939",
+      "slug": "gates-fail-fast",
+      "source": "precedent",
+      "source_sha256_16": "995c0ab0e9cff939"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f06e6806e003c730",
+      "slug": "generated-artifact-provenance",
+      "source": "precedent",
+      "source_sha256_16": "f06e6806e003c730"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5833059a38aabd37",
+      "slug": "generated-edit-goes-upstream",
+      "source": "precedent",
+      "source_sha256_16": "5833059a38aabd37"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a05ddeabd3b11e31",
+      "slug": "github-api-budget",
+      "source": "precedent",
+      "source_sha256_16": "a05ddeabd3b11e31"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "66e386b2a4d0b77e",
+      "slug": "github-setup-disclosed",
+      "source": "precedent",
+      "source_sha256_16": "66e386b2a4d0b77e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "87db2c51b97ecca8",
+      "slug": "go-update",
+      "source": "precedent",
+      "source_sha256_16": "87db2c51b97ecca8"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b8ec9a0e9d926fe4",
+      "slug": "grep-before-search",
+      "source": "precedent",
+      "source_sha256_16": "b8ec9a0e9d926fe4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2ba9139dc4cead0b",
+      "slug": "heading-outline",
+      "source": "precedent",
+      "source_sha256_16": "2ba9139dc4cead0b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "96b75f833b733e5e",
+      "slug": "headline-capitalization",
+      "source": "precedent",
+      "source_sha256_16": "96b75f833b733e5e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "754c23e326d63b27",
+      "slug": "index-remembers-past",
+      "source": "precedent",
+      "source_sha256_16": "754c23e326d63b27"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "401f6ee125e21cd5",
+      "slug": "item-closes-on-its-condition",
+      "source": "precedent",
+      "source_sha256_16": "401f6ee125e21cd5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9f798abffd26f563",
+      "slug": "judgment-check-or-tool",
+      "source": "precedent",
+      "source_sha256_16": "9f798abffd26f563"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c27ad15ee292c800",
+      "slug": "label-describes-content",
+      "source": "precedent",
+      "source_sha256_16": "c27ad15ee292c800"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6d025151ef5450ba",
+      "slug": "layered-practice-packs",
+      "source": "precedent",
+      "source_sha256_16": "6d025151ef5450ba"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d5d838c3c2cc89c6",
+      "slug": "lead-with-what-it-is",
+      "source": "precedent",
+      "source_sha256_16": "d5d838c3c2cc89c6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "11053fd4ca491a6e",
+      "slug": "leak-gate-is-background",
+      "source": "precedent",
+      "source_sha256_16": "11053fd4ca491a6e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5f09f539ce70bf0c",
+      "slug": "lease-in-flight-work",
+      "source": "precedent",
+      "source_sha256_16": "5f09f539ce70bf0c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "274395924d884389",
+      "slug": "merge-runbook",
+      "source": "precedent",
+      "source_sha256_16": "274395924d884389"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8aba303590c34813",
+      "slug": "migration-scrubs-vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "8aba303590c34813"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "154e391fc62417dc",
+      "slug": "mistakes-become-rules",
+      "source": "precedent",
+      "source_sha256_16": "154e391fc62417dc"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d8f8be97a498ff1a",
+      "slug": "my-options",
+      "source": "precedent",
+      "source_sha256_16": "d8f8be97a498ff1a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "72c6188e5f1dd230",
+      "slug": "name-both-sides-of-ledger",
+      "source": "precedent",
+      "source_sha256_16": "72c6188e5f1dd230"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "fa43506feedbcc63",
+      "slug": "never-delete-a-remote-branch",
+      "source": "precedent",
+      "source_sha256_16": "fa43506feedbcc63"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bfe0bc44ae5eb2a5",
+      "slug": "no-invented-specifics",
+      "source": "precedent",
+      "source_sha256_16": "bfe0bc44ae5eb2a5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f239efb31f7e6d14",
+      "slug": "no-rewrite-for-warnings",
+      "source": "precedent",
+      "source_sha256_16": "f239efb31f7e6d14"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8263a7e8c21b6b95",
+      "slug": "no-version-suffix",
+      "source": "precedent",
+      "source_sha256_16": "8263a7e8c21b6b95"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "20142996ce718b7c",
+      "slug": "one-formatter-per-quantity",
+      "source": "precedent",
+      "source_sha256_16": "20142996ce718b7c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "fc243e6ed03b5bd1",
+      "slug": "open-item-disposition",
+      "source": "precedent",
+      "source_sha256_16": "fc243e6ed03b5bd1"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7a16825751274913",
+      "slug": "orientation-map",
+      "source": "precedent",
+      "source_sha256_16": "7a16825751274913"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f4b150e92fc3cd96",
+      "slug": "outward-summary-discipline",
+      "source": "precedent",
+      "source_sha256_16": "f4b150e92fc3cd96"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7ceccdbebc39b54f",
+      "slug": "park-it",
+      "source": "precedent",
+      "source_sha256_16": "7ceccdbebc39b54f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cc0c1b2b367ec633",
+      "slug": "permutation-frontier-column",
+      "source": "precedent",
+      "source_sha256_16": "cc0c1b2b367ec633"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6632bd27acf1d307",
+      "slug": "plain-words",
+      "source": "precedent",
+      "source_sha256_16": "6632bd27acf1d307"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0092661aec9b72c2",
+      "slug": "pr-template-honest-gates",
+      "source": "precedent",
+      "source_sha256_16": "0092661aec9b72c2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9cf6e7c3f14bf09a",
+      "slug": "practice-carries-its-files",
+      "source": "precedent",
+      "source_sha256_16": "9cf6e7c3f14bf09a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "a9bab5b9c241a853",
+      "slug": "practice-change-propagates",
+      "source": "precedent",
+      "source_sha256_16": "c8935ccd4f1dd130"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7ce5db48d8e5c373",
+      "slug": "practice-export-loop",
+      "source": "precedent",
+      "source_sha256_16": "7ce5db48d8e5c373"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "82b82e22226b62c6",
+      "slug": "practice-links-travel",
+      "source": "precedent",
+      "source_sha256_16": "82b82e22226b62c6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "97757b3903450c81",
+      "slug": "primary-branch",
+      "source": "precedent",
+      "source_sha256_16": "97757b3903450c81"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1eab83c834bec32b",
+      "slug": "produce",
+      "source": "precedent",
+      "source_sha256_16": "1eab83c834bec32b"
+    },
+    {
+      "level": "repo-local",
+      "links_rewritten": false,
+      "sha256_16": "3773469a64d76b3a",
+      "slug": "project-visual-identity",
+      "source": "local",
+      "source_sha256_16": "3773469a64d76b3a"
+    },
+    {
+      "level": "repo-local",
+      "links_rewritten": false,
+      "sha256_16": "74c2f1ec8771122a",
+      "slug": "project-voice",
+      "source": "local",
+      "source_sha256_16": "74c2f1ec8771122a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f6a17e8b2b34ee66",
+      "slug": "promote",
+      "source": "precedent",
+      "source_sha256_16": "f6a17e8b2b34ee66"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "12508127e741ba20",
+      "slug": "prompt-please",
+      "source": "precedent",
+      "source_sha256_16": "12508127e741ba20"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4ec3253dee2b6e3c",
+      "slug": "push-back",
+      "source": "precedent",
+      "source_sha256_16": "4ec3253dee2b6e3c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "205b37910a4cf3bd",
+      "slug": "quick-index",
+      "source": "precedent",
+      "source_sha256_16": "205b37910a4cf3bd"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f08056af1900c697",
+      "slug": "quote-discipline",
+      "source": "precedent",
+      "source_sha256_16": "f08056af1900c697"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9aa5cc326c67af91",
+      "slug": "readers-vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "9aa5cc326c67af91"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c476bc9091fc87c2",
+      "slug": "reduction-pass",
+      "source": "precedent",
+      "source_sha256_16": "c476bc9091fc87c2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c2d719ec2b8d74f7",
+      "slug": "registry-source-of-truth",
+      "source": "precedent",
+      "source_sha256_16": "c2d719ec2b8d74f7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d78515bf32ef294d",
+      "slug": "relayed-authorization",
+      "source": "precedent",
+      "source_sha256_16": "d78515bf32ef294d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "99c35d903d13e662",
+      "slug": "rename-updates-links",
+      "source": "precedent",
+      "source_sha256_16": "99c35d903d13e662"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "45a53cace7c081a6",
+      "slug": "repair-cannot-discard-work",
+      "source": "precedent",
+      "source_sha256_16": "45a53cace7c081a6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ef173c634442cc5f",
+      "slug": "reply-links-files",
+      "source": "precedent",
+      "source_sha256_16": "ef173c634442cc5f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8fff08225332f6f9",
+      "slug": "repo-is-memory",
+      "source": "precedent",
+      "source_sha256_16": "8fff08225332f6f9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3dac2d61b7ea877d",
+      "slug": "review-against-a-contract",
+      "source": "precedent",
+      "source_sha256_16": "3dac2d61b7ea877d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5e1faa5642d29ae4",
+      "slug": "rule-level-by-reach",
+      "source": "precedent",
+      "source_sha256_16": "5e1faa5642d29ae4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e3e967e758413f0e",
+      "slug": "scripts-assert-properties",
+      "source": "precedent",
+      "source_sha256_16": "e3e967e758413f0e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8849b59280e5a486",
+      "slug": "scrub-gate",
+      "source": "precedent",
+      "source_sha256_16": "8849b59280e5a486"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7ff51f9d5ca070b2",
+      "slug": "search-by-purpose",
+      "source": "precedent",
+      "source_sha256_16": "7ff51f9d5ca070b2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ea451ba044d7bbc7",
+      "slug": "second-pass-capture",
+      "source": "precedent",
+      "source_sha256_16": "ea451ba044d7bbc7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9a2f0e0c7adac607",
+      "slug": "section-order-by-frequency",
+      "source": "precedent",
+      "source_sha256_16": "9a2f0e0c7adac607"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "72085cf80e2cdaaf",
+      "slug": "seeded-prompt-names-its-origin",
+      "source": "precedent",
+      "source_sha256_16": "72085cf80e2cdaaf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bb374c7f860594d7",
+      "slug": "session-bootstrap",
+      "source": "precedent",
+      "source_sha256_16": "bb374c7f860594d7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1e169a6a2245e672",
+      "slug": "session-load-budget",
+      "source": "precedent",
+      "source_sha256_16": "1e169a6a2245e672"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f25844d00df0d49e",
+      "slug": "session-spend-follows-the-task",
+      "source": "precedent",
+      "source_sha256_16": "f25844d00df0d49e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5e929d9e439641c5",
+      "slug": "session-tags",
+      "source": "precedent",
+      "source_sha256_16": "5e929d9e439641c5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f799f199df855e64",
+      "slug": "session-title-names-the-difference",
+      "source": "precedent",
+      "source_sha256_16": "f799f199df855e64"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "188f56491561fb45",
+      "slug": "session-trailer",
+      "source": "precedent",
+      "source_sha256_16": "188f56491561fb45"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3b09057236128a77",
+      "slug": "shared-result-cache",
+      "source": "precedent",
+      "source_sha256_16": "3b09057236128a77"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7f3c7bf4d864e496",
+      "slug": "slow-steps-report-and-cache",
+      "source": "precedent",
+      "source_sha256_16": "7f3c7bf4d864e496"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6c256f564a31a36b",
+      "slug": "small-calls",
+      "source": "precedent",
+      "source_sha256_16": "6c256f564a31a36b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ac33046d392ef241",
+      "slug": "source-naming",
+      "source": "precedent",
+      "source_sha256_16": "ac33046d392ef241"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8886dcc1ca10e84e",
+      "slug": "source-sets-run-no-ci",
+      "source": "precedent",
+      "source_sha256_16": "8886dcc1ca10e84e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "086538994d7d4366",
+      "slug": "speculation-is-marked",
+      "source": "precedent",
+      "source_sha256_16": "086538994d7d4366"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "46c91ddc28db45ce",
+      "slug": "stage-word-carries-its-step",
+      "source": "precedent",
+      "source_sha256_16": "46c91ddc28db45ce"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "fe14ca5a816c1dbf",
+      "slug": "tabular-shared-renderer",
+      "source": "precedent",
+      "source_sha256_16": "fe14ca5a816c1dbf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2d758f035ae1cacb",
+      "slug": "technical-describes-people",
+      "source": "precedent",
+      "source_sha256_16": "2d758f035ae1cacb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1e0e7b5a171cc996",
+      "slug": "the-boildown",
+      "source": "precedent",
+      "source_sha256_16": "1e0e7b5a171cc996"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "161b4d68464332e0",
+      "slug": "three-things",
+      "source": "precedent",
+      "source_sha256_16": "161b4d68464332e0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4f101b126b36fe97",
+      "slug": "tier-branch",
+      "source": "precedent",
+      "source_sha256_16": "4f101b126b36fe97"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "53dacc868c161f92",
+      "slug": "timestamps-carry-offset",
+      "source": "precedent",
+      "source_sha256_16": "53dacc868c161f92"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b283b2e1b376e6ca",
+      "slug": "todo-is-a-handoff",
+      "source": "precedent",
+      "source_sha256_16": "b283b2e1b376e6ca"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6c4f9579d99c6509",
+      "slug": "todo-migrate-available-but-unused",
+      "source": "precedent",
+      "source_sha256_16": "6c4f9579d99c6509"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "10f50e615c3c5532",
+      "slug": "todo-reminder",
+      "source": "precedent",
+      "source_sha256_16": "10f50e615c3c5532"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0fd19add36da7acb",
+      "slug": "two-check-levels",
+      "source": "precedent",
+      "source_sha256_16": "0fd19add36da7acb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a6b534e4f0b171a0",
+      "slug": "upstream-bug-stops-here",
+      "source": "precedent",
+      "source_sha256_16": "a6b534e4f0b171a0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2aecd3774cbc2944",
+      "slug": "upstream-fix",
+      "source": "precedent",
+      "source_sha256_16": "2aecd3774cbc2944"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0b80540433689dee",
+      "slug": "variant-re-derives",
+      "source": "precedent",
+      "source_sha256_16": "0b80540433689dee"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "91243d39c9555c94",
+      "slug": "vendor-rollout-disclosed",
+      "source": "precedent",
+      "source_sha256_16": "91243d39c9555c94"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1c952532552b293a",
+      "slug": "vendor-update-runbook",
+      "source": "precedent",
+      "source_sha256_16": "1c952532552b293a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "86b08c16b7581c54",
+      "slug": "verdict-not-mechanism",
+      "source": "precedent",
+      "source_sha256_16": "86b08c16b7581c54"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a263c9d788f9f4be",
+      "slug": "verify-decomposition",
+      "source": "precedent",
+      "source_sha256_16": "a263c9d788f9f4be"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b5703e16b59a4cc8",
+      "slug": "verify-postcondition",
+      "source": "precedent",
+      "source_sha256_16": "b5703e16b59a4cc8"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "3e132b36e93f5665",
+      "slug": "very-deep-check",
+      "source": "precedent",
+      "source_sha256_16": "06ab05c25f4d3616"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "41916fc9d5b0d36c",
+      "slug": "vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "41916fc9d5b0d36c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "35fe0466294119cd",
+      "slug": "volatile-rules-carry-dates",
+      "source": "precedent",
+      "source_sha256_16": "35fe0466294119cd"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "02b8b7d08e1aff47",
+      "slug": "weak-yes",
+      "source": "precedent",
+      "source_sha256_16": "02b8b7d08e1aff47"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ea2e8d307780aae7",
+      "slug": "whats-new",
+      "source": "precedent",
+      "source_sha256_16": "ea2e8d307780aae7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a712025e00342a59",
+      "slug": "wide-search-needs-asking",
+      "source": "precedent",
+      "source_sha256_16": "a712025e00342a59"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "40dffc7eb4a481c2",
+      "slug": "workflow-file-outside-vendoring",
+      "source": "precedent",
+      "source_sha256_16": "40dffc7eb4a481c2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "51f89b4a9b0fbf3e",
+      "slug": "write-it-up",
+      "source": "precedent",
+      "source_sha256_16": "51f89b4a9b0fbf3e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d5128d6d3775eee2",
+      "slug": "write-like-a-human",
+      "source": "precedent",
+      "source_sha256_16": "d5128d6d3775eee2"
+    }
+  ],
+  "resident": {
+    "budget": 2000,
+    "over_budget": false,
+    "practices": [
+      {
+        "level": "universal",
+        "slug": "bold-key-phrases",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "brainstorm-holds-commits",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "current-rule-governs",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "environment-gotchas",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "no-invented-specifics",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "orientation-map",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "quick-index",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "repo-is-memory",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "verify-postcondition",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "write-like-a-human",
+        "source": "precedent"
+      }
+    ],
+    "tokens": 915
+  },
+  "sources": [
+    {
+      "level": "universal",
+      "name": "precedent",
+      "path": "/home/user/GematriaPageCalculator/process/upstream"
+    },
+    {
+      "level": "repo-local",
+      "name": "local",
+      "path": "/home/user/GematriaPageCalculator/local"
+    }
+  ],
+  "withheld": [
+    "actions-minutes-are-scarce",
+    "answer-first-ask-before-long-work",
+    "assorted-notes",
+    "audience-register",
+    "auto-delete-branches",
+    "blank-blocklist",
+    "brainstorm-citations",
+    "branch-links",
+    "branch-names-its-repo",
+    "buenos-aires-dates",
+    "claude-web-bootstrap",
+    "commit-author",
+    "cost-concern-face-value",
+    "create-word-doc",
+    "crons-are-a-last-resort",
+    "curly-quotes",
+    "deep-check",
+    "default-branch",
+    "default-register",
+    "deliverables-carry-no-process",
+    "derived-file-marker",
+    "doc-link-text",
+    "doc-recipe",
+    "draft-marker",
+    "drift-notice",
+    "durable-list-anchors",
+    "file-header",
+    "file-mention-links",
+    "fresh-check-escalation",
+    "handoff-only-when-blocked",
+    "install",
+    "ladder-required",
+    "language-variety",
+    "light-check",
+    "list-item-parity",
+    "list-restraint",
+    "loss-comes-with-a-verdict",
+    "mirror-into-agents",
+    "my-identity-is-not-private",
+    "name-the-branch",
+    "new-rule-placement",
+    "no-duplication",
+    "no-stale-counts",
+    "nonblocking-questions",
+    "organize-scattered-content",
+    "private-repo-scrub",
+    "promote-only",
+    "proportional-emphasis",
+    "quiet-checks",
+    "report-up-the-chain",
+    "resolved-issue-note-updates",
+    "revert-needs-no-trailer",
+    "rule-links",
+    "rule-scope-ask",
+    "sensitive-characterization-scrub",
+    "session-title-abbreviates-repo",
+    "so-what-test",
+    "their-constraints-are-given",
+    "todo-gate",
+    "trim-prose",
+    "vendor-neutral-by-default",
+    "visual-style-guide",
+    "voice-sync-on-go-ahead"
+  ]
+}
