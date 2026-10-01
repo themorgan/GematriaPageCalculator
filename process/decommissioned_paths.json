@@ -1,0 +1,10 @@
+{
+  "decommissioned": [
+    {
+      "path": ".github/workflows/bestpractice-docs.yml",
+      "reason": "upstream does not ship it, and github_ci_approved carries no approval of it in the person's words -- a consumer's CI converges to upstream (2026-09-27). Its content stays in git history. It ran doc_lint.py: the local push check runs that already",
+      "decommissioned_at": "2026-10-01"
+    }
+  ],
+  "exempt_files": []
+}

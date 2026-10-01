@@ -1,9 +1,21 @@
 # Repository instructions — read me first
 
+
 **Orientation: read `MAP.md` first** — the repository map. It covers the key
 deliverables and indexes which documents back each part of each one.
 
+<!-- BEGIN GENERATED: precedent-loader -->
+<!-- END GENERATED -->
+
+<!-- The block above is written by `python3 tools/precedent_sync_views.py --repo .`
+     (INSTALL.md §0 step 6) — never hand-edit between the markers; the
+     regeneration check fails loudly on drift. Leave the markers themselves
+     exactly as shown, on their own lines, with nothing between them until
+     the tool fills them in. -->
+
 ## Where things are (quick index — check here BEFORE searching the repo)
+
+<!-- Add a row whenever a session is observed hunting for something (practice `quick-index`). -->
 
 | Looking for… | Go to |
 |---|---|
@@ -12,7 +24,8 @@ deliverables and indexes which documents back each part of each one.
 | Store packages ready for upload | `dist/` (generated — see [README.md](README.md)) |
 | Marketing/store-listing copy and assets | [marketing/](marketing/) |
 | Open items: analyses, verifications, decisions | [TODO.md](TODO.md) |
-| Practice layer: vendored BestPractice copy, manifest, scrub blocklist | `process/` |
+| Which practice sources are in force, and where each is vendored or resolved from | [precedent.json](precedent.json) |
+| The vendored universal practice catalogue and its manifest | [process/upstream/](process/upstream/), [process/manifest.json](process/manifest.json) |
 
 ## Extension build workflow
 
@@ -28,11 +41,94 @@ Bump the `version` field in **both** `extension/manifest.chrome.json` and
 `extension/manifest.firefox.json` before cutting a release, then re-run
 `./build/build.sh`.
 
+### Session start
+
+- At session start, run `bash tools/bootstrap.sh` before other work. Claude
+  Code runs it for you from its SessionStart hook, on the web and
+  locally (locally it skips the package install and the machine-wide git
+  setup); in other harnesses, run it yourself unless your adapter wires it — Precedent's
+  [templates/harness/](https://github.com/alex137/BestPractice/tree/main/templates/harness)
+  says which can.
+- **Keep `AGENTS.md`'s generated block current.** Before relying on it,
+  run `python3 tools/precedent_sync_views.py --repo . --check` — it exits non-zero
+  if any declared source (`precedent.json`) has moved since the block was
+  last regenerated. Re-run without `--check` to refresh it, review the
+  diff, and commit.
+
+### Two check levels
+
+<!-- practice `two-check-levels`. Rename the two levels if your team prefers
+     other words, but name them somewhere fixed and say which gates what —
+     the point is that "run the check" resolves to one thing without a
+     session re-deriving it. Add your own repo's audits to the deep check. -->
+
+- **Light check** — `python3 tools/doc_lint.py` on the markdown you touched.
+  Fast, run before every commit without thinking about it. Gates a commit.
+- **Deep check** — the full suite: `python3 tools/precedent_check.py`,
+  `python3 tools/precedent_sync_views.py --repo . --check`, and
+  `python3 tools/practice_audit.py` (the vendored catalogue's manifest).
+  Gates a push and a merge. `bash tools/checks/tests/run_all.sh` runs the
+  tests materialized from this repo's sources and names each failing test's
+  source: a failing one is that source's bug, fixed and reported there —
+  never noted here as pre-existing.
+
 ### Build-environment gotchas — do NOT rediscover these
 
-- At session start, run `bash tools/bootstrap.sh` before other work (harnesses
-  with a hook mechanism run it automatically — see `process/upstream/templates/harness/`).
+Environment and tooling traps are written down one per file under
+[gotchas/](gotchas/), each with what failed, what it cost, and the fix
+(practice `environment-gotchas`). **None of that catalogue is copied into
+this file**: hit a confusing, hard-to-explain failure, and before
+concluding it is new, grep for it —
+`grep -ril '<a keyword from what you are seeing>' gotchas/`. Add one as
+`gotchas/gotcha-<date>-<slug>.md` with `## Symptom`, `## Story` and
+`## Fix`, and mirror its fix into the bootstrap script (practice
+`session-bootstrap`) so it applies itself. The bullets below are standing
+instructions for this repo, not gotchas.
+
 - `build/build.sh` requires the `zip` CLI on PATH to package the `.zip`/`.xpi`.
+
+<!-- INSTALL.md §0 step 3 / §1 step 9: if the administrator answered yes to a
+     team and/or individual practice source, add the bullet below (drop
+     whichever half doesn't apply) BEFORE the bootstrap-script bullet above,
+     not after — the access grant has to happen before anything tries to
+     clone. Fill in the real repo name(s); keep the wording, since it's
+     answering a failure mode that already happened once for real (a first
+     pass at this wrote "ask to add the repo" instead of just calling it,
+     which meant it only ever got fixed when a human happened to notice a
+     session-start failure — see spec/MIGRATING_EXISTING_INSTALLS.md's step
+     4 upstream for the incident). Do NOT weaken "no asking first" to
+     something softer; that softening is the exact mistake this bullet
+     exists to prevent. -->
+
+- **A brand-new session on this repo alone has no git read access to
+  the person's individual practice set** (Morgan's is `precedent-individual`)
+  — the shared sets `precedent.json` declares are public and clone without
+  it. Session repo access is
+  scoped per session, never inherited just because `precedent.json` or a
+  bootstrap hook names a repo. No token or secret is involved: the tool
+  that grants a session this access rides the same GitHub identity already
+  behind the session, so it only ever succeeds because that person is
+  already a collaborator on the target repo. **At the very start of every
+  session, before running `tools/bootstrap.sh`, call that tool for the
+  individual set of the person driving the session — silently, with no
+  confirmation needed first.** This is a read-only
+  scope extension, not a credential or production change. Never write this
+  as "if the clone fails, ask to add the repo" — that only works when a
+  human happens to be watching for the failure, and the whole point is
+  that a person only ever attaches the one repo they're actually working
+  in; reaching for the others is this session's own job, every time.
+  **Attach the individual set, and keep one clone of it** (practice
+  `attach-never-clone-individual`). The attach tool's reply says to clone
+  it to `/home/user/<name>`. If the session-start hook got there first,
+  that path is already a link to its clone and the clone command stops
+  with "already exists": use the path as it is. If not, clone it there;
+  the next bootstrap run points `~/.config/precedent/config.json` at that
+  clone and links `~/precedent-individual` to it. Either path is the same
+  tree. Never clone it anywhere else: a second copy is one nothing loads,
+  and it drifts from the first within the hour. The shared sets are
+  the other way round: each clone lives at the path `precedent.json`
+  resolves, beside this repo, so clone it there if nothing has.
+
 
 ## Git / workflow
 
@@ -46,48 +142,66 @@ Bump the `version` field in **both** `extension/manifest.chrome.json` and
 Conflicts in shared files are EXPECTED. The fast, safe path:
 
 0. **Capture gate — before the merge, in the thread that did the work**
-   (practice 10): did this thread's work imply anything that must be
+   (practice `capture-gate`): did this thread's work imply anything that must be
    captured — a document update, a registry entry, a decision record? Fold
    it now; the thread that built the rationale is the one that knows what to
    record.
-   **0b. Export gate** (practice 14): did this thread improve a *generic*
-   practice? Fold the abstracted form into `process/upstream/` now, per
-   `process/upstream/INSTALL.md` §3, and run the scrub audit.
+   **0b. Export gate** (practice `practice-export-loop`): did this thread improve a *generic*
+   practice — one that would hold in an unrelated repo, not just this
+   one's own subject matter? Fold the abstracted form into this repo's own
+   vendored copy of the universal source (`precedent.json`'s `universal`
+   entry — see its `path`) and open it as an ordinary pull request directly
+   against that source's own repo (https://github.com/alex137/BestPractice). **There is
+   no local check-in mirror for this yet** — the candidate/promotion
+   pipeline the loader's own catalogue uses internally
+   (`tools/precedent_candidate.py` and friends, in the source repo's own
+   `tools/`) is not wired into a fresh install as of this writing; a plain
+   PR against the upstream repo is the real mechanism until it is. Then run
+   `python3 tools/precedent_sync_views.py --repo .` locally to pick your own change
+   back up once it lands upstream.
 1. Fetch and merge the default branch locally.
-2. Resolve by fixed per-file-class rules (practice 9):
-   - `TODO.md`: **union** of both sides — never drop an entry or a status.
-   - `GLOSSARY.md`: **append-only — keep both sides' additions.**
+2. Resolve by fixed per-file-class rules (practice `merge-runbook`):
+   - Registries (`TODO.md`, `todo/`): **union** of both sides — never drop
+     an entry or a status.
+   - Logs / index files (`GLOSSARY.md`): **append-only — keep both sides'
+     additions.**
    - Same content file edited on both sides (e.g. `extension/content.js`):
-     keep both sides' text; renumber/reconcile the side not yet referenced
-     elsewhere.
-   - **Renumbering is repo-wide:** when sections are renumbered, grep every
-     doc — instructions, map, glossary, TODO, not just the content file
-     itself — for the old numbers and update them in the same commit.
-   - **Generated outputs: never hand-merge.** `dist/` always loses to a
-     rebuild from `extension/`; delete and rebuild rather than resolving
-     conflicts inside it.
+     keep both sides' text; renumber the side not yet referenced elsewhere.
+   - **Renumbering is repo-wide:** when sections are renumbered, grep
+     every doc — instructions, map, glossary, TODO, not just the content
+     file itself — for the old numbers and update them in the same
+     commit. Partial renumbers ship stale cross-references (observed
+     2026-08: a reorganization updated an index row but left two stale
+     section references standing in the instructions file).
+   - **Generated outputs: never hand-merge.** The side matching the
+     committed manifest wins; unshipped builds are deleted and rebuilt —
+     for the `<!-- BEGIN GENERATED: precedent-loader -->` block above, that
+     means re-running `python3 tools/precedent_sync_views.py --repo .`, never
+     hand-resolving its own conflict markers; for `dist/`, a rebuild from
+     `extension/` with `./build/build.sh`.
 3. Run the audits — **all must pass before the merge commits**:
-   `python3 process/upstream/tools/doc_lint.py` and
-   `python3 process/upstream/tools/practice_audit.py`.
+   `python3 tools/doc_lint.py`, `python3 tools/practice_audit.py`,
+   `python3 tools/precedent_check.py` and
+   `python3 tools/precedent_sync_views.py --repo . --check`.
 4. Commit the merge, push, land per this repo's convention.
 
 ## Conventions
 
 - **Sections are ordered by the reader's frequency, not the writer's**
-  (practice 36): a document walking through instructions or rules in
+  (practice `section-order-by-frequency`): a document walking through instructions or rules in
   multiple sections puts common, everyday content first and rare edge
   cases / migration scenarios / "if the world changes" contingencies last —
   unless the subject matter itself dictates a different order. Ask: would
   most readers have to scroll past this section to reach the one they
   opened the document for?
-- **PR descriptions come from the diff, not the template** (practice 39):
+- **PR descriptions come from the diff, not the template** (practice `pr-template-honest-gates`):
   when opening a PR, write "What changed" / "Why" / "Files touched" from
   what actually happened on this branch. Check a `## Gates` box only when
   it is actually true for this change — an unchecked box, or a "not
   applicable" note, is normal and expected. Never check every box, or fill
   every field with N/A, just to make the form look complete; that looks
   like verification and isn't.
-- **Doc references are links** (practice 11): in-repo docs reference other
+- **Doc references are links** (practice `doc-references-are-links`): in-repo docs reference other
   repo files as relative markdown links, never bare backticked names. New
   text always links; a thread touching a document fixes the references in
   the parts it touches.
@@ -95,18 +209,20 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   strikethrough on GitHub. Links stay plain markdown: GitHub strips
   `target=` and most other attributes from raw HTML anchors in rendered
   docs, so an "open in new tab" link can't work there (*as of 2026-08*).
-  `python3 process/upstream/tools/doc_lint.py`
-  checks these conventions on files changed vs the default branch; run it on
-  what you touch before committing.
-- **Volatile rules carry their dates** (practice 16): a rule that depends
+  `python3 tools/doc_lint.py` checks these conventions on files changed vs
+  the default branch; run it on what you touch before committing.
+- **Volatile rules carry their dates** (practice `volatile-rules-carry-dates`): a rule that depends
   on the outside world (an external platform, someone else's algorithm, a
   tool quirk) carries *as of / verified `<date>`* inline, and a session
   that re-confirms it updates the date. The date is the contributor's
   local calendar date, not the agent's system clock — the two can
   disagree by a day depending on time of day and timezone; ask if it
   isn't already clear from context. Old + unverified in a shifting
-  domain = re-verify before relying on it.
-- **Outward-facing documents use the reader's words** (practice 34): in a
+  domain = re-verify before relying on it. Rules about model behavior also
+  name the model they were verified on (a model upgrade = re-verify); a
+  durable rule records its tenure and exceptions (*in effect since X; N
+  exceptions, each under Y*) — its survival record is its authority.
+- **Outward-facing documents use the reader's words** (practice `readers-vocabulary`): in a
   README, product page, pitch, or onboarding guide, every term that names a
   category is either already the reader's word, replaced with a plain
   equivalent, or glossed inline on first use — never left to a glossary the
@@ -114,29 +230,52 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   read, so run this as a separate pass after drafting, not while writing.
   Rule of thumb: if a term can be replaced by a plain description of five
   words or fewer, it is jargon.
-- **Reply convention** (practice 12): every reply that created or modified
-  files ends with a "Files touched" list — branch link + post-merge link +
-  one-line description per file — so the reader can open the work from the
-  chat.
+- **Reply convention** (practice `reply-links-files`): every reply that created, modified or
+  deleted files ends with a "Files touched" list, prefaced `Files touched in
+  owner/repo/branch:` (one preface per repository and branch), then branch
+  link + post-merge link + one-line description per file — so the reader can open the work from
+  the chat. A **deleted** file is listed too: its path, why it went, and a
+  link to the commit that removed it, since it is the one entry with nothing
+  to open on the branch and the one a reader cannot find any other way (a
+  whole retired directory is one entry, not one line per file). When a
+  touched file is an HTML render or a picture and the harness
+  offers hosted private previews (artifacts), the entry also carries the
+  rendered-view link — a repo link shows source, not the render; publish by
+  the same file path each time so the link stays stable, and never preview
+  per-recipient send records.
 - **Commits are credited to the human driving the session.** Set the git
   author to the member's name and GitHub noreply email (ask **before the
   first commit** if you don't know who you're working for —
   `git commit --author="Name <ID+user@users.noreply.github.com>"`), and
-  name yourself in a `Co-Authored-By:` trailer. The project's history must
-  show people's contributions as theirs, not as the agent's.
-- **Open each session by catching the member up.** At session start — and
-  any time they ask "what's new?" — fetch the latest default branch and
-  summarize, in plain language, what changed since their last activity. If
-  their in-progress branch has fallen behind, offer to bring it up to date
-  before continuing (ask, don't just do it).
+  name yourself in a `Co-Authored-By:` trailer. The project's history
+  must show people's contributions as theirs, not as the agent's; where a
+  hosting platform forces its own committer identity, the author field
+  still records the human. Hosted agent harnesses author commits as the
+  agent unless told otherwise, so a session that never asks mis-attributes
+  silently — a dependent repo's first member PRs all landed authored as
+  the agent this way (*observed 2026-08 on hosted Claude Code sessions*).
+  *(GitHub attributes by author email — verified 2026-08.)*
+- **Open each session by pointing at what's new.** The shared project
+  moves between a member's conversations, and nothing pushes updates into
+  their old chats. At session start, run
+  `python3 tools/precedent_whats_new.py`; if it reports days missing from
+  the project's log, say so in one line (*"2 days of changes aren't in
+  What's new yet -- say 'What's new?'"*). When they ask "what's new?",
+  follow the `whats-new` practice. If their in-progress branch has fallen
+  behind, offer to bring it up to date before continuing (ask, don't just
+  do it — their branch may be mid-thought).
 
 ## Working in parallel (multi-member repos)
 
+<!-- These conventions exist so several members' threads don't duplicate
+     or silently trample each other's work. Keep them when instantiating;
+     fill the sensitivities list with the team's real entries. -->
+
 - **Claim before you start.** When a member takes on a `TODO.md` item (or
   any sizable change), mark the item claimed — *(claimed: NAME, date,
-  branch)* — as the branch's first commit. Before starting any work, check
-  `TODO.md` claims and the repo's open branches and PRs for overlap with
-  what your member wants; if someone is already on it, say so before
+  branch)* — as the branch's first commit. Before starting any work,
+  check `TODO.md` claims and the repo's open branches and PRs for overlap
+  with what your member wants; if someone is already on it, say so before
   duplicating their work.
 - **Flag changes to the people they matter to — inferred, not
   declared.** Before packaging changes for review, work out who has
@@ -151,9 +290,9 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   2. **The accumulated list below,** which agents maintain from
      evidence: when a member pushes back in review, reverts a change, or
      objects in conversation, that session appends a one-line entry —
-     what this member wants flagged, citing the incident that showed it.
-     Members may seed entries directly, but the list grows mainly by
-     observation.
+     what this member wants flagged, citing the incident that showed it
+     (practice `cite-the-incident`). Members may seed entries directly, but the list grows
+     mainly by observation.
 
   (For path-based ownership, GitHub's CODEOWNERS enforces review
   requests natively — as of 2026-08. The list also covers concerns no
@@ -168,11 +307,16 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
 ### Review sensitivities (accumulated)
 
 <!-- Maintained by agents as evidence accumulates: one line per member
-     per concern, each citing the incident that revealed it. Empty until
-     the first observation — authorship-based flagging works from day one
-     with an empty list. -->
+     per concern, each citing the incident that revealed it. Seed entries
+     are welcome but not required — authorship-based flagging works from
+     day one with an empty list. -->
+
 
 ## Administrator requests you must know how to handle
+
+<!-- These are conversational workflows the administrator triggers by
+     plain phrases. Guide them end-to-end in plain language — they may
+     not be a programmer. Keep this section when instantiating. -->
 
 - **"What's waiting for me?"** (or "review pending changes") — the
   administrator's review loop, entirely in conversation:
@@ -194,33 +338,42 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
      they'll work on, and which AI tool they use (Claude, Codex, ChatGPT,
      Gemini, Grok, other).
   2. Give the exact GitHub steps to grant access — for a personal repo:
-     repository **Settings → Collaborators → Add people**. One sentence
-     on the choice: read access lets the member's assistant answer
-     questions; write access lets it propose changes (which still need
-     approval to join the project).
+     repository **Settings → Collaborators → Add people**; in an
+     organization, their existing team flow. One sentence on the choice:
+     read access lets the member's assistant answer questions; write
+     access lets it propose changes (which still need approval to join
+     the project).
   3. Generate a short personal welcome message the administrator can
      paste into email or chat: greet the member by name, one sentence on
      what the project is, the link to this repository's
-     [GETTING_STARTED.md](GETTING_STARTED.md) naming the section for
-     their tool, and one suggested first task drawn from `TODO.md`.
+     [GETTING_STARTED.md](GETTING_STARTED.md) naming the section for their tool, and one
+     suggested first task drawn from `TODO.md`.
   4. Confirm there is nothing else to install or configure — once access
      exists, the member's Getting Started section is everything they
      need.
 
-## Practice export — BestPractice (policy)
+## Practice sources — Precedent loader (policy)
 
-- `process/upstream/` is a vendored copy of the public BestPractice repo
-  (https://github.com/alex137/BestPractice), tracked in this repo.
-  **Public-safe invariant:** nothing proprietary may appear under
-  `process/upstream/`, ever. `python3 process/upstream/tools/practice_audit.py`
-  enforces this against `process/scrub_blocklist.txt` (this repo has none —
-  it is already fully public) and must pass before committing anything that
-  touches `process/`.
-- This repo is already public (published to the Chrome Web Store and
-  Firefox Add-ons); there is no private vocabulary to guard, so no
-  `process/scrub_blocklist.txt` was created.
-- Export gate = merge runbook step 0b. Periodic check-in per
-  `process/upstream/INSTALL.md` §4 (recurring item in `TODO.md`).
-- `process/manifest.json` is the installed-practices registry; when a
-  practice file changes locally, export + re-baseline, or flip the entry to
-  `diverged`.
+<!-- The loader variant of the old "Practice export — Precedent
+     (policy)" section: precedent.json + a vendored universal copy,
+     instead of process/upstream/. -->
+
+- `precedent.json` declares every practice source in force here — see
+  [INSTALL.md §0](process/upstream/INSTALL.md) for the resolution and
+  precedence rules. The `universal` source is a **real vendored copy** at
+  `process/upstream/` (this repo's classic install, migrated onto the loader
+  2026-10-01), not a live reference — every
+  collaborator and every fresh container needs it without a sibling
+  checkout. The `shared` sources resolve live from sibling clones instead
+  (never vendored — see INSTALL.md §0 step 3).
+- **Public-safe invariant, if this repo is public and the universal
+  source's upstream is too:** nothing proprietary may appear under the
+  vendored universal path, ever — the same invariant the classic vendored
+  model enforced with `practice_audit.py`, which still runs here against
+  [process/manifest.json](process/manifest.json). This repo is already
+  public (published to the Chrome Web Store and Firefox Add-ons), so there
+  is no private vocabulary to guard and no `process/scrub_blocklist.txt`.
+- `python3 tools/precedent_sync_views.py --repo . --check` is this repo's own
+  drift gate — run it before trusting `AGENTS.md`'s generated block, and
+  after any source's vendored copy or `precedent.json` itself changes.
+- Export gate = merge runbook step 0b, above.

@@ -160,9 +160,36 @@
   },
   "_note": "The vendored Precedent consumer-repo engine (see tools/precedent_vendor_engine.py's own docstring, and spec/BOOTSTRAP_NEW_SOURCES.md / INSTALL.md). Never hand-edit a file this manifest lists -- run 'python3 tools/precedent_vendor_engine.py refresh <bestpractice-clone>' instead (kind is read back from this manifest -- no --kind flag needed for status/refresh); a hand-edit is detected as drift (sha256 mismatch) and refused without --force.",
   "hook_files": [
-    "session-start.sh"
+    "commit-identity-once.sh",
+    "commit-identity.sh",
+    "doc-lint-gate.sh",
+    "merge-check-gate.sh",
+    "precedent-paths.sh",
+    "push-check-gate.sh",
+    "reply-gate.sh",
+    "seeded-prompt-gate.sh",
+    "session-start.sh",
+    "stop-git-check.sh",
+    "stop-reply-check.sh",
+    "workflow-write-gate.sh"
   ],
   "hooks_sha256": {
-    "session-start.sh": "2c16cad048d761c0f10c2c0f51884ec0465dd58868be77c65b20c6c27af5f883"
+    "commit-identity-once.sh": "897aaaeb2d46fade16b8b478541df4f268a0d7d664d1cd84d23a57f9a496f140",
+    "commit-identity.sh": "717e25141a44c94ec987e47a6ca0e4e28cdd6b42eae3dc8f2c62e4065fee4092",
+    "doc-lint-gate.sh": "0a04057135052c31ab19b3c9187485d74ea3bfd4c0de787842b72468fc37b095",
+    "merge-check-gate.sh": "6bc1eb7fcf9ab6fd8766926023e35cb9b2eac4afbbd965a569442ab5f514809b",
+    "precedent-paths.sh": "40eeef958d29929773319a40b2a4732eb1cb00ad8eeff4702ff1ef874e6cb0e0",
+    "push-check-gate.sh": "e4e83e564f9aafbe02af662f52778589c72ddba6aea6e31bc5ddcfb86b72637c",
+    "reply-gate.sh": "c4cd0508c1aebba231713be3a6eb8c5850fd96bef64c7548b99ddd9849d3e275",
+    "seeded-prompt-gate.sh": "9054cbb7dd2ebfa271454b97ae1d724d07a75ade9027fc66b6b0e9d02512913f",
+    "session-start.sh": "2c16cad048d761c0f10c2c0f51884ec0465dd58868be77c65b20c6c27af5f883",
+    "stop-git-check.sh": "2eb82867222db8a3eaab1cd9e88141e946f65e29a9e699a05c07ab0889224665",
+    "stop-reply-check.sh": "ccae7637b2e62283d78b66e3a26a52b28a47a296d5842ff93c11f09a86e5fcff",
+    "workflow-write-gate.sh": "9a8716dded36140475cbdbfce8c4b13ff0e187c6811450d909bfb1cdcea63c51"
+  },
+  "agents_md_sections_sha256": {
+    "### Session start": null,
+    "### Two check levels": null,
+    "## Practice sources — Precedent loader (policy)": null
   }
 }
