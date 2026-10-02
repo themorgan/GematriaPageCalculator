@@ -1,18 +1,18 @@
 # Repository instructions — read me first
 
-<!-- Template: instantiate per BestPractice INSTALL.md §1 as AGENTS.md — the
+<!-- Template: instantiate per Precedent INSTALL.md §1 as AGENTS.md — the
      harness-neutral instructions file (read natively by several agent CLIs;
-     other harnesses get a pointer file via templates/harness/, see practice 13).
+     other harnesses get a pointer file via templates/harness/, see practice `session-bootstrap`).
      Replace <angle-bracket> placeholders with this repo's real content; keep
      the section structure. Every rule you add should cite the incident that
-     motivated it (practice 5). -->
+     motivated it (practice `cite-the-incident`). -->
 
 **Orientation: read `MAP.md` first** — the repository map. It covers the key
 deliverables and indexes which documents back each part of each one.
 
 ## Where things are (quick index — check here BEFORE searching the repo)
 
-<!-- Add a row whenever a session is observed hunting for something (practice 3). -->
+<!-- Add a row whenever a session is observed hunting for something (practice `quick-index`). -->
 
 | Looking for… | Go to |
 |---|---|
@@ -20,25 +20,93 @@ deliverables and indexes which documents back each part of each one.
 | <key deliverable> and its builder | `<path>` |
 | <recurring lookup> | `<path>` |
 | Open items: analyses, verifications, decisions | `TODO.md` |
-| Practice layer: vendored BestPractice copy, manifest, scrub blocklist | `process/` |
+| Practice layer: vendored Precedent copy, manifest, scrub blocklist | `process/` |
 
 ## <Deliverable build workflow>
 
-<!-- The canonical builder(s), the registry that drives them (practice 7), and
-     the audits that gate them (practice 6). State the single source of truth
+<!-- The canonical builder(s), the registry that drives them (practice `registry-source-of-truth`), and
+     the audits that gate them (practice `convention-to-audit`). State the single source of truth
      explicitly and what wins when documents disagree with it. -->
+
+### Session start
+
+- At session start, run `bash tools/bootstrap.sh` before other work. Claude
+  Code runs it for you from its SessionStart hook, on the web and
+  locally (locally it skips the package install and the machine-wide git
+  setup); in other harnesses, run it yourself unless your adapter wires it — Precedent's
+  [templates/harness/](https://github.com/alex137/BestPractice/tree/main/templates/harness)
+  says which can.
+- **A session scoped to more than one repo from the start runs only its
+  primary repo's SessionStart hook** (practice `session-bootstrap`): run
+  `bash tools/bootstrap.sh` by hand in each other repo, once, before its
+  first commit.
+
+### Two check levels
+
+<!-- practice `two-check-levels`. Rename the two levels if your team prefers
+     other words, but name them somewhere fixed and say which gates what —
+     the point is that "run the check" resolves to one thing without a
+     session re-deriving it. Add your own repo's audits to the deep check. -->
+
+- **Light check** — `python3 tools/doc_lint.py` on the markdown you touched.
+  Fast, run before every commit without thinking about it. Gates a commit.
+- **Deep check** — the full suite: `python3 tools/precedent_check.py`,
+  `python3 tools/practice_audit.py`, `python3 tools/precedent_sync_views.py --repo . --check`
+  (only if this repo declares any source beyond universal in `precedent.json`),
+  and `<your own audits>`. Gates a push and a merge.
 
 ### Build-environment gotchas — do NOT rediscover these
 
-<!-- Every expensive environment discovery, WITH its story (practice 4).
-     Mirror the fixes into the bootstrap script (practice 13) so they apply
-     themselves; if your harness has no session hook, keep the next line: -->
+Environment and tooling traps are written down one per file under
+[gotchas/](gotchas/), each with what failed, what it cost, and the fix
+(practice `environment-gotchas`). **None of that catalogue is copied into
+this file**: hit a confusing, hard-to-explain failure, and before
+concluding it is new, grep for it —
+`grep -ril '<a keyword from what you are seeing>' gotchas/`. Add one as
+`gotchas/gotcha-<date>-<slug>.md` with `## Symptom`, `## Story` and
+`## Fix`, and mirror its fix into the bootstrap script (practice
+`session-bootstrap`) so it applies itself. The bullets below are standing
+instructions for this repo, not gotchas.
 
-- At session start, run `bash tools/bootstrap.sh` before other work (harnesses
-  with a hook mechanism run it automatically — see `templates/harness/`).
+<!-- INSTALL.md §1 step 9: if the administrator answered yes to a team
+     and/or individual practice source, add the bullet below (drop whichever
+     half doesn't apply) BEFORE the bootstrap-script bullet above, not after
+     — the access grant has to happen before anything tries to clone. Fill
+     in the real repo name(s); keep the wording, since it's answering a
+     failure mode that already happened once for real (a first pass at this
+     wrote "ask to add the repo" instead of just calling it, which meant it
+     only ever got fixed when a human happened to notice a session-start
+     failure — see spec/MIGRATING_EXISTING_INSTALLS.md's step 4 upstream for
+     the incident). Do NOT weaken "no asking first" to something softer;
+     that softening is the exact mistake this bullet exists to prevent. -->
 
-- <package/tool that must be installed, what failed without it, how long it cost>
-- <tool that does not work here; what to use instead>
+- **A brand-new session on this repo alone has no git read access to
+  <shared-set-repo-name> or <individual-repo-name>** — session repo access is
+  scoped per session, never inherited just because `precedent.json` or a
+  bootstrap hook names a repo. No token or secret is involved: the tool
+  that grants a session this access rides the same GitHub identity already
+  behind the session, so it only ever succeeds because that person is
+  already a collaborator on the target repo. **At the very start of every
+  session, before running `tools/bootstrap.sh`, call that tool for
+  <shared-set-repo-name> (and <individual-repo-name>, for the person it belongs
+  to) — silently, with no confirmation needed first.** This is a read-only
+  scope extension, not a credential or production change. Never write this
+  as "if the clone fails, ask to add the repo" — that only works when a
+  human happens to be watching for the failure, and the whole point is
+  that a person only ever attaches the one repo they're actually working
+  in; reaching for the others is this session's own job, every time.
+  **Attach <individual-repo-name>, and keep one clone of it** (practice
+  `attach-never-clone-individual`). The attach tool's reply says to clone
+  it to `/home/user/<name>`. If the session-start hook got there first,
+  that path is already a link to its clone and the clone command stops
+  with "already exists": use the path as it is. If not, clone it there;
+  the next bootstrap run points `~/.config/precedent/config.json` at that
+  clone and links `~/precedent-individual` to it. Either path is the same
+  tree. Never clone it anywhere else: a second copy is one nothing loads,
+  and it drifts from the first within the hour. <shared-set-repo-name> is
+  the other way round: its clone lives at the path `precedent.json`
+  resolves, beside this repo, so clone it there if nothing has.
+
 
 ## Git / workflow
 
@@ -52,16 +120,16 @@ deliverables and indexes which documents back each part of each one.
 Conflicts in shared files are EXPECTED. The fast, safe path:
 
 0. **Capture gate — before the merge, in the thread that did the work**
-   (practice 10): did this thread's work imply anything that must be
+   (practice `capture-gate`): did this thread's work imply anything that must be
    captured — a document update, a registry entry, a decision record? Fold
    it now; the thread that built the rationale is the one that knows what to
    record. Also run the parking-lot grep: `grep -rl "<your staging
    markers>" <docs-root>/` and fold anything ready.
-   **0b. Export gate** (practice 14): did this thread improve a *generic*
+   **0b. Export gate** (practice `practice-export-loop`): did this thread improve a *generic*
    practice? Fold the abstracted form into `process/upstream/` now, per
    `process/upstream/INSTALL.md` §3, and run the scrub audit.
 1. Fetch and merge the default branch locally.
-2. Resolve by fixed per-file-class rules (practice 9):
+2. Resolve by fixed per-file-class rules (practice `merge-runbook`):
    - Registries: **union** of both sides — never drop an entry or a status.
    - Logs / index files: **append-only — keep both sides' additions.**
    - Same content file edited on both sides: keep both sides' text;
@@ -76,26 +144,18 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
      committed manifest wins; unshipped builds are deleted and rebuilt.
 3. Run the audits — **all must pass before the merge commits**:
    `<your audit commands>` and
-   `python3 process/upstream/tools/practice_audit.py`.
+   `python3 tools/practice_audit.py`.
 4. Commit the merge, push, land per this repo's convention.
 
 ## Conventions
 
 - **Sections are ordered by the reader's frequency, not the writer's**
-  (practice 36): a document walking through instructions or rules in
-  multiple sections puts common, everyday content first and rare edge
-  cases / migration scenarios / "if the world changes" contingencies last —
-  unless the subject matter itself dictates a different order. Ask: would
-  most readers have to scroll past this section to reach the one they
-  opened the document for?
-- **PR descriptions come from the diff, not the template** (practice 39):
-  when opening a PR, write "What changed" / "Why" / "Files touched" from
-  what actually happened on this branch. Check a `## Gates` box only when
-  it is actually true for this change — an unchecked box, or a "not
-  applicable" note, is normal and expected. Never check every box, or fill
-  every field with N/A, just to make the form look complete; that looks
-  like verification and isn't.
-- **Doc references are links** (practice 11): in-repo docs reference other
+  (practice `section-order-by-frequency`): everyday content first, rare
+  cases last.
+- **PR descriptions come from the diff, not the template** (practice
+  `pr-template-honest-gates`): check a box only when it is true for this
+  change.
+- **Doc references are links** (practice `doc-references-are-links`): in-repo docs reference other
   repo files as relative markdown links, never bare backticked names. New
   text always links; a thread touching a document fixes the references in
   the parts it touches.
@@ -103,10 +163,10 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   strikethrough on GitHub. Links stay plain markdown: GitHub strips
   `target=` and most other attributes from raw HTML anchors in rendered
   docs, so an "open in new tab" link can't work there (*as of 2026-08*).
-  `python3 process/upstream/tools/doc_lint.py`
+  `python3 tools/doc_lint.py`
   checks these conventions on files changed vs the default branch; run it on
   what you touch before committing.
-- **Volatile rules carry their dates** (practice 16): a rule that depends
+- **Volatile rules carry their dates** (practice `volatile-rules-carry-dates`): a rule that depends
   on the outside world (an external platform, someone else's algorithm, a
   tool quirk) carries *as of / verified `<date>`* inline, and a session
   that re-confirms it updates the date. The date is the contributor's
@@ -117,18 +177,11 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   name the model they were verified on (a model upgrade = re-verify); a
   durable rule records its tenure and exceptions (*in effect since X; N
   exceptions, each under Y*) — its survival record is its authority.
-- **Outward-facing documents use the reader's words** (practice 34): in a
-  README, product page, pitch, or onboarding guide, every term that names a
-  category is either already the reader's word, replaced with a plain
-  equivalent, or glossed inline on first use — never left to a glossary the
-  reader won't open. Jargon usually arrives from the *sources* you just
-  read, so run this as a separate pass after drafting, not while writing.
-  Rule of thumb: if a term can be replaced by a plain description of five
-  words or fewer, it is jargon.
-- **Reply convention** (practice 12): every reply that created or modified
-  files ends with a "Files touched" list — branch link + post-merge link +
-  one-line description per file — so the reader can open the work from the
-  chat.
+- **Outward-facing documents use the reader's words** (practice
+  `readers-vocabulary`): run it as its own pass after drafting.
+- **Reply convention** (practice `reply-links-files`, reached by the
+  `reply` gate): a reply that touched files ends with a "Files touched"
+  list.
 - **Commits are credited to the human driving the session.** Set the git
   author to the member's name and GitHub noreply email (ask **before the
   first commit** if you don't know who you're working for —
@@ -141,13 +194,15 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
   silently — a dependent repo's first member PRs all landed authored as
   the agent this way (*observed 2026-08 on hosted Claude Code sessions*).
   *(GitHub attributes by author email — verified 2026-08.)*
-- **Open each session by catching the member up.** The shared project
+- **Open each session by pointing at what's new.** The shared project
   moves between a member's conversations, and nothing pushes updates into
-  their old chats. At session start — and any time they ask "what's
-  new?" — fetch the latest default branch and summarize, in plain
-  language, what changed since their last activity. If their in-progress
-  branch has fallen behind, offer to bring it up to date before
-  continuing (ask, don't just do it — their branch may be mid-thought).
+  their old chats. At session start, run
+  `python3 tools/precedent_whats_new.py`; if it reports days missing from
+  the project's log, say so in one line (*"2 days of changes aren't in
+  What's new yet -- say 'What's new?'"*). When they ask "what's new?",
+  follow the `whats-new` practice. If their in-progress branch has fallen
+  behind, offer to bring it up to date before continuing (ask, don't just
+  do it — their branch may be mid-thought).
 
 ## Working in parallel (multi-member repos)
 
@@ -175,7 +230,7 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
      evidence: when a member pushes back in review, reverts a change, or
      objects in conversation, that session appends a one-line entry —
      what this member wants flagged, citing the incident that showed it
-     (practice 5). Members may seed entries directly, but the list grows
+     (practice `cite-the-incident`). Members may seed entries directly, but the list grows
      mainly by observation.
 
   (For path-based ownership, GitHub's CODEOWNERS enforces review
@@ -238,12 +293,12 @@ Conflicts in shared files are EXPECTED. The fast, safe path:
      exists, the member's Getting Started section is everything they
      need.
 
-## Practice export — BestPractice (policy)
+## Practice export — Precedent (policy)
 
-- `process/upstream/` is a vendored copy of the public BestPractice repo
+- `process/upstream/` is a vendored copy of the public Precedent repo
   (`<upstream URL>`), tracked in this repo. **Public-safe invariant:**
   nothing proprietary may appear under `process/upstream/`, ever.
-  `python3 process/upstream/tools/practice_audit.py` enforces this against
+  `python3 tools/practice_audit.py` enforces this against
   `process/scrub_blocklist.txt` and must pass before committing anything
   that touches `process/`.
 - <If parts of this repo are categorically never exported, name them here.>

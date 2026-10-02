@@ -2,9 +2,11 @@
   "upstream": {
     "repo": "https://github.com/alex137/BestPractice",
     "vendored_at": "process/upstream",
-    "commit": "47aabda4b44796f2c01591ec9c7e7edf6a1e404d",
-    "synced_from": "47aabda4b44796f2c01591ec9c7e7edf6a1e404d",
-    "_note": "commit = upstream hash last synced (routine upstream sync, recorded 2026-08-20; verified tree-identical)."
+    "scrub_blocklist": null,
+    "_scrub_blocklist_comment": "Opted out on purpose (2026-10-02, Morgan): this repo is public -- the extension is published on the Chrome Web Store and Firefox Add-ons -- so it has no private vocabulary to keep out of the vendored tree. The leak gate (tools/leak_gate.py) still scans every push against the default list and the person's own private list.",
+    "commit": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
+    "synced_from": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
+    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-02; verified tree-identical)."
   },
   "entries": [
     {
@@ -14,7 +16,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Instantiated with this repo's real quick-index, build workflow, and file classes. Structure kept identical to the template. 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): propagated the new practice-36 (section ordering), practice-39 (PR-description), and practice-34 (outward-facing documents) Conventions bullets, plus the practice-16 date-source clarification, verbatim.",
-      "local_sha256": "abc6e491f046331c598d9235fd73c1017d1d77923ed14b0460a0f334bb1ca2d3"
+      "local_sha256": "07b65aca7a948cbeba705be000a90c525129dd100b3c02bf81cb388847ddcc96"
     },
     {
       "practice": "harness-claude-code-pointer",
@@ -32,7 +34,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Added one repo-specific allowlist entry (./build/build.sh) beyond the template's baseline commands.",
-      "local_sha256": "71769a5aa231dad55cf19668e57523ab10ee6b56db16d23ff7e87d20bc2a9a96"
+      "local_sha256": "afe08bdc6a8d7155129ff9219f46921629fb8fb468abdd8d2b2db32dd6abcf14"
     },
     {
       "practice": "harness-claude-code-hook",
@@ -41,7 +43,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Verbatim wrapper.",
-      "local_sha256": "1718079c7b5581a9e26190311453e99cd472c3b4b4e01f0a6fd7f1e0b0aae4f0"
+      "local_sha256": "2c16cad048d761c0f10c2c0f51884ec0465dd58868be77c65b20c6c27af5f883"
     },
     {
       "practice": "bootstrap",
@@ -50,7 +52,7 @@
       "granularity": "file",
       "status": "local-only",
       "notes": "No repo-specific apt/python setup needed yet beyond doc_lint's cmarkgfm dependency; add entries here as real sessions hit real gaps (practice 4). 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): propagated the new practice-13 upstream-freshness notice (checkin.py fresh) verbatim.",
-      "local_sha256": "1e7eaf321878de65b484da21e71f28b879d5166a95fc41638027aebf1143cd86"
+      "local_sha256": "12be3a42784f830518d72620bf533db1e6d7391e7665513d764860a0812d6394"
     },
     {
       "practice": "repo-map",
@@ -59,7 +61,7 @@
       "granularity": "file",
       "status": "local-only",
       "notes": "Fully instantiated with this repo's subject matter; not a generic artifact to export.",
-      "local_sha256": "a9e732eb065e97ce8a1c4ba70d0ff7aa2b7a2576e9a2267de22ff6c2c73b9ba3"
+      "local_sha256": "5ad13f0a06abc968e0637fc1cfba50cfc91bbd85d4a35514371ad6747e0e08b5"
     },
     {
       "practice": "todo-list",
@@ -68,7 +70,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Structure and recurring check-in item kept as-is from the template.",
-      "local_sha256": "dcb0c449a24c2e27f7e0c199c0ae209719c8090a7f0ae198fd38ed3de265c0e2"
+      "local_sha256": "d86772c5a98792c3bfca83ced7363a55b1edb965450470a1fab52bac388f93d3"
     },
     {
       "practice": "glossary",
@@ -86,7 +88,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Placeholders replaced with this repo's name/owner; per-assistant section structure kept intact so upstream onboarding improvements propagate on updates. 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): appended the new practice-37 \"Automatic checks installed for this project\" subsection (doc-lint Actions check + PR template) verbatim.",
-      "local_sha256": "bc248dbab79683bce04806328c96017c29bf4e8d69e118ff4ee2c641483e6a40"
+      "local_sha256": "1f838f9127a65ed2799898d55628078bed042855ef889e2b88b797c2d6e9f1ab"
     },
     {
       "practice": "readme-agent-entry",
@@ -98,22 +100,13 @@
       "notes": "Inserted verbatim near the top of README.md, above the existing project description."
     },
     {
-      "practice": "github-actions-doc-lint",
-      "upstream_path": "templates/github-actions/doc-lint.yml.template",
-      "local_path": ".github/workflows/bestpractice-docs.yml",
-      "granularity": "file",
-      "status": "synced",
-      "notes": "Verbatim; runs the vendored linter at process/upstream/tools/doc_lint.py.",
-      "local_sha256": "b89c8c858a5dc6f81d037ef7f58afb6974bd68af185782b3d6c4fbc43f59c4f6"
-    },
-    {
       "practice": "gitignore",
       "upstream_path": "templates/gitignore.template",
       "local_path": ".gitignore",
       "granularity": "file",
       "status": "synced",
       "notes": "New template introduced upstream 2026-08-20 (practice 8, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: merged the baseline ignores into this repo's pre-existing .gitignore (which only covered the /dist/chrome/ and /dist/firefox/ build output) rather than replacing it, per the template's own merge instruction.",
-      "local_sha256": "9b1793924637a1683a9a1cad3041bab1b73ccf001757c375d7e8c20bd5ad0989"
+      "local_sha256": "bff41cb81e78fe827bb155c80ddb9378cbc501fa87a3dadad77b1f27702a59c8"
     },
     {
       "practice": "pr-template",
@@ -122,7 +115,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "New template introduced upstream (practice 39, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: copied verbatim, stripping only the template's own top install-instruction comment, same treatment as the readme-agent-entry marker block.",
-      "local_sha256": "dfb6553508415eee3ca84de0c79ad2930f95371e912bfb7c97b7c36e9b88efd4"
+      "local_sha256": "f9292be467ab7e9706aa69f74a73cbd015256e350af9f1411a0b7acf9a27a42c"
     }
   ]
 }

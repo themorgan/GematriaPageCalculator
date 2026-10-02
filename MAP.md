@@ -17,8 +17,11 @@ sessions).
 | `build/` | `build.sh`, the builder that assembles `dist/` and the store packages from `extension/`. |
 | `dist/` | Generated build output (Chrome/Firefox unpacked dirs + the `.zip`/`.xpi` store uploads) — never hand-edited, see [README.md](README.md). |
 | `marketing/` | Store listing assets and copy (icon, screenshots, promo tiles) — see `marketing/README.md`. |
-| `process/` | Practice layer (vendored BestPractice + manifest) — see [AGENTS.md](AGENTS.md) "Practice export". |
-| `TODO.md` | Cross-session open items. |
+| `process/upstream/` | The vendored BestPractice practice catalogue — never hand-edited; refreshed by `Update Vendors`. The engine that reads it is in `tools/`; [precedent.json](precedent.json) declares every practice source in force. |
+| `local/practices/` | This repo's own practices (project voice, visual identity). |
+| `todo/` | Open items, one file each; [todo/TODO.md](todo/TODO.md) is the generated index. |
+| `gotchas/` | Environment traps, one file each; [gotchas/INDEX.md](gotchas/INDEX.md) is the generated index. |
+| `TODO.md` | Pointer to `todo/`. |
 
 ## The extension
 
