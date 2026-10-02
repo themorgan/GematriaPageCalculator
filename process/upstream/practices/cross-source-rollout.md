@@ -1,0 +1,102 @@
+---
+slug:        cross-source-rollout
+title:       A change with cross-source implications rolls out now, or queues with why
+tier:        on-demand
+severity:    default
+scope:       engine-dev
+applies_to:  ["**"]
+applies_to_why: "A moment, not a place -- what makes a change cross-source-relevant is its meaning, not which file it touched, so no glob identifies it. Routed by the `merge` gate instead. Decided: 2026-09-05, same session that added very-deep-check's source-presence and stale-branch additions."
+occasion:    "a change here has implications for how an attached team, individual, or repo-local source should work"
+gates:       ["merge"]
+gates_why:   "The rollout (or the blocked-on TODO standing in for it) has to happen before the thread ends, the same timing capture-gate and todo-is-a-handoff already use."
+index_clause: "roll it out to attached sources now; else a blocked-on TODO"
+index_required: false
+checked_by:  null
+defines:     ["cross-source rollout"]
+status:      active
+in_force_at: null
+supersedes:  []
+overrides:   null
+added:       2026-09-05
+approved_by: "Morgan F"
+---
+## Rule
+A change to how this repo's own checks, conventions, or engine work — a
+new mechanical gate, a changed merge or push convention, a tool whose
+behavior a private source relies on — is not finished at this repo's own
+commit if the change has implications for how a team, individual, or
+repo-local source should work. If that source is attached to this same
+session, roll the change out to it in this session, before the thread
+ends — the same "do it now, not later" reasoning
+[todo-is-a-handoff](todo-is-a-handoff.md) already applies to any
+agent-doable item. If it is not attached, the rollout is genuinely blocked
+on a session that has it: file it under `todo/`
+(`todo/todo-<date>-<slug>.md`, with `blocked_on: <source name> not attached
+this session`), naming the specific change and what the
+other source needs to do about it — never a bare "check the other repos"
+reminder.
+
+**A practice's name, status and Rule count as mechanism here, not prose.**
+Renaming, retiring, deduplicating, deleting or rewording a practice is a
+change every other source is exposed to, because they cite it by name:
+[practice-change-propagates](practice-change-propagates.md) is how that
+rollout is done, and its check is what catches one that was missed.
+
+## Detail
+This is `todo-is-a-handoff` applied to one recurring boundary: the
+four-way split between universal, team, individual, and repo-local
+practices means a change made in one of them routinely has a sibling
+implication in another, and "the other repo isn't open right now" is a
+real, nameable `blocked-on` reason — distinct from the convenience
+deferral `todo-is-a-handoff` already rules out.
+
+It is also distinct from [parallel-artifact-ledger](https://github.com/alex137/BestPractice/blob/staging/practices/parallel-artifact-ledger.md): that practice's family
+members are independent implementations of *one design* (three harness
+adapters, same architecture). These four sources are not parallel copies
+of each other at all — individual, team, and repo-local practices are
+novel content their own owners write, most of which has nothing to do
+with universal. What transfers here is narrower and specific: a change to
+the *mechanism* a source relies on (an engine tool's behavior, a
+merge/push/deep-check convention, a resolver rule) — not every change to
+this repo's own prose. **The one exception is the catalogue's own
+identities** (added 2026-09-27): a practice's slug, status and Rule are what
+other sources cite, so changing one is a mechanism change to them, even
+though it is written as prose here. The go-merge rename proved it — the
+sets kept citing the old name for a day, and nothing at merge time asked.
+
+[very-deep-check](https://github.com/alex137/BestPractice/blob/staging/practices/very-deep-check.md) is this same gap seen from the other side, on-demand rather
+than at every merge: run against the checkout plus every attached
+shared/individual source, it should read whether a check, tool, or
+convention this repo changed has left an attached source assuming the old
+behavior, and fix or flag it in the same pass. This practice is what
+should have made that drift impossible to accumulate in the first place;
+`very-deep-check`'s own cross-source-staleness bullet is the backstop for
+whatever a session's rollout at merge time still misses.
+
+## Why
+A four-source split with no standing rule for propagating mechanism
+changes across it degrades exactly like any other split-ownership system:
+each source drifts from what the others now assume, silently, because no
+single commit's diff shows the gap — the change lands cleanly in the repo
+that made it, and the repos that should have followed simply don't, with
+nothing at merge time asking whether they needed to.
+
+## Story
+Raised directly, in the same conversation that added `very-deep-check`'s
+own source-presence and stale-branch-sweep additions — the request that
+closed those two gaps immediately generalized to: whenever this repo
+changes something an attached sibling source should also reflect, that
+rollout needs the same standing rule `todo-is-a-handoff` already gives
+every other agent-doable item, not a one-off fix each time it happens to
+get noticed.
+
+## Install
+No mechanical check, and not for lack of trying: "does this change have
+implications for another source" is a judgment call about the *meaning*
+of a diff, the same class `checkable-gets-checked` already lets
+`todo-is-a-handoff` leave unchecked for the identical reason. One
+narrower thing could plausibly be checked later — that every `blocked-on:
+<source> not attached` item this practice creates actually gets picked up
+once that source is attached, rather than sitting in `todo/`
+indefinitely — left `checked_by: null` here rather than wired in without
+running it, per `checkable-gets-checked`.

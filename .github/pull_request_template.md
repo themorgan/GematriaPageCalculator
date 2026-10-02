@@ -1,10 +1,22 @@
+<!-- Template: instantiate per Precedent INSTALL.md §1 as
+     .github/pull_request_template.md — GitHub picks it up automatically
+     for every PR opened against this repo. Copy verbatim; nothing here
+     needs adapting to the project's subject matter.
+
+     Fill this in from the actual diff, every time. An unchecked gate, or
+     a "not applicable" note, is a normal and expected outcome of a real
+     PR — never check a box, or write N/A across every field, just to make
+     the form look complete. A checklist filled in mechanically looks like
+     verification and isn't; that defeats the entire point of having one
+     (practice `pr-template-honest-gates` in PRACTICES.md). -->
+
 ## What changed
 
 <!-- One or two sentences, plain language. What is different after this merge? -->
 
 ## Why
 
-<!-- The intent/critique that prompted it. Link the TODO.md item if there is one. -->
+<!-- The intent/critique that prompted it. Link the relevant todo/ item if there is one. -->
 
 ## Files touched
 
@@ -14,9 +26,9 @@
 
 - [ ] Scrub gate run — no private names/code words in the vendored tree
 - [ ] MAP.md updated (or: no structural change, so not needed)
-- [ ] TODO.md updated — items opened/closed listed below
+- [ ] Relevant `todo/` item(s) opened/closed, listed below
 - [ ] GLOSSARY.md updated (or: no new terms)
 
 ## Open questions / follow-ups
 
-<!-- Anything deferred. These should also land in TODO.md. -->
+<!-- Anything deferred. These should also land under todo/. -->

@@ -1,0 +1,318 @@
+---
+slug:        practice-links-travel
+title:       A practice links only what travels with it
+tier:        on-demand
+severity:    default
+applies_to:  ["practices/*.md"]
+applies_to_why: "The path IS the distinguishing condition: the rule is about what a file in the published catalogue may link, and every such file is in practices/. local/practices/*.md is deliberately out -- a repo-local source is read in place here and materialized nowhere, so its links travel nowhere. Decided: 2026-09-11, when the practice landed at universal."
+occasion:    "writing or editing a practice file"
+gates:       []
+index_clause: "link only what travels with the file; the rest is an absolute upstream URL"
+checked_by:  "tools/precedent_check.py"
+defines:     []
+status:      active
+in_force_at: null
+supersedes:  []
+overrides:   null
+added:       "2026-09-11"
+approved_by: "Morgan, 2026-09-11"
+strength:    assented
+---
+## Rule
+**A practice file is published into every repository that adopts the
+catalogue, so a relative link in one only works if the target travels with
+it.** Four things do, the first three here: **another practice file in the same directory that is
+still in force**, cited the normal way as a markdown link to its own
+`<slug>.md`; **the vendored
+engine files under `../tools/`** that every consumer receives; and **a
+source's own check scripts and their tests under `../tools/checks/`**, which
+materialization copies alongside the practices — the `check_*.py` scripts
+and the `test_*.sh` files under `tests/` — a practice citing the script that
+enforces it is the most common cross-reference a private set makes, and it is
+a correct one. **A file a practice here declares in `ships:` travels too**
+([practice-carries-its-files](practice-carries-its-files.md)): materialization
+delivers it to the same path in every consumer, so `../tools/<script>` to a
+shipped script is a correct relative link.
+
+**A sibling that is no longer in force does not travel either**, and this is
+the one shape that looks correct from inside the publishing repository. A
+practice whose `status:` is anything but `active` is dropped by the resolver
+before materialization, so the consumer receives the file doing the linking
+and never the file being linked. **Link the successor instead** — `in_force_at:`
+names it — or, where the rule was absorbed into the engine or is in force
+nowhere, drop the link and say in prose what it covered.
+
+**The one withdrawn sibling you may link is a DEDUPLICATED one whose
+`in_force_at:` names its own slug**, and this is the common case in a private
+set rather than an edge case. It means the copy *here* is redundant because
+another source carries that same slug and is active. The resolver walks
+sources lowest-precedence first, so the surviving copy lands at exactly the
+`practices/<slug>.md` the link already points at, and the link travels
+untouched. **Link it the normal way.**
+
+**Everything else in the publishing repository does not travel** — `spec/`,
+`templates/`, root documents, decisions, records, hooks. Link one of those
+relatively and the link is live where it was written and dead in every
+repository that receives it, which is the one place nobody checking it will
+look.
+
+**From a PUBLIC source, link it as an absolute URL** to the file in the
+publishing repository, on that repository's declared `base_branch`. The
+reader gets a live link wherever they are reading, and the writer gets to
+keep the reference. **From a PRIVATE source, drop the link markup and keep
+the backticked path** — an absolute URL would publish the private
+repository's name into every consumer that materializes the practice, which
+is a worse failure than a reference the reader has to go find. **Nothing downstream will
+repair that one, and nothing downstream should** — `_rewrite_links` refuses
+the private case on purpose, so the unlinked path is load-bearing rather than
+an oversight somebody should tidy up later.
+
+**A practice that lives in ANOTHER set is never linked by URL, whatever
+this source's visibility** -- the public-source advice above is about files
+in the publishing repository, and another set is not one. Write its slug in
+backticks. The one exception is a universal practice, linked on the
+universal source's declared `base_branch`. This is the shape a practice
+moved between sets is left carrying: its sibling links now point at files
+that stayed behind, and the obvious repair, a URL to where they stayed,
+published a private set's name from a public one on 2026-09-23.
+
+## Detail
+**The public and private answers differ, and neither is the general case.**
+What decides it is whether the target is readable by whoever ends up holding
+the practice file. A universal practice published from a world-readable
+upstream can name its own repository in a URL freely; an individual or shared
+set cannot, and pays for the reference with a path the reader has to resolve
+by hand.
+
+**A sibling practice link is the one reference that survives in both
+directions and at every level**, because materialization writes every
+source's practices into one directory. Prefer it: a rule that can make its
+point by citing another rule needs no URL at all. **It survives only while
+the sibling is in force**, though — materialization writes the practices the
+resolver resolved, and the resolver drops every non-active one — so the
+sibling link is the safest reference in the file and the only one whose
+target can stop travelling without anybody touching either file.
+
+**The worst shape of this bug is not a dead link — it is a live one pointing
+at the wrong file.** `../bootstrap/x` at least 404s, and a markdown lint can
+see that. `../.claude/settings.json` **resolves** in the consumer, to that
+consumer's own settings file rather than the one the sentence was written
+about. No lint anywhere reports it; only reading the link as a claim about
+*which repository* it assumes will catch it. The rule catches this one only
+because `.claude/` does not travel — nothing would catch it if it did.
+
+**Do not assume materialization repairs this for a public source.**
+[precedent_materialize.py](../tools/precedent_materialize.py)'s
+`_rewrite_links` does turn an unplaceable relative link into an absolute
+URL when the source is public, which reads
+like the problem solving itself. It does not, in the install that matters
+most: when the universal source is a tracked tree *inside* the consuming
+repository, the rewriter resolves the target within that repository instead,
+finds nothing there, and leaves the link exactly as written — it will not
+invent a target it cannot place. That is the right refusal and it is why the
+links have to be correct in the publishing source.
+
+**For a PRIVATE source it refuses on purpose, and the dead link is
+load-bearing.** The same rewriter passes `may_name_source_repo=False` for
+an individual source, so it leaves the relative link exactly as written
+rather than minting an absolute URL into the publishing repository. That is
+a privacy boundary, not a gap: the URL would hand a consuming repo's tracked
+tree that private repository's owner and name, and a consuming repo can be
+public. Its own words: *"a
+relative link that does not resolve is a smaller failure than a disclosure
+that cannot be taken back."* **So a session that finds such a link must not
+make it absolute** — that is the disclosure, and it is the first thing
+anyone tries. Nothing downstream repairs it and nothing downstream should;
+the repair belongs in the publishing source, as a backticked path.
+
+## Why
+The catalogue is written in one repository and read in all of them, and
+nothing about writing it makes that visible. A relative path resolves
+correctly on the screen of whoever wrote it, passes that repository's own
+link check because the file really is there, and breaks only after it has
+been copied somewhere else — by which point the person holding the broken
+link has no way to tell what it was ever pointing at.
+
+## Story
+**The rule is older than this file, and the private original had already
+named four things this one missed.** It was written in `precedent-individual`
+on 2026-09-06, out of the incident below. The universal text here was written
+by a session that could not attach that repository and had never read it, so
+it shipped without the check-script clause, without the shape that resolves
+to the wrong file, without the private half of the materialization refusal,
+and without the incident itself — and its check would have fired on a
+correct link to a source's own check script. All four were closed on
+2026-09-11, once the private sources resolved and the two texts could be
+read against each other.
+
+**The incident: 2026-09-06, three sessions, one day, one directory.** A
+practice landed carrying three `../bootstrap/` links. The first push that
+vendored it turned a consuming repo's Markdown lint red — three broken
+relative links, a hard failure — and **the fix made them absolute, which
+tripped that same repo's `private-repo-scrub`**, because an absolute URL was
+precisely the disclosure the rewriter refuses to make. They were corrected to
+bare backticked paths. Hours later two more practices landed with seven more
+of the same, from a different session that had no way to know. A sweep then
+found two in a third practice that had been dead **for weeks** and had never
+been reported once — `doc_lint` scopes to CHANGED files, and nobody had
+touched that file since. A gotchas note written after the first batch
+prevented neither the second nor the third, which is the case for a check
+rather than more prose
+([checkable-gets-checked](checkable-gets-checked.md)).
+
+**Measured 2026-09-11, in this repository at engine `89c90d7`: 134 relative
+links across 42 of the 94 universal practice files pointed at 57 targets
+that exist only here.** The same measurement taken from a real consuming
+repository the same day reported 120 broken links across 40 of its 126
+materialized practice files, against 52 distinct targets — the two counts
+differ because a consumer's tree holds practices from other sources too, and
+has root documents of its own that a few of the links happen to hit.
+
+**The rule already existed and could not see the catalogue from anywhere.**
+It was written in `precedent-individual`, with a real check script beside
+it, and that script skips every practice whose source is not the individual
+set — correct on its own terms, since a consumer cannot fix another source's
+text and the next sync would overwrite the attempt, but it means the
+universal catalogue was examined by nobody. In this repository neither the
+practice nor the script existed at all: they live in a private set, and this
+repository is not a materializing consumer, so they never arrived. Running
+the consumer's own `precedent_check.py --only practice-links-travel` printed
+**1 passed, 0 violated** while 120 links in the tree it had just scanned
+were dead.
+
+**The move to universal is [layered-practice-packs](layered-practice-packs.md)
+applied literally**: this is a rule about how practice files are written, and
+practice files are written here. The individual copy is still standing as of
+this landing — that repository could not be reached from the session that
+landed this one — and deduplicating it is
+[spec/MOVING_PRACTICES.md](https://github.com/alex137/BestPractice/blob/staging/spec/MOVING_PRACTICES.md)'s
+second step, queued in
+[TODO.md](https://github.com/alex137/BestPractice/blob/staging/TODO.md)
+rather than done silently. The text here was written fresh rather than
+carried across, for the same reason: nobody in that session could read the
+original.
+
+**The withdrawn-sibling shape, found 2026-09-14, after it bit the same
+practice file twice.** An individual set's
+`closing-items-are-this-thread.md` linked `half-the-words.md` from its Story;
+`half-the-words` is `status: retired`, superseded by `reply-fits-one-screen`.
+That set's own `precedent_check.py` reported **16 passed, 0 violated both with
+the broken link and with it fixed** — the target file is sitting right there
+in `practices/`, so nothing local is wrong and no local check could ever say
+otherwise. It surfaced as a Markdown-lint failure in a repository consuming
+that set, and only after that repo re-vendored and picked up the retirement —
+which is to say the one repository that could see the defect was the one with
+no way to fix it.
+
+**The same file had already done it once**, and that set's `MAP.md` records
+the first time: its first version linked `audience-register` as a sibling,
+*"correct inside practices/, and broken the moment a consuming repository
+materialized it."* Twice in one file with no check seeing either time is a gap
+in the check rather than a slip in authoring
+([mistakes-become-rules](mistakes-become-rules.md)) — and it is the same
+lesson the 2026-09-06 incident above taught about prose: a note that a
+previous session wrote prevented neither repeat
+([checkable-gets-checked](checkable-gets-checked.md)).
+
+**Why no check could see it, stated mechanically**, because this is the part
+that makes the shape worth a rule rather than a reminder:
+[precedent_resolve.py](../tools/precedent_resolve.py)'s `resolve()` skips any
+practice whose status is not `active` before materialization is handed the
+set, so a withdrawn practice is never written into a consumer's `practices/`.
+Both halves of the link are correct in the publishing repository and exactly
+one half arrives anywhere else. Every other shape this rule catches is
+detectable where it is written; this one is detectable only by reading the
+target's own frontmatter, which is what the check now does.
+
+**The check's first run against a real private set was a false positive, and
+it blocked the vendor update it was supposed to protect.** 2026-09-14, hours
+after the clause above landed: a session taking this engine into an individual
+set found two of that set's own practices linking `go-update.md`, which is
+`status: deduplicated` there with `in_force_at: go-update` — **its own slug**.
+The check read "not active" and reported both. The remedy it printed gave the
+game away: *"that rule is in force as `go-merge` — link `go-merge.md`
+instead"*, telling the reader to link the file they had already linked.
+
+**A degenerate message is a symptom; the false positive was the defect.** The
+session was one step from editing two correct files to satisfy a wrong check,
+and it stopped because the remedy made no sense — which is a thin thing to
+have relied on. Settled by measurement rather than argument: a fixture with a
+universal `go-update` (active) and an individual `go-update` (deduplicated,
+`in_force_at` itself) resolves to the universal one, so a consuming repository
+does receive `practices/go-update.md` and the link was always sound.
+
+**The miss, root-caused** ([mistakes-become-rules](mistakes-become-rules.md)):
+the check asked "is this file in force?" when the question is "will a file
+exist at this path in the consumer?" — and in a multi-source world those come
+apart exactly where one source deduplicates against another. The check reads
+one directory and cannot see the other sources, but it does not need to:
+`in_force_at:` naming the file's own slug **is** the declaration that another
+source carries it. What made this reachable at all is that the rule binds
+publishers, so it runs in the sets where same-slug deduplication is normal —
+and it was written against this repository, where every withdrawn practice
+happens to point at a differently-named successor.
+
+**The check itself had the "somebody else's repository" gap, found
+2026-09-19.** Its URL branch only ever validated a link that named THIS
+repository — any other absolute URL was treated as somebody else's to keep
+working and skipped outright, no matter what it named. That included the
+one target every repo declaring a source can actually check: the universal
+source, cloned as a sibling before the first turn in exactly the repos this
+check is vendored into. `precedent-individual/practices/my-identity-is-not-private.md`
+linked `private-repo-scrub` as an absolute URL into BestPractice — the
+practice had never lived there, only in a different declared source — and
+the vendored copy of this exact check, run in that exact repository,
+reported nothing: the self-slug guard skipped the link before ever asking
+whether the path existed. Fixed by checking a non-self absolute URL against
+the declared universal source's local clone (via `precedent_resolve.load_config`)
+whenever that clone is resolvable, rather than skipping every non-self URL
+unconditionally. Verified both directions against a scratch copy of
+`precedent-individual`: the unpatched check reports the link clean, the
+patched one reports it — the same real link, the same real repository,
+nothing else changed.
+
+**The check read a consumer's repo-local practices as published, found
+2026-09-27.** A private consuming repository took a vendor update and its full
+check reported 20 links in its own repo-local practices as dead — links to its
+to-do list, its glossary and its instructions file, every one of which
+resolved. The check kept every practice the committed manifest did not mark as
+another source's, and a `repo-local` entry is not another source's, so the
+materialized copies were tested as if every consumer received them. None does.
+The printed repair made it worse: an absolute URL into that private repository,
+which is the disclosure this rule's own text forbids for a private source. The
+consuming session rewrote its links to satisfy the check
+rather than wait. Fixed at the source: the check skips a practice whose
+manifest entry is `repo-local`, and suggests a URL only in a repository that
+declares itself public.
+
+## Install
+[tools/precedent_check.py](../tools/precedent_check.py) enforces it, as a
+tree-scope check over the practice files this repository owns. It reads
+which engine files travel from
+[tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)'s
+`CONSUMER_ENGINE_FILES` rather than keeping a second list, and it holds the
+other half too: an absolute upstream URL must use the branch
+`precedent.json` declares and must name a path that actually exists in the
+tree. **For a sibling link it reads the target's own `status:`**, through
+[build_views.py](../tools/build_views.py)'s `is_in_force` rather than a second
+copy of the vocabulary, so it fails closed the same way the loader does: a
+status this engine does not recognize counts as not in force. The finding
+names the successor when `in_force_at:` gives one, because a finding that only
+says the link is broken sends the reader back to the dead file to work out what
+replaced it. **A sibling whose `in_force_at:` is its own slug is not reported
+at all** — that is deduplication against another source, and the surviving copy
+materializes at the same filename. **A withdrawn-sibling link between two withdrawn practices is
+not reported** — neither file reaches a consumer, so nothing anybody receives
+is broken. Only that finding is suppressed: the rest of the rule still applies
+to a withdrawn practice's links, which are read in the publishing repository
+whether or not they travel out of it.
+
+**In a materializing consumer the check reports SKIPPED with its
+reason** — `practices/` there is generated output, and the links have to be
+right in the publishing source or not at all. **That includes the consumer's
+own repo-local practices**, which the committed `MANIFEST.json` marks
+`level: repo-local`: a repo-local source is never published, so a link from
+one into the repository's own files is correct, and whether it resolves is
+the Markdown lint's question. **The repair it suggests follows the
+repository's declared `visibility`**: an absolute URL only when
+`precedent.json` says `public`, and the backticked path otherwise.

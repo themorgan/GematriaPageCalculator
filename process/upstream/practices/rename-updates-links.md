@@ -1,0 +1,118 @@
+---
+slug:        rename-updates-links
+title:       "A rename is not done until every link to the old path, and every use of the old name, is updated"
+tier:        on-demand
+severity:    default
+applies_to:  ["**"]
+applies_to_why: "A rename can strand a reference in any file of any type -- a markdown link, a path inside a script, a workflow, a config -- so no narrower glob is honest. `**` is right here for the same reason it is right for no-version-suffix: the occasion is an action taken ON a file, not a property of the file being edited. Its check is scoped instead: it compares against the published default branch, so it only ever asks about renames this branch itself made. Decided: 2026-09-06, when the practice was added."
+occasion:    "renaming, moving or deleting a file others may link to, renaming or retiring a name, or migrating a repo off an old system"
+gates:       []
+index_clause: "repoint every link and use of a retired name in the same commit or migration"
+checked_by:  "tools/precedent_check.py"
+defines:     []
+status:      active
+in_force_at: null
+supersedes:  []
+overrides:   null
+added:       "2026-09-06"
+approved_by: "Morgan; the migration paragraph from migration-scrubs-vocabulary added 2026-10-01, in the reduction pass Morgan approved that day: \"Question 3 - all are great, approved\" (strength: decided)"
+source_practice_number: null
+---
+## Rule
+Renaming, moving or deleting a file is only half the change. Every
+reference to its old path — a markdown link, an image, a path in a script,
+a workflow, a config — is repointed **in the same commit**, so the
+repository is never in a state where the rename has landed and the links
+have not. Search the whole tracked tree for the old path, not just the
+directory the file lived in.
+
+**A name is renamed the same way.** When a product, an organisation, a
+term or a code is renamed or retired, every place that still uses the old
+name to mean the thing is updated in the same commit, and the search is
+for the name as well as for any path spelled with it. A use that quotes or
+records the past — a dated decision, a filed or sent document, a
+changelog entry — keeps the old name on purpose and is left as it stands;
+everything else follows the new one. The check already leaves alone a
+generated view, a closed todo item and a `## Story` section; declare any
+other whole record file (a migration record, a dated audit) in
+`precedent.json`'s `record_paths`, each with its `reason`.
+
+**A migration off an old system retires a whole vocabulary, in the same
+migration, unasked.** Every day-to-day document — instructions file,
+glossary, map, onboarding page, workflow comments — loses the old system's
+names, retired workflows and dead concepts before the migration is called
+done, not when someone notices and asks. The old vocabulary survives only in
+the migration record and genuinely historical logs, declared once in
+`process/retired_vocabulary.json`;
+[migration-scrubs-vocabulary](migration-scrubs-vocabulary.md) has that
+file's format and the check for a leftover pre-migration pack.
+
+## Why
+A rename is the one edit that breaks files it never touches. The moved
+file is fine, its own links are fine, and the damage lands in documents
+the person renaming it did not open — so nothing they look at afterwards
+looks wrong. Split across two commits, the repository is broken at every
+commit in between, and anyone reading it there finds dead references with
+no clue that a rename is what did it.
+
+Splitting it also loses the only cheap moment to fix it: at rename time
+the old path is known exactly, and one search finds every reference. A
+week later the same job means guessing what the file used to be called.
+
+A retired name does the same damage more quietly. No link breaks, so no
+check fails; the old name goes on appearing in prose, in headings and in
+generated text, and a reader who meets it cannot tell whether it is a
+different thing or the same thing under its old name. The fix is the same
+search at the same moment, run on the name.
+
+## Story
+Not a hypothetical here. A 2026-09-06 sweep of this repository found 96
+markdown links resolving to nothing, and a second pass found nine more
+pointing at headings that had been reworded since — a class where the
+link still loads the right document, just at the top, so no reader ever
+reports it. In a consuming repo the same sweep found eighteen links into
+a directory that had been retired months earlier, still sitting in its
+`TODO.md`. In every case the move itself was correct and complete; only
+the references were left behind, and each one had gone unnoticed for as
+long as it existed.
+
+2026-09-07, the other direction: a private consumer repo renamed its content
+directory, and of the check's eight findings, seven sat in files that repo
+could not edit at all — an individual source's practice text, its check
+script and that check's test, and the copy of its index clause inside the
+generated loader block. Each of those uses the old directory name as the
+canonical *example* of a convention; none points at anything in the
+consuming repo, and `doc_lint` confirmed no link anywhere actually landed
+nowhere. `practices/` and `tools/checks/` are `precedent_materialize.py`'s
+own output directories — deleted and rewritten from every declared source on
+every sync — so an edit there survives until the next sync and no longer.
+The check now skips what a repo *received* rather than wrote, attributed by
+`MANIFEST.json`'s own committed record rather than by live resolution, and
+skips the generated loader block as a *region* so the hand-written half of
+the same document is still checked. A check whose findings a repo cannot act
+on trains people to ignore it, which costs more than the findings were
+worth.
+
+2026-09-28: a consuming repository retired a name and asked whether this
+rule covered the leftovers. It covered the files and paths spelled with
+the name, and not the prose that still used it, which is what a reader
+actually meets; the rule now names the name as well as the path.
+
+2026-10-01: migration-scrubs-vocabulary's index line folded in here, in the
+reduction pass Morgan approved that day ("Question 3 - all are great,
+approved", strength: decided). A migration is this rule applied to a whole
+vocabulary at once, so its trigger and its core now sit in this Rule's last
+paragraph. migration-scrubs-vocabulary stays in force for its declaration
+format and its leftover-pack check, routed by the files a migration touches.
+
+## Install
+`tools/precedent_check.py`'s `rename-updates-links` check compares the
+current branch against the published default branch, finds files git
+records as renamed or deleted, and fails if any tracked file still
+references an old path. It scopes to the branch's own changes on purpose:
+a reference to a path deleted long ago is somebody else's history, and
+this rule is about the rename you are making now.
+
+`tools/doc_lint.py` covers the neighbouring case continuously — a
+markdown link whose target does not exist, whatever caused it — including
+`#fragment`s that no heading matches any more.
