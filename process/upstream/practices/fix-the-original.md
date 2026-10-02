@@ -1,0 +1,170 @@
+---
+slug:        fix-the-original
+title:       Fix the original, not just the copy in front of you
+tier:        on-demand
+severity:    default
+applies_to:  ["**"]
+applies_to_why: "No locus. The occasion is a property of the file's HISTORY -- was it copied from somewhere -- which no glob can express: the instantiated copy of a template looks exactly like a file written in place. Routed by the `review` and `reply` gates and by the occasion index instead. Decided: 2026-09-12, when the practice landed."
+occasion:    "fixing a file that came from somewhere else -- a template, a vendored tree, another repo's copy"
+gates:       ["review", "reply"]
+gates_why:   "`review` catches it while the fix is being made, which is the only moment the origin is cheap to fix. `reply` catches the disclosure half -- every copy has to be named in the reply, and that obligation exists even when the origin turned out to be unreachable."
+index_clause: "fix the origin, every copy, and the gate that missed it -- name them all"
+index_required: false
+checked_by:  null
+defines:     []
+status:      deduplicated
+in_force_at: upstream-fix
+supersedes:  []
+overrides:   null
+added:       "2026-09-12"
+approved_by: "Morgan, 2026-09-12"
+strength:    decided
+---
+## Rule
+**A file you are fixing may be a copy, and the copy is never the whole
+job.** Before reporting any fix done, answer three questions out loud:
+
+1. **Where did this file come from?** A template, a vendored tree, another
+   repo that had it first.
+2. **Who else has a copy?** Every other place the same file, or the same
+   mistake, went.
+3. **What should have caught it earlier, and why didn't it?** When one gate
+   passed what a later one failed — local green but GitHub red, one
+   checkout's gate green and another's red — **that difference is its own
+   bug, and its fix ships with this one.**
+
+**Fix the origin first, then the copies and the gate, and name all of them
+in the reply.** An origin this session cannot reach is a `blocked-on` item
+naming the repository — never a silent omission.
+
+## Detail
+**Before a fix, a different rule applies.** When the bug is upstream and this
+repository only holds a copy, [upstream-bug-stops-here](upstream-bug-stops-here.md)
+stops the local edit and hands the fix to the owning repository. The questions
+here are for the fix that does get made: where it came from, who else has a
+copy, and which gate missed it.
+
+**The first two questions are one search, and the third is one comparison.**
+That is deliberate: this is a lookup, not a meditation on root causes. A
+session that cannot find an origin in one search says so and moves on. The
+third asks what the gate that passed had, or lacked, that the gate that
+failed did not — a machine with a module installed, a directory with the
+other clones beside it.
+
+**This is a different axis from the three practices that look like it**, and
+the gap between them is where the failure lives:
+
+| Practice | Asks | Blind to |
+|---|---|---|
+| [durable-fix](durable-fix.md) | *Where does the fix live?* | How many copies exist. A downstream repo's edited copy is a committed file, so it scores rung 1 and passes. |
+| [generated-edit-goes-upstream](generated-edit-goes-upstream.md) | *Is this file generated?* | A file nothing regenerates. An instantiated copy is not a render, so this never fires on it. |
+| [mistakes-become-rules](mistakes-become-rules.md) | *What rule prevents the next one?* | The artifact itself. A rule can be written while the template stays broken. |
+
+**The case this exists for is the instantiated copy**: a file born from a
+template or copied between repos, that nothing regenerates and no manifest
+tracks. It is invisible to all three above by construction.
+
+**"The same mistake" counts, not only the same file.** A wrong argument
+copied into five hooks is one origin and five copies even where the five
+files are otherwise unrelated.
+
+**On the mechanical check, which was attempted and declined with a reason**
+([checkable-gets-checked](checkable-gets-checked.md) requires the attempt,
+not the outcome). Two designs were built and run against this tree on
+2026-09-12:
+
+- **Same-basename divergence across the repo and every attached source**
+  reported **12 identical and 100 divergent** basenames. Nearly all of the
+  100 are correct work — per-case test fixtures that are *supposed* to
+  differ, and per-source `approvers.json` files whose whole purpose is to
+  differ. A check that fires on a hundred correct files teaches the next
+  session to ignore the gate.
+- **Template-to-instantiation similarity**, narrowed to `templates/` against
+  the rest of the tree, was far cleaner: **six pairs**, four identical and
+  two divergent. But both divergences are legitimate and **each instance
+  already documents why it differs from its template in its own header** —
+  so the check would be red on the unplanted tree from the day it landed.
+
+**The reason no check is wired is therefore specific: divergence is not the
+signal.** A copy that legitimately differs and a copy that drifted are
+identical to a differ, and nothing in the tree records which is which.
+**The checkable version of this practice is a provenance stamp**, not a
+similarity threshold — and that is a real design, not a shrug, filed in
+[todo/TODO.md](https://github.com/alex137/BestPractice/blob/staging/todo/TODO.md).
+The one family that *does* carry provenance is already checked:
+[tools/precedent_refresh_sources.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_refresh_sources.py)
+compares each source's vendored engine against canonical, which is why
+engine staleness reaches a person at session start and template drift does
+not.
+
+## Why
+**The cost is paid in a different repository from the one that saves it**,
+which is why no single session ever sees it. Fixing the copy in front of you
+genuinely solves your problem; the recurrence lands on someone else, months
+later, looking like a new bug because its surface details are new.
+
+**The person watching is the only one who can see it**, and that is the
+failure mode worth naming: the signal that this practice is missing is a
+human having to say *"also change it in the template"* — repeatedly, across
+unrelated threads, because each session in isolation was correct.
+
+## Story
+**Requested by Morgan, 2026-09-12, in those terms:** *"I often have to
+remind you, make this change not just in this file, but in the original
+template that led to it."* He described the general shape too — a fix
+applied once, in one repo, while the cause stays free to fire again
+elsewhere.
+
+**This repository had already paid for it twice, and recorded both without
+generalising either.** `commit-identity.sh` was found **one version behind
+in all five** real private practice sets — uniform drift, which is what a
+template fix that never went back to the template looks like from the
+outside. One of those sets' `freshness-guard.sh` was about three thousand
+bytes shorter than canonical, supporting two modes where the current file
+supports three.
+
+**What was built in response was a repair path, not a prevention.**
+`precedent_refresh_sources.py --apply` restores a drifted hook, and the
+session that wrote it recorded the asymmetry precisely: *"there was an
+install path and no repair path."* Both are downstream of the copy already
+having diverged. **Nothing asked, at the moment of the fix, where the file
+came from** — and that moment is the only one at which the drift costs
+nothing to prevent.
+
+**The third question was added 2026-09-28, after the first two passed twice
+in one session and the root was still missed.** A shared practice set's
+check script did `import yaml` unconditionally and crashed on GitHub's bare
+runner, turning a consuming repo's pull request into main red. The session
+fixed the script at its origin, the set, which answered questions 1 and 2
+correctly. It never asked why the local push check had passed the same tree:
+the local machine had PyYAML, and BestPractice's consumer CI template, unlike
+its practice-set template, never installed it. The same hour, the leak gate
+passed a private repository's name into a public set, because it was run
+from a worktree whose directory held none of the other clones; run from the
+main clone, it flagged the name. Both times the bug that mattered was the
+gap between a gate that passed and one that failed. Morgan asked *"can we
+make that practice stronger"* and approved this wording with *"Go update on
+the fixes and wording"* (strength: decided).
+
+**Merged into [upstream-fix](upstream-fix.md), 2026-10-01.** Morgan asked
+whether this, durable-fix and upstream-fix were saying the same thing three
+times, and approved folding them into one: *"Go, merge them, then Booked
+into pre-staging."* Its copies question and its missed-gate question are
+upstream-fix's points 8 and 9. This file stays, word for word above, as the
+record; the rule in force is upstream-fix.
+
+## Install
+Two questions before any fix is reported, and one line in the reply.
+
+- **Search for the origin.** `grep -rl "<a distinctive line from the file>"`
+  across the repo and any attached sources, or check whether a `templates/`
+  copy of the same basename exists.
+- **Fix the origin first**, then the copies. Doing it in that order is what
+  keeps the copies from being forgotten once the visible symptom is gone.
+- **Name every file in the reply**, per
+  [reply-links-files](reply-links-files.md). A fix that touched an origin
+  and three copies is four entries, not one.
+- **Where the origin is out of reach**, say so in those words and queue it
+  per [todo-is-a-handoff](todo-is-a-handoff.md) with the repository named —
+  the same `blocked-on` reasoning
+  [cross-source-rollout](https://github.com/alex137/BestPractice/blob/staging/practices/cross-source-rollout.md) already uses.

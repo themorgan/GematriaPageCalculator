@@ -1,0 +1,1433 @@
+{
+  "adapters": [
+    {
+      "executable": true,
+      "path": ".claude/hooks/precedent-paths.sh",
+      "sha256_16": "40eeef958d299297",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/precedent-universal-catalogue.sh",
+      "sha256_16": "47a2a6779ebcb46e",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/reply-gate.sh",
+      "sha256_16": "c4cd0508c1aebba2",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/session-start.sh",
+      "sha256_16": "2c16cad048d761c0",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/stop-git-check.sh",
+      "sha256_16": "eb3c225caf263bed",
+      "source": "precedent"
+    },
+    {
+      "executable": true,
+      "path": ".claude/hooks/stop-reply-check.sh",
+      "sha256_16": "ccae7637b2e62283",
+      "source": "precedent"
+    }
+  ],
+  "checks": [
+    {
+      "path": "tools/checks/tests/run_all.sh",
+      "sha256_16": "8108c9a5875b6512",
+      "source": "(generated)"
+    }
+  ],
+  "excluded_engine_dev": [
+    "cross-source-rollout",
+    "new-hook-joins-the-registry",
+    "parallel-artifact-ledger",
+    "routing-audit"
+  ],
+  "generated_at_utc": "2026-10-02T08:19:05+00:00",
+  "generated_by": "tools/precedent_materialize.py",
+  "note": "DERIVED ARTIFACT -- never hand-edit. Regenerate by re-running precedent_materialize.py with the same --repo/--user-config; this file records exactly what produced the snapshot so drift is visible, per generated-artifact-provenance.",
+  "practices": [
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6381cab807569bd1",
+      "slug": "acronyms-glossary",
+      "source": "precedent",
+      "source_sha256_16": "6381cab807569bd1"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cf95e9f31bc7b2d2",
+      "slug": "act",
+      "source": "precedent",
+      "source_sha256_16": "cf95e9f31bc7b2d2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "61f9eb49c6c11bee",
+      "slug": "affordance-is-shared",
+      "source": "precedent",
+      "source_sha256_16": "61f9eb49c6c11bee"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b2faed3d79126f34",
+      "slug": "archive-status-check",
+      "source": "precedent",
+      "source_sha256_16": "b2faed3d79126f34"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5541d35abd167f1e",
+      "slug": "attach-never-clone-individual",
+      "source": "precedent",
+      "source_sha256_16": "5541d35abd167f1e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "277bae5ef2d9c8fb",
+      "slug": "attach-the-original",
+      "source": "precedent",
+      "source_sha256_16": "277bae5ef2d9c8fb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "730101486d5fa833",
+      "slug": "automation-issues",
+      "source": "precedent",
+      "source_sha256_16": "730101486d5fa833"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "67e311b9099e6ad0",
+      "slug": "base-branch-is-the-record",
+      "source": "precedent",
+      "source_sha256_16": "67e311b9099e6ad0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "355aeb849bd0f77a",
+      "slug": "bold-key-phrases",
+      "source": "precedent",
+      "source_sha256_16": "355aeb849bd0f77a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7dc6486b0bad642f",
+      "slug": "brainstorm-holds-commits",
+      "source": "precedent",
+      "source_sha256_16": "7dc6486b0bad642f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f2040107451f885e",
+      "slug": "branch-delete-links",
+      "source": "precedent",
+      "source_sha256_16": "f2040107451f885e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d87b24377f17fb66",
+      "slug": "build-buy-decompose",
+      "source": "precedent",
+      "source_sha256_16": "d87b24377f17fb66"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4a3cba4b7e07d6a0",
+      "slug": "capture-gate",
+      "source": "precedent",
+      "source_sha256_16": "4a3cba4b7e07d6a0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0510fd146f0c2a8f",
+      "slug": "catalogue-carries-stories",
+      "source": "precedent",
+      "source_sha256_16": "0510fd146f0c2a8f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "93cba43e45fafcb7",
+      "slug": "change-updates-its-docs",
+      "source": "precedent",
+      "source_sha256_16": "93cba43e45fafcb7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "11ed97593dbb9e24",
+      "slug": "check-source-architecture",
+      "source": "precedent",
+      "source_sha256_16": "11ed97593dbb9e24"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "04bcb37f0a49ba1f",
+      "slug": "checkable-gets-checked",
+      "source": "precedent",
+      "source_sha256_16": "04bcb37f0a49ba1f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d92e22f85255018d",
+      "slug": "checks-carry-a-declared-decline",
+      "source": "precedent",
+      "source_sha256_16": "d92e22f85255018d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7a93cbd8b34c20e4",
+      "slug": "checks-follow-the-tier",
+      "source": "precedent",
+      "source_sha256_16": "7a93cbd8b34c20e4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4bff24b34ff1157d",
+      "slug": "checks-plant-their-state",
+      "source": "precedent",
+      "source_sha256_16": "4bff24b34ff1157d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1e05eade7b94d789",
+      "slug": "chief-of-staff",
+      "source": "precedent",
+      "source_sha256_16": "1e05eade7b94d789"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "545c886deef3bed7",
+      "slug": "ci-commits-carry-identity",
+      "source": "precedent",
+      "source_sha256_16": "545c886deef3bed7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6aba4fe205f13608",
+      "slug": "ci-workflow-approved",
+      "source": "precedent",
+      "source_sha256_16": "6aba4fe205f13608"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "142c550df9616a42",
+      "slug": "cite-the-incident",
+      "source": "precedent",
+      "source_sha256_16": "142c550df9616a42"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3630a0fee80b677e",
+      "slug": "code-cites-practice",
+      "source": "precedent",
+      "source_sha256_16": "3630a0fee80b677e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2484c65d7f7c55c0",
+      "slug": "computed-numbers-in-scripts",
+      "source": "precedent",
+      "source_sha256_16": "2484c65d7f7c55c0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cb8db5dcee9f2bb4",
+      "slug": "consider",
+      "source": "precedent",
+      "source_sha256_16": "cb8db5dcee9f2bb4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dc596810ec319518",
+      "slug": "constants-are-risk-inputs",
+      "source": "precedent",
+      "source_sha256_16": "dc596810ec319518"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "71884b1957a5cf90",
+      "slug": "control-asserts-which-failure",
+      "source": "precedent",
+      "source_sha256_16": "71884b1957a5cf90"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bccc770eddeb4285",
+      "slug": "convention-to-audit",
+      "source": "precedent",
+      "source_sha256_16": "bccc770eddeb4285"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c260439f8d086490",
+      "slug": "current-rule-governs",
+      "source": "precedent",
+      "source_sha256_16": "c260439f8d086490"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3f83c23408f97e3f",
+      "slug": "dated-list-runs-forward",
+      "source": "precedent",
+      "source_sha256_16": "3f83c23408f97e3f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a11b8f0f4841f78b",
+      "slug": "debut",
+      "source": "precedent",
+      "source_sha256_16": "a11b8f0f4841f78b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e0ce9203fc6b2eb2",
+      "slug": "decision-strength",
+      "source": "precedent",
+      "source_sha256_16": "e0ce9203fc6b2eb2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "18bf6daa4cd50469",
+      "slug": "declared-default-is-applied",
+      "source": "precedent",
+      "source_sha256_16": "18bf6daa4cd50469"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c4ceea3c7ed974e2",
+      "slug": "declared-pronouns",
+      "source": "precedent",
+      "source_sha256_16": "c4ceea3c7ed974e2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3965e0416385d551",
+      "slug": "decommission-deletes-files",
+      "source": "precedent",
+      "source_sha256_16": "3965e0416385d551"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5ebd97e4ddd7e41f",
+      "slug": "deliverables-look-like-output",
+      "source": "precedent",
+      "source_sha256_16": "5ebd97e4ddd7e41f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ea20d9cb52b755cf",
+      "slug": "diagnosis-is-measured",
+      "source": "precedent",
+      "source_sha256_16": "ea20d9cb52b755cf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b2cf864e83b232c7",
+      "slug": "disclose-landing",
+      "source": "precedent",
+      "source_sha256_16": "b2cf864e83b232c7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dc86cf3b3be34d5f",
+      "slug": "doc-references-are-links",
+      "source": "precedent",
+      "source_sha256_16": "dc86cf3b3be34d5f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0ba30d31aa982523",
+      "slug": "docs-are-current-state",
+      "source": "precedent",
+      "source_sha256_16": "0ba30d31aa982523"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "37d634f6f2bb5b0d",
+      "slug": "docs-track-models",
+      "source": "precedent",
+      "source_sha256_16": "37d634f6f2bb5b0d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "faa279af767de448",
+      "slug": "document-status-header",
+      "source": "precedent",
+      "source_sha256_16": "faa279af767de448"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e78d2662a8224e11",
+      "slug": "dont-race-another-window",
+      "source": "precedent",
+      "source_sha256_16": "e78d2662a8224e11"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4e0447ae59e76a17",
+      "slug": "engine-plus-host-shims",
+      "source": "precedent",
+      "source_sha256_16": "4e0447ae59e76a17"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a86d69eccd9af7d5",
+      "slug": "environment-gotchas",
+      "source": "precedent",
+      "source_sha256_16": "a86d69eccd9af7d5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "007e87cb60c5290c",
+      "slug": "fail-gracefully",
+      "source": "precedent",
+      "source_sha256_16": "007e87cb60c5290c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dafdcea4125916c4",
+      "slug": "fence-block-for-paste",
+      "source": "precedent",
+      "source_sha256_16": "dafdcea4125916c4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0a74f27703862c1c",
+      "slug": "filename-separator",
+      "source": "precedent",
+      "source_sha256_16": "0a74f27703862c1c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ec75a8f54051a10d",
+      "slug": "findings-return-through-repo",
+      "source": "precedent",
+      "source_sha256_16": "ec75a8f54051a10d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "155c29c80b8f5bf9",
+      "slug": "fixture-owns-its-state",
+      "source": "precedent",
+      "source_sha256_16": "155c29c80b8f5bf9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5289d524373a275d",
+      "slug": "frame-from-audience-question",
+      "source": "precedent",
+      "source_sha256_16": "5289d524373a275d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "39348020566c7d60",
+      "slug": "fresh-before-write",
+      "source": "precedent",
+      "source_sha256_16": "39348020566c7d60"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "37b50d0e47469fa2",
+      "slug": "full-practice-audit",
+      "source": "precedent",
+      "source_sha256_16": "b4169fb6158e5e97"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c6b6b279eba949d9",
+      "slug": "gate-ledger",
+      "source": "precedent",
+      "source_sha256_16": "c6b6b279eba949d9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "37a400e63d07611f",
+      "slug": "gates-fail-fast",
+      "source": "precedent",
+      "source_sha256_16": "37a400e63d07611f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f06e6806e003c730",
+      "slug": "generated-artifact-provenance",
+      "source": "precedent",
+      "source_sha256_16": "f06e6806e003c730"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5833059a38aabd37",
+      "slug": "generated-edit-goes-upstream",
+      "source": "precedent",
+      "source_sha256_16": "5833059a38aabd37"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a05ddeabd3b11e31",
+      "slug": "github-api-budget",
+      "source": "precedent",
+      "source_sha256_16": "a05ddeabd3b11e31"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "66e386b2a4d0b77e",
+      "slug": "github-setup-disclosed",
+      "source": "precedent",
+      "source_sha256_16": "66e386b2a4d0b77e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "921ac9edf74c644c",
+      "slug": "go-update",
+      "source": "precedent",
+      "source_sha256_16": "921ac9edf74c644c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "69118d18b31d16bc",
+      "slug": "grep-before-search",
+      "source": "precedent",
+      "source_sha256_16": "69118d18b31d16bc"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2ba9139dc4cead0b",
+      "slug": "heading-outline",
+      "source": "precedent",
+      "source_sha256_16": "2ba9139dc4cead0b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "95f099b96cd19336",
+      "slug": "headline-capitalization",
+      "source": "precedent",
+      "source_sha256_16": "95f099b96cd19336"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "64a6c6828ec31c26",
+      "slug": "index-remembers-past",
+      "source": "precedent",
+      "source_sha256_16": "64a6c6828ec31c26"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "eece89f977eddd6d",
+      "slug": "item-closes-on-its-condition",
+      "source": "precedent",
+      "source_sha256_16": "eece89f977eddd6d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cf25f242f0958eba",
+      "slug": "judgment-check-or-tool",
+      "source": "precedent",
+      "source_sha256_16": "cf25f242f0958eba"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c27ad15ee292c800",
+      "slug": "label-describes-content",
+      "source": "precedent",
+      "source_sha256_16": "c27ad15ee292c800"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6d025151ef5450ba",
+      "slug": "layered-practice-packs",
+      "source": "precedent",
+      "source_sha256_16": "6d025151ef5450ba"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d5d838c3c2cc89c6",
+      "slug": "lead-with-what-it-is",
+      "source": "precedent",
+      "source_sha256_16": "d5d838c3c2cc89c6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "11053fd4ca491a6e",
+      "slug": "leak-gate-is-background",
+      "source": "precedent",
+      "source_sha256_16": "11053fd4ca491a6e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "831dbbf4164a290e",
+      "slug": "lease-in-flight-work",
+      "source": "precedent",
+      "source_sha256_16": "831dbbf4164a290e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "274395924d884389",
+      "slug": "merge-runbook",
+      "source": "precedent",
+      "source_sha256_16": "274395924d884389"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dfc12447be2cb918",
+      "slug": "migration-scrubs-vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "dfc12447be2cb918"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "44935e6c58522ef7",
+      "slug": "mistakes-become-rules",
+      "source": "precedent",
+      "source_sha256_16": "44935e6c58522ef7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9c85f33b73cce3a5",
+      "slug": "my-options",
+      "source": "precedent",
+      "source_sha256_16": "9c85f33b73cce3a5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "72c6188e5f1dd230",
+      "slug": "name-both-sides-of-ledger",
+      "source": "precedent",
+      "source_sha256_16": "72c6188e5f1dd230"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ecc3e1b0cc1d250f",
+      "slug": "never-delete-a-remote-branch",
+      "source": "precedent",
+      "source_sha256_16": "ecc3e1b0cc1d250f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bfe0bc44ae5eb2a5",
+      "slug": "no-invented-specifics",
+      "source": "precedent",
+      "source_sha256_16": "bfe0bc44ae5eb2a5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f239efb31f7e6d14",
+      "slug": "no-rewrite-for-warnings",
+      "source": "precedent",
+      "source_sha256_16": "f239efb31f7e6d14"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "624fda9b8bdfae36",
+      "slug": "no-version-suffix",
+      "source": "precedent",
+      "source_sha256_16": "624fda9b8bdfae36"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6068aba505b524ab",
+      "slug": "one-formatter-per-quantity",
+      "source": "precedent",
+      "source_sha256_16": "6068aba505b524ab"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "fc243e6ed03b5bd1",
+      "slug": "open-item-disposition",
+      "source": "precedent",
+      "source_sha256_16": "fc243e6ed03b5bd1"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6178df0d923e34e6",
+      "slug": "orientation-map",
+      "source": "precedent",
+      "source_sha256_16": "6178df0d923e34e6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "938e2ec661001ff7",
+      "slug": "outward-summary-discipline",
+      "source": "precedent",
+      "source_sha256_16": "938e2ec661001ff7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7ceccdbebc39b54f",
+      "slug": "park-it",
+      "source": "precedent",
+      "source_sha256_16": "7ceccdbebc39b54f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "cc0c1b2b367ec633",
+      "slug": "permutation-frontier-column",
+      "source": "precedent",
+      "source_sha256_16": "cc0c1b2b367ec633"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6632bd27acf1d307",
+      "slug": "plain-words",
+      "source": "precedent",
+      "source_sha256_16": "6632bd27acf1d307"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0092661aec9b72c2",
+      "slug": "pr-template-honest-gates",
+      "source": "precedent",
+      "source_sha256_16": "0092661aec9b72c2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9cf6e7c3f14bf09a",
+      "slug": "practice-carries-its-files",
+      "source": "precedent",
+      "source_sha256_16": "9cf6e7c3f14bf09a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "a9bab5b9c241a853",
+      "slug": "practice-change-propagates",
+      "source": "precedent",
+      "source_sha256_16": "c8935ccd4f1dd130"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7ce5db48d8e5c373",
+      "slug": "practice-export-loop",
+      "source": "precedent",
+      "source_sha256_16": "7ce5db48d8e5c373"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "82b82e22226b62c6",
+      "slug": "practice-links-travel",
+      "source": "precedent",
+      "source_sha256_16": "82b82e22226b62c6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "97757b3903450c81",
+      "slug": "primary-branch",
+      "source": "precedent",
+      "source_sha256_16": "97757b3903450c81"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9a14bda68517a78c",
+      "slug": "produce",
+      "source": "precedent",
+      "source_sha256_16": "9a14bda68517a78c"
+    },
+    {
+      "level": "repo-local",
+      "links_rewritten": false,
+      "sha256_16": "3773469a64d76b3a",
+      "slug": "project-visual-identity",
+      "source": "local",
+      "source_sha256_16": "3773469a64d76b3a"
+    },
+    {
+      "level": "repo-local",
+      "links_rewritten": false,
+      "sha256_16": "74c2f1ec8771122a",
+      "slug": "project-voice",
+      "source": "local",
+      "source_sha256_16": "74c2f1ec8771122a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0a5ef93c08a2e85f",
+      "slug": "promote",
+      "source": "precedent",
+      "source_sha256_16": "0a5ef93c08a2e85f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "df5b52f8c3fbdea4",
+      "slug": "prompt-please",
+      "source": "precedent",
+      "source_sha256_16": "df5b52f8c3fbdea4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4ec3253dee2b6e3c",
+      "slug": "push-back",
+      "source": "precedent",
+      "source_sha256_16": "4ec3253dee2b6e3c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "db4dd01632ef3105",
+      "slug": "quick-index",
+      "source": "precedent",
+      "source_sha256_16": "db4dd01632ef3105"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "a2f6ec60d03ff220",
+      "slug": "quote-discipline",
+      "source": "precedent",
+      "source_sha256_16": "a2f6ec60d03ff220"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d3949f4ee901b9ad",
+      "slug": "readers-vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "d3949f4ee901b9ad"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "079ac983c7483b32",
+      "slug": "reduction-pass",
+      "source": "precedent",
+      "source_sha256_16": "079ac983c7483b32"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "c2d719ec2b8d74f7",
+      "slug": "registry-source-of-truth",
+      "source": "precedent",
+      "source_sha256_16": "c2d719ec2b8d74f7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d78515bf32ef294d",
+      "slug": "relayed-authorization",
+      "source": "precedent",
+      "source_sha256_16": "d78515bf32ef294d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f403db33a0164c3d",
+      "slug": "rename-updates-links",
+      "source": "precedent",
+      "source_sha256_16": "f403db33a0164c3d"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "fefbeef2d0cf885b",
+      "slug": "repair-cannot-discard-work",
+      "source": "precedent",
+      "source_sha256_16": "fefbeef2d0cf885b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ef173c634442cc5f",
+      "slug": "reply-links-files",
+      "source": "precedent",
+      "source_sha256_16": "ef173c634442cc5f"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "8fff08225332f6f9",
+      "slug": "repo-is-memory",
+      "source": "precedent",
+      "source_sha256_16": "8fff08225332f6f9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5babb31e487b27af",
+      "slug": "review-against-a-contract",
+      "source": "precedent",
+      "source_sha256_16": "5babb31e487b27af"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e9220b28bc7db46a",
+      "slug": "root-issues",
+      "source": "precedent",
+      "source_sha256_16": "e9220b28bc7db46a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5e1faa5642d29ae4",
+      "slug": "rule-level-by-reach",
+      "source": "precedent",
+      "source_sha256_16": "5e1faa5642d29ae4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "70b36dddd9b57135",
+      "slug": "scripts-assert-properties",
+      "source": "precedent",
+      "source_sha256_16": "70b36dddd9b57135"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d24d50426e8b1348",
+      "slug": "scrub-gate",
+      "source": "precedent",
+      "source_sha256_16": "d24d50426e8b1348"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0bc681a679247993",
+      "slug": "search-by-purpose",
+      "source": "precedent",
+      "source_sha256_16": "0bc681a679247993"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9a2f0e0c7adac607",
+      "slug": "section-order-by-frequency",
+      "source": "precedent",
+      "source_sha256_16": "9a2f0e0c7adac607"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "72085cf80e2cdaaf",
+      "slug": "seeded-prompt-names-its-origin",
+      "source": "precedent",
+      "source_sha256_16": "72085cf80e2cdaaf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "bb374c7f860594d7",
+      "slug": "session-bootstrap",
+      "source": "precedent",
+      "source_sha256_16": "bb374c7f860594d7"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1e169a6a2245e672",
+      "slug": "session-load-budget",
+      "source": "precedent",
+      "source_sha256_16": "1e169a6a2245e672"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f25844d00df0d49e",
+      "slug": "session-spend-follows-the-task",
+      "source": "precedent",
+      "source_sha256_16": "f25844d00df0d49e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5e929d9e439641c5",
+      "slug": "session-tags",
+      "source": "precedent",
+      "source_sha256_16": "5e929d9e439641c5"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "f799f199df855e64",
+      "slug": "session-title-names-the-difference",
+      "source": "precedent",
+      "source_sha256_16": "f799f199df855e64"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "1ebfe831e8e0fab9",
+      "slug": "session-trailer",
+      "source": "precedent",
+      "source_sha256_16": "1ebfe831e8e0fab9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3541a3804b8fbdf2",
+      "slug": "shared-result-cache",
+      "source": "precedent",
+      "source_sha256_16": "3541a3804b8fbdf2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "75039a48ccbc0677",
+      "slug": "slow-steps-report-and-cache",
+      "source": "precedent",
+      "source_sha256_16": "75039a48ccbc0677"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6c256f564a31a36b",
+      "slug": "small-calls",
+      "source": "precedent",
+      "source_sha256_16": "6c256f564a31a36b"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ac33046d392ef241",
+      "slug": "source-naming",
+      "source": "precedent",
+      "source_sha256_16": "ac33046d392ef241"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "763bda89834a8c91",
+      "slug": "source-sets-run-no-ci",
+      "source": "precedent",
+      "source_sha256_16": "763bda89834a8c91"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "086538994d7d4366",
+      "slug": "speculation-is-marked",
+      "source": "precedent",
+      "source_sha256_16": "086538994d7d4366"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "46c91ddc28db45ce",
+      "slug": "stage-word-carries-its-step",
+      "source": "precedent",
+      "source_sha256_16": "46c91ddc28db45ce"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2993bdb8e0c27594",
+      "slug": "tabular-shared-renderer",
+      "source": "precedent",
+      "source_sha256_16": "2993bdb8e0c27594"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "2d758f035ae1cacb",
+      "slug": "technical-describes-people",
+      "source": "precedent",
+      "source_sha256_16": "2d758f035ae1cacb"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "5242f6bdd5ebb0e4",
+      "slug": "the-boildown",
+      "source": "precedent",
+      "source_sha256_16": "5242f6bdd5ebb0e4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "161b4d68464332e0",
+      "slug": "three-things",
+      "source": "precedent",
+      "source_sha256_16": "161b4d68464332e0"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "4f101b126b36fe97",
+      "slug": "tier-branch",
+      "source": "precedent",
+      "source_sha256_16": "4f101b126b36fe97"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0840dcae91fb90bf",
+      "slug": "timestamps-carry-offset",
+      "source": "precedent",
+      "source_sha256_16": "0840dcae91fb90bf"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ca8b32d7eeb0a74a",
+      "slug": "todo-is-a-handoff",
+      "source": "precedent",
+      "source_sha256_16": "ca8b32d7eeb0a74a"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "6c4f9579d99c6509",
+      "slug": "todo-migrate-available-but-unused",
+      "source": "precedent",
+      "source_sha256_16": "6c4f9579d99c6509"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "10f50e615c3c5532",
+      "slug": "todo-reminder",
+      "source": "precedent",
+      "source_sha256_16": "10f50e615c3c5532"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "baafd28733306a0c",
+      "slug": "two-check-levels",
+      "source": "precedent",
+      "source_sha256_16": "baafd28733306a0c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "760c933dc9a6d65c",
+      "slug": "upstream-bug-stops-here",
+      "source": "precedent",
+      "source_sha256_16": "760c933dc9a6d65c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "9c4e9edf0835904e",
+      "slug": "upstream-fix",
+      "source": "precedent",
+      "source_sha256_16": "9c4e9edf0835904e"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "0b80540433689dee",
+      "slug": "variant-re-derives",
+      "source": "precedent",
+      "source_sha256_16": "0b80540433689dee"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "3aa9de497d6dd3b8",
+      "slug": "vendor-rollout-disclosed",
+      "source": "precedent",
+      "source_sha256_16": "3aa9de497d6dd3b8"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "7e996364cee997b9",
+      "slug": "vendor-update-runbook",
+      "source": "precedent",
+      "source_sha256_16": "7e996364cee997b9"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "517225300c38ed04",
+      "slug": "verdict-not-mechanism",
+      "source": "precedent",
+      "source_sha256_16": "517225300c38ed04"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e78295ab3feb02c4",
+      "slug": "verify-decomposition",
+      "source": "precedent",
+      "source_sha256_16": "e78295ab3feb02c4"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "b5703e16b59a4cc8",
+      "slug": "verify-postcondition",
+      "source": "precedent",
+      "source_sha256_16": "b5703e16b59a4cc8"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": true,
+      "sha256_16": "6e4c66c0b3045e43",
+      "slug": "very-deep-check",
+      "source": "precedent",
+      "source_sha256_16": "7457af78428003d6"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "41916fc9d5b0d36c",
+      "slug": "vocabulary",
+      "source": "precedent",
+      "source_sha256_16": "41916fc9d5b0d36c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "35fe0466294119cd",
+      "slug": "volatile-rules-carry-dates",
+      "source": "precedent",
+      "source_sha256_16": "35fe0466294119cd"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "02b8b7d08e1aff47",
+      "slug": "weak-yes",
+      "source": "precedent",
+      "source_sha256_16": "02b8b7d08e1aff47"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "dae176952e14012c",
+      "slug": "whats-new",
+      "source": "precedent",
+      "source_sha256_16": "dae176952e14012c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "40dffc7eb4a481c2",
+      "slug": "workflow-file-outside-vendoring",
+      "source": "precedent",
+      "source_sha256_16": "40dffc7eb4a481c2"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "d7173ed85899ab2c",
+      "slug": "write-it-up",
+      "source": "precedent",
+      "source_sha256_16": "d7173ed85899ab2c"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "ab1c918aafa63526",
+      "slug": "write-like-a-human",
+      "source": "precedent",
+      "source_sha256_16": "ab1c918aafa63526"
+    }
+  ],
+  "resident": {
+    "budget": 2000,
+    "over_budget": false,
+    "practices": [
+      {
+        "level": "universal",
+        "slug": "brainstorm-holds-commits",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "current-rule-governs",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "no-invented-specifics",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "repo-is-memory",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "verify-postcondition",
+        "source": "precedent"
+      },
+      {
+        "level": "universal",
+        "slug": "write-like-a-human",
+        "source": "precedent"
+      }
+    ],
+    "tokens": 561
+  },
+  "sources": [
+    {
+      "level": "universal",
+      "name": "precedent",
+      "path": "/home/user/GematriaPageCalculator/process/upstream"
+    },
+    {
+      "level": "repo-local",
+      "name": "local",
+      "path": "/home/user/GematriaPageCalculator/local"
+    }
+  ],
+  "withheld": [
+    "actions-minutes-are-scarce",
+    "answer-first-ask-before-long-work",
+    "assorted-notes",
+    "audience-register",
+    "auto-delete-branches",
+    "brainstorm-citations",
+    "branch-links",
+    "branch-names-its-repo",
+    "buenos-aires-dates",
+    "claude-web-bootstrap",
+    "commit-author",
+    "cost-concern-face-value",
+    "create-word-doc",
+    "crons-are-a-last-resort",
+    "curly-quotes",
+    "deep-check",
+    "default-branch",
+    "default-register",
+    "deliverables-carry-no-process",
+    "derived-file-marker",
+    "doc-link-text",
+    "doc-recipe",
+    "draft-marker",
+    "drift-notice",
+    "durable-list-anchors",
+    "file-header",
+    "file-mention-links",
+    "handoff-only-when-blocked",
+    "install",
+    "ladder-required",
+    "language-variety",
+    "light-check",
+    "list-item-parity",
+    "list-restraint",
+    "loss-comes-with-a-verdict",
+    "mirror-into-agents",
+    "my-identity-is-not-private",
+    "name-the-branch",
+    "no-duplication",
+    "no-stale-counts",
+    "nonblocking-questions",
+    "organize-scattered-content",
+    "private-repo-scrub",
+    "promote-only",
+    "proportional-emphasis",
+    "quiet-checks",
+    "report-up-the-chain",
+    "resolved-issue-note-updates",
+    "revert-needs-no-trailer",
+    "rule-links",
+    "rule-scope-ask",
+    "sensitive-characterization-scrub",
+    "session-title-abbreviates-repo",
+    "so-what-test",
+    "their-constraints-are-given",
+    "todo-gate",
+    "trim-prose",
+    "vendor-neutral-by-default",
+    "visual-style-guide",
+    "voice-sync-on-go-ahead"
+  ]
+}

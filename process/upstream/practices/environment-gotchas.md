@@ -1,0 +1,107 @@
+---
+slug:        environment-gotchas
+title:       "Recorded lore: environment gotchas with their stories"
+tier:        on-demand
+severity:    default
+applies_to:  ["**"]
+applies_to_why: "A trap can be met anywhere, in a file or in no file at all, so no glob names it; the occasion index reaches it, and the instructions file's own gotcha section (the install template carries one, and the environment-gotchas check refuses an instructions file without it) says where to grep. Decided: on-demand with an index line, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+occasion:    "an environment or tooling trap costs real time"
+gates:       []
+index_clause: "one file per trap under gotchas/, with the story, not just the fix"
+checked_by:  "tools/precedent_check.py"
+defines:     []
+status:      active
+in_force_at: null
+supersedes:  []
+overrides:   null
+added:       null
+approved_by: "BestPractice (pre-fork); tier on-demand: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+source_practice_number: 4
+---
+## Rule
+Every expensive environment discovery (a package that must be installed, a
+tool that silently doesn't work, a path that does work) is written down
+**with the story of what failed and why, not just the fix**, in its own
+file — one trap, one file, forever — under `gotchas/gotcha-<date>-<slug>.md`
+(directory and frontmatter shape:
+[spec/OPEN_ITEM_AND_GOTCHA_PLAN.md](https://github.com/alex137/BestPractice/blob/staging/spec/OPEN_ITEM_AND_GOTCHA_PLAN.md)
+Part 2).
+
+**None of that catalogue loads into the instructions file, at any size** —
+not the stories, and not even a one-line-per-trap index. The file carries a
+pointer instead: hit an unexplained failure, grep `gotchas/` before
+concluding it's new.
+
+## Detail
+**A generated overview** — symptom plus link, one line per live entry —
+exists for the deliberate read; nothing loads it automatically. That
+sentence was in the Rule until 2026-09-21 (see `## Story`).
+
+**In a repo that vendors Precedent, search both catalogues**: the repo's
+own `gotchas/`, and Precedent's at `process/upstream/gotchas/`, the traps a
+session using the system can hit (shipped to consumers since 2026-10-01).
+
+**Every entry is its own file from the first one.** There is no size below
+which stories live inline "for now": the instructions file never carries
+the catalogue, so there is nothing to gain by deferring the split, and a
+repo with two gotchas is exactly as split as one with two hundred.
+
+**What a session searches on is the SYMPTOM**, in the words a session would
+use for what it is seeing — not the name of the fix. Lead the entry's own
+`## Symptom` section with it, so a grep on the failure text actually lands:
+an entry keyed only on *"use `git cat-file -e`"* is unfindable by the
+session that needs it and never typed that phrase.
+
+**The story stays whole in its own file.** Retiring an entry is not an
+occasion to shorten it — flip `status: retired` in place; nothing is ever
+deleted or trimmed on its way out, and nothing moves.
+
+## Why
+**The fix alone is a fact a later session cannot judge.** Told only "install this package", a session that finds the package already present, or the symptom slightly different, has no way to decide whether the note still applies — so it either works around a note that is still correct, or trusts one that has gone stale. The story is what makes the note re-judgeable.
+
+The cost being defended against is unusual in that it is paid in *confusion* rather than in breakage. A tool that fails with a misleading error does not announce that the environment is at fault, so a session spends its time on the wrong hypothesis and reaches a plausible wrong conclusion. That is expensive, invisible in the diff, and repeats exactly as often as the environment is rebuilt.
+
+**A one-line index is a smaller version of the same cost, not a different one.** It is cheaper per entry than the full story, but it is still a fixed tax that grows every time a trap is caught, paid by every session whether or not that session is debugging anything that day. Moving the stories out and leaving the index behind fixes the first-order problem and recreates the second-order one at a smaller constant — which is exactly what happened here: BestPractice's own index reached 44 lines before anyone measured what it cost at the top of every session.
+
+## Story
+A build tool once failed on every input with a misleading error; two
+full sessions were lost to "this tool is broken" lore before someone found the
+one missing package. Once the fix *and the story* were written down, the
+failure never recurred — and the story is what lets a future session judge
+whether the note still applies.
+
+The index that replaced the inline stories was itself still loaded whole,
+every session, forever — one line per trap, with no ceiling. It reached 44
+lines in BestPractice's own AGENTS.md before a session totaling what gets
+paid before any real work starts found several thousand tokens spent on
+traps most sessions never touch. The index moved out into a generated,
+not-loaded overview (2026-09-16); the instructions file kept only a pointer
+and a grep instruction.
+
+
+**Rule compressed 2026-09-21**, in the reduction pass recorded in
+[todo-2026-09-21-resident-cap-was-measured-on-the-wrong-shape.md](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-21-resident-cap-was-measured-on-the-wrong-shape.md).
+153 tokens -> 100. The "none of it loads, at any size" clause stayed, because
+it is the rule that keeps an instructions file from regrowing the catalogue;
+what left is the sentence about the generated overview, which is a pointer
+to a convenience rather than a constraint on anybody.
+
+**On-demand from 2026-10-01, with an index line.** The reduction pass for precedent-individual's session-start file ([the session-file open item](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)) found this rule resident in every session while every instructions file the install template writes carries its own gotcha section, which the environment-gotchas check refuses to lose. Morgan approved making it on-demand, kept in the occasion index under "an environment or tooling trap costs real time" (strength: decided): *"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)"*
+
+## Install
+A short pointer section in the instructions file naming `gotchas/` and the
+grep instruction — no entries, no index — plus
+[session-bootstrap](session-bootstrap.md) (encode the fixes as a bootstrap
+hook so they apply themselves). One file per trap under
+`gotchas/gotcha-<date>-<slug>.md`;
+[tools/build_gotcha_index.py](https://github.com/alex137/BestPractice/blob/staging/tools/build_gotcha_index.py)
+generates
+[gotchas/INDEX.md](https://github.com/alex137/BestPractice/blob/staging/gotchas/INDEX.md)
+for the deliberate read from those files' frontmatter and `## Symptom`
+sections.
+
+[tools/precedent_check.py](../tools/precedent_check.py)'s
+`environment-gotchas` check reads `gotchas/*.md` directly and applies the
+story test to each `status: live` entry's Symptom and Story — it does not
+read the instructions file's pointer at all, only that the catalogue exists
+and no live entry is a bare fix.

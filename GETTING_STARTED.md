@@ -1,62 +1,137 @@
-# Getting started with `Gematria Page Calculator`
+# Getting Started With `Gematria Page Calculator`
+
 
 Welcome. This project runs on a simple idea: **the project's memory lives
 in its repository, and you work with that memory by talking to an AI
-assistant.** Ask what the team has decided and why — the assistant
+Assistant.** Ask what the team has decided and why — the AI Assistant
 answers from the project's own records. Describe a change you want — the
-assistant makes it everywhere it applies, and the team reviews it before
+AI Assistant makes it everywhere it applies, and the team reviews it before
 it becomes shared. Decisions don't get lost in chat history, nobody
 overwrites anyone's work, and a person who joins today can be useful
 within the hour. You do not need to be a programmer.
 
-## How contributing works — five steps
+## How Contributing Works — Five Steps
 
 One difference from tools like Google Docs matters here: in Google Docs,
 your edits appear for everyone instantly. In this project, **your changes
 are drafted privately and join the shared project only after review.**
-That is what makes it safe for many people — and many AI assistants — to
+That is what makes it safe for many people — and many AI Assistants — to
 work at the same time. The whole loop:
 
 1. **Set up your AI tool** (one time). See
    [Setting up your AI tool](#setting-up-your-ai-tool) below for your
    tool's exact steps.
 2. **Ask what needs doing.** Say *"What are the open items?"* — the
-   assistant reads the project's to-do list for you. (This step is
+   AI Assistant reads the project's to-do list for you. (This step is
    optional: changes you think of yourself are just as welcome.)
-3. **Describe the change you want.** The assistant makes it on your own
+3. **Describe the change you want.** The AI Assistant makes it on your own
    private working copy — a version of the project only your conversation
    touches, so nothing you do can break the shared project.
-4. **Look at what it made.** The assistant's reply ends with links to the
-   changed files; open them and ask for adjustments until it's right.
-5. **Say "propose this to the team."** The assistant packages your change
-   for review — the technical name is a *pull request* — and an
-   administrator, not you, decides when it joins the shared project.
+4. **Look at what it made.** The AI Assistant's reply ends with links to
+   the changed files; open them and ask for adjustments until it's right.
+5. **Say "propose this to the team."** The AI Assistant packages your change
+   for review — the technical name is a *pull request* — and says who
+   decides when it joins the shared project: for the documents themselves
+   that may be you, depending on how your project is set up; for the
+   project's settings, checks and rules it is always an administrator.
    Until that happens, nobody else sees your change: unlike Google Docs,
    nothing becomes shared automatically.
 
-## Setting up your AI tool
+## How the Project Remembers New Rules
+
+You don't have to ask for this by name — it happens as part of ordinary
+conversation. If you say something like *"always name these a certain
+way"*, *"never merge without running the tests"*, or *"from now on, do
+X"*, the AI Assistant will notice and offer to write that down as one of
+this project's own working rules, so every future conversation follows it
+too — not just the one you're having right now. It always tells you
+plainly when it's doing this and where the rule is going, and nothing
+becomes official until it's reviewed and approved the same way any other
+change is (see the five steps above) — you're never signing up for
+something without seeing it first.
+
+## Taking Your Rules With You
+
+The rules you add here belong to this project. **Rules that are really
+about *you*, or about *your team*, can live somewhere better — in their own
+small collection that follows you into every project you work on.**
+
+**One question sorts them.** *Do I want this rule in everything I work
+on?* If yes, it belongs in your own personal collection, which follows you
+into every project automatically. If it should apply to some projects and
+not others, it belongs in a **shared** collection instead — one you switch
+on per project, one line each. A shared collection with only you in it is
+completely normal; "shared" is about being able to point several projects
+at it, not about handing it to other people.
+
+Two kinds are worth making:
+
+- **Your own.** Anything you find yourself asking for again and again — how
+  you like things written, what you always want checked, how you prefer to
+  be talked to. Write it once instead of re-explaining it in every project.
+- **Your team's.** Anything your team keeps re-agreeing in review. A team
+  collection settles it in one place, and everyone's assistant follows it.
+
+**You already have what you need to make one.** The tool that sets one up
+comes with this project, so there is nothing to install and nothing to ask
+anyone for. Say to your assistant:
+
+> I'd like to start my own collection of rules that follows me between
+> projects. Can you set one up?
+
+It will make the repository, add your first rules, and connect it to this
+project so your sessions start using it.
+
+**Do not wait until you have a lot to say.** Three rules you are tired of
+repeating is a perfectly good collection. The shared library this project
+draws on started the same way and grew one rule at a time, each written down
+the first time somebody got it wrong twice.
+
+## Setting Up Your AI Tool
 
 Before any of it works, an administrator must have given your GitHub
-account access to `themorgan/GematriaPageCalculator` — if you don't have
-access yet, ask the project administrator. Then follow the section for
-your tool:
+account access to `themorgan/GematriaPageCalculator` — if you don't have access yet,
+ask the project administrator. Then follow the section for your tool:
 
-### Claude users (Claude Code)
+### Claude Users (Claude Code)
 
 The most complete experience, on web, desktop, or phone. *(As of
 2026-08.)*
 
 1. Go to [claude.ai/code](https://claude.ai/code) (or open the Claude
    mobile app's Code area).
-2. Start a new session on `themorgan/GematriaPageCalculator` — the first
-   time, approve the GitHub authorization it requests.
+2. Start a new session on `themorgan/GematriaPageCalculator` — the first time, approve
+   the GitHub authorization it requests.
 3. Ask your first question, e.g.: *"Review the project context, then tell
    me what needs my attention."*
 
-Claude Code reads the project's instruction files automatically. Nothing
-else to set up.
+Claude Code reads the project's instruction files automatically — nothing
+else to set up for that. **Two things are per-person, though, and neither
+happens on its own:**
 
-### Codex users
+- **Your own settings.** Your name and timezone on the commits Claude
+  makes for you, and — if you or your team have one — your own practices
+  repository. [PER_MACHINE_SETUP.md](process/upstream/documentation/PER_MACHINE_SETUP.md)
+  is the full copy-paste list; the short version is **environment
+  variables** (settings that live on your Claude account, not in this
+  repository), added at `claude.ai/code` → the environment this project
+  runs in → its **environment variables** page. *(Click-path as of
+  2026-09-11 — Anthropic's own guide at
+  [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web)
+  is the place to check if it's moved.)*
+- **If you'd rather not set those, ask Claude directly instead.** In your
+  first message, say something like: *"Please connect to `<your team's or
+  your own practices repository>`."* Claude can attach read access to it
+  for that one session — the same thing the environment variables do
+  automatically, every session, without asking. This only works when that
+  repository is owned by the same GitHub account as this project; a
+  repository under a different account needs the environment-variable
+  route above instead. Skipping both isn't loud about it — your team's
+  and your own rules simply won't apply that session — so ask if Claude's
+  answers don't seem to reflect something you know your team has agreed
+  on.
+
+### Codex Users
 
 *(As of 2026-08.)*
 
@@ -65,7 +140,7 @@ else to set up.
 2. Codex follows the project's instruction files automatically.
 3. Give it a task or a question, the same way as any coding session.
 
-### ChatGPT users
+### ChatGPT Users
 
 A plain ChatGPT conversation with the GitHub connector can **read** this
 project and answer questions dependably. **Making changes** from a plain
@@ -73,58 +148,58 @@ conversation is not currently reliable *(as of 2026-08)* — have Codex
 make the changes, or hand them to a teammate who uses Claude Code or
 Codex; the project's automatic checks protect the result either way.
 
-1. Connect the GitHub connector to `themorgan/GematriaPageCalculator` if
-   you haven't.
+1. Connect the GitHub connector to `themorgan/GematriaPageCalculator` if you haven't.
 2. Start each new project conversation with:
 
-   > Work on `themorgan/GematriaPageCalculator`. Start with its README
-   > and follow the repository's agent instructions before answering.
+   > Work on `themorgan/GematriaPageCalculator`. Start with its README and follow the
+   > repository's agent instructions before answering.
 
 3. Then ask your question or describe the change you want.
 
 Working from an iPhone a lot? This project includes an iPhone Shortcut
 recipe that prepares this starting message for you — see the phone guide
-at `process/upstream/MOBILE.md`.
+in [MOBILE.md](process/upstream/documentation/MOBILE.md).
 
-### Gemini users
+### Gemini Users
 
 The Gemini CLI (a desktop tool) is already wired to this project's
 instructions — nothing for you to configure. *(As of 2026-08; a
 phone-based Gemini workflow is unverified.)* If you use the Gemini app
-rather than the CLI, follow the "Any other assistant" line below for
+rather than the CLI, follow the "Any Other AI Assistant" line below for
 reading and questions, and hand changes to a teammate who uses Claude
 Code or Codex.
 
-### Grok users
+### Grok Users
 
-Not yet verified with this workflow *(as of 2026-08)*. If Grok can reach
+Grok hasn't been tried with this workflow *(as of 2026-08)*. If Grok can reach
 the repository, use the same starting instruction as ChatGPT users above.
-Otherwise, treat Grok as a disconnected assistant: paste in the documents
+Otherwise, treat Grok as a disconnected AI Assistant: paste in the documents
 you're discussing, work out what you want changed, and hand the change
 request to a teammate who uses Claude Code or Codex.
 
-### Any other assistant
+### Any Other AI Assistant
 
-Any assistant that can read this repository understands the same one-line
-opener:
+Any AI Assistant that can read this repository understands the same
+one-line opener:
 
-> Work on `themorgan/GematriaPageCalculator`. Start with its README and
-> follow the repository's agent instructions before answering.
+> Work on `themorgan/GematriaPageCalculator`. Start with its README and follow the
+> repository's agent instructions before answering.
 
-## Tips while you work
+## Tips While You Work
 
 - **Ask before hunting.** The fastest way to learn anything about this
-  project is to ask your assistant — it reads the project's map and
+  project is to ask your AI Assistant — it reads the project's map and
   decision records for you. You should rarely need to open a file
   yourself.
-- **Ask what's new.** Approved changes don't appear in your old
-  conversations by themselves. Each new session, the assistant catches
-  you up on what changed since you last worked — and you can ask
-  *"what's new?"* at any time. If your in-progress work has fallen
-  behind the shared project, the assistant will offer to bring it up to
-  date.
+- **Ask what's new.** Changes don't appear in your old conversations by
+  themselves, so the project keeps a daily log of what changed, in plain
+  words. Ask *"what's new?"* at any time: the AI Assistant brings the log
+  up to date, links it so you can check it daily, shows you the latest,
+  and asks what you'd like to hear more about. If your in-progress work
+  has fallen behind the shared project, the AI Assistant will offer to
+  bring it up to date.
 - **Claim what you take on.** When you start an item from the to-do
-  list, the assistant marks it with your name so teammates don't
+  list, the AI Assistant marks it with your name so teammates don't
   duplicate the work — and it will tell you if someone else is already on
   what you're about to start. Big or opinionated changes get flagged to
   the teammates who care before they join the shared project — and the
@@ -132,15 +207,15 @@ opener:
   wrote what, who pushed back on what); nobody has to declare it up
   front.
 - **Change by describing, not editing.** Say what is wrong and what you
-  want instead; the assistant makes the change everywhere it applies and
-  the team reviews it before it becomes shared. Don't hand-edit files —
-  a hand edit skips the checks the project relies on.
-- **Your work is credited to you.** The assistant records you as the
+  want instead; the AI Assistant makes the change everywhere it applies
+  and the team reviews it before it becomes shared. Don't hand-edit
+  files — a hand edit skips the checks the project relies on.
+- **Your work is credited to you.** The AI Assistant records you as the
   author of the changes it makes for you (it appears alongside as a
   co-author), so the project's history shows your contributions as
   yours.
 - **Office files are welcome, but they're for input and output — not
-  where the project's knowledge lives.** Send the assistant a Word,
+  where the project's knowledge lives.** Send the AI Assistant a Word,
   Excel, PowerPoint, or PDF file and it will extract what matters into
   the project (the original is kept for the record). Ask for one and it
   will be generated for you — though a single-file interactive HTML page
@@ -148,21 +223,22 @@ opener:
   way (each slide its own file, so several people can develop slides at
   once).
 - **Compose bigger requests.** For anything substantial, draft your
-  request in a notes app first, then paste it — the assistant's output
-  quality tracks the clarity of what you hand it. (More habits like this
-  in the project's method guide: `process/upstream/METHOD.md`.)
+  request in a notes app first, then paste it — the AI Assistant's
+  output quality tracks the clarity of what you hand it. (More habits
+  like this in the project's method guide,
+  [METHOD.md](process/upstream/documentation/METHOD.md).)
 
-## For the administrator: approving changes
+## For the Administrator: Approving Changes
 
 Members draft changes on their own private copies; nothing joins the
 shared project until you approve it. Your side of the loop is also just
 conversation:
 
-- **Ask "what's waiting for me?"** Your assistant lists each pending
+- **Ask "what's waiting for me?"** Your AI Assistant lists each pending
   proposal and summarizes it in plain language: what changed, who made
   it, and whether it touches anything you have cared about before.
 - **The merge magic.** If two proposals collide — both reworked the same
-  passage, say — the assistant integrates them for you and shows the
+  passage, say — the AI Assistant integrates them for you and shows the
   combined result before anything becomes shared. You never untangle
   conflicts yourself.
 - **Three answers, all in chat:** *approve* ("merge it"), *adjust*
@@ -170,18 +246,81 @@ conversation:
   to reconsider the tone — here's why"). Approving makes the change
   shared for everyone; your reasoning is recorded either way.
 - **Routine things stay quick.** Most proposals are safe to approve in
-  seconds; the assistant tells you when one deserves a closer look —
+  seconds; the AI Assistant tells you when one deserves a closer look —
   because it reworks someone's writing, collides with other work, or
   touches something you've pushed back on before.
 
-### Automatic checks installed for this project
+### Settings Only You Can Turn On
 
-- **A Markdown check runs on every pull request** (a GitHub Actions
-  workflow) and catches a couple of specific formatting mistakes before
-  they reach the shared project. It needs no maintenance. If it doesn't
-  appear on a pull request's checks, GitHub Actions may be disabled for
-  this repository — an administrator can turn it on at repository
-  **Settings → Actions**. Details: `process/upstream/GITHUB_ACTIONS.md`.
+A few things can only be done by hand, in GitHub's own settings pages, by
+someone with administrator rights here. None is urgent, and each fails
+*quietly* rather than loudly, so they are worth a look when you have a
+moment. **Ask the AI Assistant for more specific instructions on any of
+them**, or read the full reference at
+[GITHUB_SETTINGS.md](process/upstream/documentation/GITHUB_SETTINGS.md).
+Click-paths as of 2026-10-01.
+
+- **This project's repository is public on purpose** — the extension it
+  builds is published on the Chrome Web Store and Firefox Add-ons.
+- **A developer key, stored in this project** — a personal access token
+  (GitHub's name for a key that stands in for a person) that can reach this
+  repository, saved under **Settings → Secrets and variables → Actions →
+  New repository secret**, named `PRECEDENT_REPO_TOKEN` unless something
+  here expects another name. Without it an AI Assistant can prepare
+  changes but not push them or open a proposal on the project's behalf.
+- **The main line of work is called `main`** — **Settings → General →
+  Default branch**. The project's branches (`pre-staging`, `staging`,
+  `main`) are named on that assumption.
+- **Automation is allowed to open proposals** — **Settings → Actions →
+  General → Workflow permissions**, with *Allow GitHub Actions to create
+  and approve pull requests* ticked.
+- **Optional: turn GitHub Actions off here, if this project needs no
+  automatic checks on GitHub** — **Settings → Actions → General → Actions
+  permissions → Disable actions**. GitHub Actions is the service that runs
+  checks on GitHub's computers, and in a private repository each run costs
+  minutes from your account. Turned off, a stray check file costs nothing
+  at all. The checks that run on your own machine before every push keep
+  working. Leave it on if this project relies on a check running on
+  GitHub.
+- **A few settings inside Claude itself**, if you work in Claude Code on
+  the web. Open [claude.ai/code](https://claude.ai/code), go to the
+  environment this project runs in, and add these to its **environment
+  variables**, with your own values:
+
+  ```
+  PRECEDENT_COMMIT_NAME=Your Name
+  PRECEDENT_COMMIT_EMAIL=you@example.com
+  PRECEDENT_COMMIT_TZ=America/Argentina/Buenos_Aires
+  ```
+
+  Without them your work gets committed under the AI Assistant's own
+  account rather than your name, with the wrong timezone on it. If you have a
+  practices repo of your own, add `PRECEDENT_GIT_TOKEN` (a read-only
+  personal access token that can see it) and `PRECEDENT_SOURCE_BASE_URL`
+  (`https://github.com/your-account`) too, or your own practices never
+  load. **A change here does not reach a session already open** — start a
+  new one to test it.
+
+### Automatic Checks Installed for This Project
+
+<!-- Standing note (INSTALL.md §1 step 8 / practice `github-setup-disclosed`): every
+     GitHub-specific requirement this project depends on gets a line
+     here, naming what it is and the exact click-path to configure it —
+     not just a mention in the internal install log under
+     `process/upstream/`. Add a line whenever a future install step
+     introduces a new one (a required secret, a new required check). -->
+
+- **No GitHub Actions workflow was installed.** Precedent's CI
+  workflows were switched off for this install by the `github_ci_workflows`
+  setting of the individual or shared source it resolves — GitHub Actions
+  minutes are metered and billed in whole-minute increments per JOB.
+  Turn them on by
+  declaring `"github_ci_workflows": "enabled"` in the individual or team
+  source this project resolves, then say `Update Vendors`
+  to an AI Assistant — or copy a template in by hand any time. Note that the Markdown
+  lint is deliberately NOT among them: it runs before every commit
+  instead. Details:
+  [GITHUB_ACTIONS.md](process/upstream/documentation/GITHUB_ACTIONS.md).
 - **Every pull request opens with a standard template** — what changed,
   why, files touched, and a short checklist. An unchecked box on that
   checklist is normal; it means that gate didn't apply to this particular

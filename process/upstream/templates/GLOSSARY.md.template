@@ -1,9 +1,18 @@
 # Canonical names
 
-<!-- Template: instantiate per BestPractice INSTALL.md §1 (practice 1).
+<!-- Template: instantiate per Precedent INSTALL.md §1 (practice `repo-is-memory`).
      One file owns the nomenclature. Sessions use these names and do not
      invent new ones; a new thing gets its row here in the thread that
-     creates it. Link each entry to its defining document (practice 11). -->
+     creates it. Link each entry to its defining document (practice `doc-references-are-links`).
+
+     Two rows worth adding early, if this repo adopts the practices they
+     name: the repo's two named check levels (practice `two-check-levels` — a fast,
+     every-commit pass and a full, pre-merge audit; "light check" /
+     "deep check" is one reasonable pair of names, not the only one) and
+     its standing merge-authorization keyword, if it has one (practice `go-update`
+     says which words invoke it and how they are read). Neither is required;
+     add them only if this repo
+     actually uses the pattern. -->
 
 The one list of names for <domain things: products, components, systems,
 code words>. **Use these names; don't invent new ones.** If two documents
@@ -11,4 +20,4 @@ disagree with this file, this file wins — fix the documents.
 
 | Name | What it is | Defined in |
 |---|---|---|
-| <Name> | <one-line role/description, key parameters> | [<doc>](<path>) |
+| <Name> | <one-line role/description, key parameters> | <link to the document that defines it> |

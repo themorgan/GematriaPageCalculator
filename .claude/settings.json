@@ -16,9 +16,9 @@
       "Bash(git push -u origin *)",
       "Bash(git check-ignore *)",
       "Bash(git check-attr *)",
-      "Bash(python3 process/upstream/tools/doc_lint.py *)",
-      "Bash(python3 process/upstream/tools/practice_audit.py)",
-      "Bash(python3 process/upstream/tools/practice_audit.py *)",
+      "Bash(python3 tools/doc_lint.py *)",
+      "Bash(python3 tools/practice_audit.py)",
+      "Bash(python3 tools/practice_audit.py *)",
       "Bash(./build/build.sh)"
     ]
   },
@@ -29,6 +29,112 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-identity.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/reply-gate.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-paths.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-identity-once.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/doc-lint-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/push-check-gate.sh",
+            "timeout": 900
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/wait-loop-gate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(create_session|create_trigger|update_trigger|fire_trigger|send_later)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/seeded-prompt-gate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|mcp__.*__merge_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/merge-check-gate.sh",
+            "timeout": 900
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(create_or_update_file|push_files)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/workflow-write-gate.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|mcp__.*__merge_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/merge-check-gate.sh",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-git-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-reply-check.sh"
           }
         ]
       }

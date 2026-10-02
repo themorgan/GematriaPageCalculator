@@ -12,3 +12,8 @@ __pycache__/
 # The packaged .zip/.xpi in dist/ are committed as release artifacts.
 /dist/chrome/
 /dist/firefox/
+
+# From BestPractice templates/gitignore.template (2026-10-01 migration)
+.precedent/
+.claude/settings.local.json
+.claude/worktrees/
