@@ -48,6 +48,12 @@ whether the reply asserts it in the same breath as a plain-language phrase
 that means the opposite. Added 2026-09-20 after exactly that: a reply said
 "nothing is blocking" and then closed with "Don't archive this session".
 
+A `require_no_contradiction` pair may also carry `unless_sentence_matching`:
+a match whose own sentence matches it is skipped, so a report about
+ANOTHER session, window or repository ("your Planning window says
+it's blocked on an upstream bug") is not read as this session's state.
+Added 2026-10-01; an older engine ignores the key.
+
 `require_no_bare_pattern` checks a different practice family entirely --
 rule-links and branch-links, both of which say a mentioned destination (a
 PR, a session, a branch, a rule) gets a link the first time it is named, and
@@ -271,7 +277,7 @@ def offer_is_due(timeline, every, phrases):
 
     Stateless on purpose -- the transcript is the state. The alternative was a
     counter file somewhere, which goes stale the moment a session is resumed
-    in a fresh container (practice: durable-fix).
+    in a fresh container (practice: upstream-fix).
     """
     # The BASELINE is where the session started, not zero. A session in this
     # repository opens at ≈97,000 tokens before anybody types anything --
@@ -312,6 +318,13 @@ def _norm(s):
 # docstring, reply_check.json's `why` fields, every *"..."* quote in the
 # practice files). practice: the-boildown, cite-the-incident.
 _DQUOTE_SPAN_RE = re.compile(r'"[^"]*"|“[^”]*”')
+
+
+def _sentence_at(text, pos):
+    """The sentence (or list item, or line) of `text` that holds `pos`."""
+    start = max(text.rfind(c, 0, pos) for c in ('.', '!', '?', '\n')) + 1
+    ends = [i for i in (text.find(c, pos) for c in ('.', '!', '?', '\n')) if i != -1]
+    return text[start:min(ends) if ends else len(text)]
 
 
 def _strip_quoted_spans(s):
@@ -403,6 +416,27 @@ def first_item_under_heading(text, pattern):
     return None
 
 
+def _fenced_blocks(text):
+    """-> the text inside each ``` or ~~~ fenced block of `text`, in order.
+    An unclosed fence runs to the end, as Markdown renders it."""
+    blocks, cur, fence = [], None, None
+    for line in text.split('\n'):
+        m = re.match(r'^\s{0,3}(`{3,}|~{3,})', line)
+        if cur is None:
+            if m:
+                cur, fence = [], m.group(1)
+            continue
+        if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) \
+                and not line.strip()[len(m.group(1)):].strip():
+            blocks.append('\n'.join(cur))
+            cur = None
+            continue
+        cur.append(line)
+    if cur is not None:
+        blocks.append('\n'.join(cur))
+    return blocks
+
+
 def is_trivial_checkin(text):
     """True when `text` opens with the fixed one-line check-in template
     practices/the-boildown.md names for a turn with nothing visible or
@@ -423,6 +457,7 @@ KNOWN_REQUIREMENT_KEYS = frozenset({
     'require_no_contradiction',
     'require_no_bare_pattern',
     'require_paired_with',
+    'require_in_fence_paired_with',
     'require_container_safe_if_says',
     'require_landed_if_says',
     'unless_reply_declares_loss',
@@ -607,8 +642,21 @@ def violations(text, reqs, timeline=None):
             trigger, pat2 = pair.get('if_says'), pair.get('must_not_say_matching')
             if not trigger or not pat2:
                 continue
-            if (_norm(trigger) in _norm(quoted_stripped)
-                    and re.search(pat2, quoted_stripped, re.I)):
+            # `unless_sentence_matching`: a match whose own sentence is
+            # about another session, window or repository is that one's
+            # state, not this session's (2026-10-01: "your Planning
+            # window says it's blocked on an upstream bug" refused a correct
+            # "You can archive this session").
+            elsewhere = pair.get('unless_sentence_matching')
+            hit = None
+            for m in re.finditer(pat2, quoted_stripped, re.I):
+                if elsewhere and re.search(elsewhere,
+                                           _sentence_at(quoted_stripped, m.start()),
+                                           re.I):
+                    continue
+                hit = m
+                break
+            if _norm(trigger) in _norm(quoted_stripped) and hit:
                 out.append({'kind': 'contradiction', 'advisory': advisory, 'message': (
                     f"[{r.get('_source', '?')}] this reply says \"{trigger}\" and "
                     f"ALSO matches /{pat2}/i elsewhere in the same reply -- the two "
@@ -666,6 +714,34 @@ def violations(text, reqs, timeline=None):
                     + (f" -- {pair.get('why')}" if pair.get('why') else '')
                     + "."
                     + (f" (practice: {r['practice']})" if r.get('practice') else ''))})
+
+        # require_in_fence_paired_with: require_paired_with, judged one
+        # fenced block at a time. A rule about what a paste block may say to
+        # another session must read the block, not the reply around it: the
+        # reply's own prose says "lands on pre-staging" all day, to the
+        # person, and that is no instruction to anybody.
+        #
+        # WHY IT EXISTS (2026-10-01): two prompts a session wrote ended
+        # "Land it on staging per this repo's conventions." The person had
+        # not said Booked, so the block granted landing nobody gave, and
+        # to the wrong branch. fence-block-for-paste passed both: it checks
+        # that a block says where it goes, not what it authorizes.
+        for pair in (r.get('require_in_fence_paired_with') or []):
+            trigger, needed = pair.get('if_matches'), pair.get('must_also_match')
+            if not (trigger and needed):
+                continue
+            for block in _fenced_blocks(text):
+                m = re.search(trigger, block, re.I | re.M)
+                if m and not re.search(needed, block, re.I | re.M):
+                    out.append({'kind': 'in_fence_paired', 'advisory': advisory,
+                                'message': (
+                        f"[{r.get('_source', '?')}] a fenced block says "
+                        f"\"{m.group(0).strip()[:90]}\" but nothing in that "
+                        f"block matches /{needed}/"
+                        + (f" -- {pair.get('why')}" if pair.get('why') else '')
+                        + "."
+                        + (f" (practice: {r['practice']})" if r.get('practice') else ''))})
+                    break
 
         # require_container_safe_if_says: the only predicate here that looks
         # at the DISK rather than at the reply. When the reply says one of
@@ -935,6 +1011,11 @@ def main():
                 for pair in r['require_paired_with']:
                     bits.append(f"/{pair.get('if_matches')}/ requires "
                                 f"/{pair.get('must_also_match')}/")
+            if r.get('require_in_fence_paired_with'):
+                for pair in r['require_in_fence_paired_with']:
+                    bits.append(f"inside a fenced block, /{pair.get('if_matches')}/ "
+                                f"requires /{pair.get('must_also_match')}/ in "
+                                f"the same block")
             if r.get('require_container_safe_if_says'):
                 for ph in r['require_container_safe_if_says']:
                     bits.append(f'"{ph}" requires a container with nothing '
@@ -1000,7 +1081,7 @@ def main():
     # missing closing on its own; re-sending the whole answer makes them read
     # it twice, which is what happened on 2026-09-13 when this message said
     # only "rewrite the closing" and the session rewrote everything.
-    # practice: durable-fix, label-describes-content.
+    # practice: upstream-fix, label-describes-content.
     #
     # THE SECOND INCIDENT, 2026-09-14, is why there are two messages. The
     # individual set revised its required sentence that morning from "close

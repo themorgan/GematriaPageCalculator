@@ -123,8 +123,40 @@ def _own_new_branch(git, cur, start_sha, stamp):
             return False
     except (IndexError, ValueError, OSError):
         return False
+    # Made from a declared tier branch: the ladder's own move. A cloud
+    # session starts on main and branches from origin/pre-staging, which
+    # lacks main's newest merge commit until the next back-merge -- so the
+    # start commit is not in it, and every ladder session was warned on
+    # every prompt (2026-10-01, from a consumer's session).
+    source = msg[0][len('branch: Created from'):].strip()
+    if _is_tier_ref(git, source):
+        return git('merge-base', '--is-ancestor', sha, 'HEAD')[0] == 0
     return (git('merge-base', '--is-ancestor', start_sha, sha)[0] == 0
             and git('merge-base', '--is-ancestor', start_sha, 'HEAD')[0] == 0)
+
+
+_TIER_NAMES = ('main', 'staging', 'pre-staging', 'precedent-beta-v01')
+
+
+def _is_tier_ref(git, ref):
+    """True when `ref` (a branch's "Created from" source) names a tier
+    branch here, local or origin's: main, staging, pre-staging, or a branch
+    precedent.json declares as base, staging or landing branch."""
+    name = ref
+    for prefix in ('refs/remotes/', 'refs/heads/', 'origin/'):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    names = set(_TIER_NAMES)
+    rc, top, _ = git('rev-parse', '--show-toplevel')
+    if rc == 0 and top:
+        try:
+            cfg = json.loads((pathlib.Path(top.strip()) / 'precedent.json')
+                             .read_text(encoding='utf-8'))
+            names |= {str(cfg.get(k)) for k in ('base_branch', 'staging_branch',
+                                                 'landing_branch') if cfg.get(k)}
+        except (OSError, ValueError, AttributeError):
+            pass
+    return name in names
 
 
 def _session_branch_row(stamp, git):
@@ -180,6 +212,23 @@ def _session_branch_row(stamp, git):
         return (name, True, f'started on {started!r} and moved onto {cur!r}, a '
                             f'branch this session created from where it started '
                             f'-- its own feature branch; {cur!r} is now the baseline')
+    # The branch it started on is wholly inside the one it is on now: work
+    # carried, not stranded. Measured 2026-10-01: a container restarted
+    # while the checkout sat on a feature branch, so the stamp named that
+    # branch; after Booked merged it into pre-staging and the session moved
+    # there, every turn said the SessionStart guarantee was not in effect.
+    # The start branch's tip as it is NOW, so a commit made there after the
+    # stamp counts too; its recorded commit when the branch is gone. Only a
+    # start on a working branch: a start on a tier branch moving onto an
+    # older one that holds it is still the jump this row exists for.
+    if started != 'HEAD' and cur != 'HEAD' and not _is_tier_ref(git, started):
+        rc_t, tip, _ = git('rev-parse', '--verify', '-q', f'refs/heads/{started}')
+        tip = tip if rc_t == 0 and tip else start_sha
+        if tip and git('merge-base', '--is-ancestor', tip, 'HEAD')[0] == 0:
+            write()
+            return (name, True, f'started on {started!r} and moved onto {cur!r}, '
+                                f'which carries all of it -- nothing is stranded; '
+                                f'{cur!r} is now the baseline')
     return (name, False,
             f'started on {started!r}, now on {cur!r}. Work committed before '
             f'the move is on {started!r} and is NOT lost -- `git checkout '
@@ -639,7 +688,7 @@ def checks(offline=False):
     # that two rules had been silently switched off. They had not. The copies
     # had landed upstream hours earlier. Absent-from-disk was reported as
     # absent-full-stop, which is the exact confusion the shared set's
-    # `fresh-check-escalation` names: tell "could not verify" apart from
+    # `drift-notice` names: tell "could not verify" apart from
     # "confirmed".
     #
     # So: BEHIND is still a hard False, including when read off a stale ref

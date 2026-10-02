@@ -9,7 +9,7 @@
     {
       "executable": true,
       "path": ".claude/hooks/precedent-universal-catalogue.sh",
-      "sha256_16": "a4236891c3507eb6",
+      "sha256_16": "47a2a6779ebcb46e",
       "source": "precedent"
     },
     {
@@ -27,7 +27,7 @@
     {
       "executable": true,
       "path": ".claude/hooks/stop-git-check.sh",
-      "sha256_16": "2eb82867222db8a3",
+      "sha256_16": "eb3c225caf263bed",
       "source": "precedent"
     },
     {
@@ -50,7 +50,7 @@
     "parallel-artifact-ledger",
     "routing-audit"
   ],
-  "generated_at_utc": "2026-10-01T15:27:52+00:00",
+  "generated_at_utc": "2026-10-02T08:19:05+00:00",
   "generated_by": "tools/precedent_materialize.py",
   "note": "DERIVED ARTIFACT -- never hand-edit. Regenerate by re-running precedent_materialize.py with the same --repo/--user-config; this file records exactly what produced the snapshot so drift is visible, per generated-artifact-provenance.",
   "practices": [
@@ -65,10 +65,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "b86fc9326bbba3c6",
+      "sha256_16": "cf95e9f31bc7b2d2",
       "slug": "act",
       "source": "precedent",
-      "source_sha256_16": "b86fc9326bbba3c6"
+      "source_sha256_16": "cf95e9f31bc7b2d2"
     },
     {
       "level": "universal",
@@ -89,10 +89,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "65f578e0ec8cd0bb",
+      "sha256_16": "5541d35abd167f1e",
       "slug": "attach-never-clone-individual",
       "source": "precedent",
-      "source_sha256_16": "65f578e0ec8cd0bb"
+      "source_sha256_16": "5541d35abd167f1e"
     },
     {
       "level": "universal",
@@ -113,34 +113,34 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "26984d25f523ff1a",
+      "sha256_16": "67e311b9099e6ad0",
       "slug": "base-branch-is-the-record",
       "source": "precedent",
-      "source_sha256_16": "26984d25f523ff1a"
+      "source_sha256_16": "67e311b9099e6ad0"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "e1ab0a4b39f885d0",
+      "sha256_16": "355aeb849bd0f77a",
       "slug": "bold-key-phrases",
       "source": "precedent",
-      "source_sha256_16": "e1ab0a4b39f885d0"
+      "source_sha256_16": "355aeb849bd0f77a"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "40d2e2c7f321f831",
+      "sha256_16": "7dc6486b0bad642f",
       "slug": "brainstorm-holds-commits",
       "source": "precedent",
-      "source_sha256_16": "40d2e2c7f321f831"
+      "source_sha256_16": "7dc6486b0bad642f"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "10f980c975df6561",
+      "sha256_16": "f2040107451f885e",
       "slug": "branch-delete-links",
       "source": "precedent",
-      "source_sha256_16": "10f980c975df6561"
+      "source_sha256_16": "f2040107451f885e"
     },
     {
       "level": "universal",
@@ -153,10 +153,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "75c5ca3f7cd7cb71",
+      "sha256_16": "4a3cba4b7e07d6a0",
       "slug": "capture-gate",
       "source": "precedent",
-      "source_sha256_16": "75c5ca3f7cd7cb71"
+      "source_sha256_16": "4a3cba4b7e07d6a0"
     },
     {
       "level": "universal",
@@ -169,10 +169,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "49d26a2b123551b6",
+      "sha256_16": "93cba43e45fafcb7",
       "slug": "change-updates-its-docs",
       "source": "precedent",
-      "source_sha256_16": "49d26a2b123551b6"
+      "source_sha256_16": "93cba43e45fafcb7"
     },
     {
       "level": "universal",
@@ -233,10 +233,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "907692caca33f9fa",
+      "sha256_16": "6aba4fe205f13608",
       "slug": "ci-workflow-approved",
       "source": "precedent",
-      "source_sha256_16": "907692caca33f9fa"
+      "source_sha256_16": "6aba4fe205f13608"
     },
     {
       "level": "universal",
@@ -265,18 +265,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "f3485fd370099560",
+      "sha256_16": "cb8db5dcee9f2bb4",
       "slug": "consider",
       "source": "precedent",
-      "source_sha256_16": "f3485fd370099560"
+      "source_sha256_16": "cb8db5dcee9f2bb4"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "93ea2d08678bbec0",
+      "sha256_16": "dc596810ec319518",
       "slug": "constants-are-risk-inputs",
       "source": "precedent",
-      "source_sha256_16": "93ea2d08678bbec0"
+      "source_sha256_16": "dc596810ec319518"
     },
     {
       "level": "universal",
@@ -297,10 +297,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "7e53618141ab6cfb",
+      "sha256_16": "c260439f8d086490",
       "slug": "current-rule-governs",
       "source": "precedent",
-      "source_sha256_16": "7e53618141ab6cfb"
+      "source_sha256_16": "c260439f8d086490"
     },
     {
       "level": "universal",
@@ -313,10 +313,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "a3071c1895e6dea3",
+      "sha256_16": "a11b8f0f4841f78b",
       "slug": "debut",
       "source": "precedent",
-      "source_sha256_16": "a3071c1895e6dea3"
+      "source_sha256_16": "a11b8f0f4841f78b"
     },
     {
       "level": "universal",
@@ -345,18 +345,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "d0695f080dd8d0bd",
+      "sha256_16": "3965e0416385d551",
       "slug": "decommission-deletes-files",
       "source": "precedent",
-      "source_sha256_16": "d0695f080dd8d0bd"
+      "source_sha256_16": "3965e0416385d551"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "ed8802d4286b7772",
+      "sha256_16": "5ebd97e4ddd7e41f",
       "slug": "deliverables-look-like-output",
       "source": "precedent",
-      "source_sha256_16": "ed8802d4286b7772"
+      "source_sha256_16": "5ebd97e4ddd7e41f"
     },
     {
       "level": "universal",
@@ -401,10 +401,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "b42504f8d4edc966",
+      "sha256_16": "faa279af767de448",
       "slug": "document-status-header",
       "source": "precedent",
-      "source_sha256_16": "b42504f8d4edc966"
+      "source_sha256_16": "faa279af767de448"
     },
     {
       "level": "universal",
@@ -417,14 +417,6 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "cbfbcbc2cb6ef9f4",
-      "slug": "durable-fix",
-      "source": "precedent",
-      "source_sha256_16": "cbfbcbc2cb6ef9f4"
-    },
-    {
-      "level": "universal",
-      "links_rewritten": false,
       "sha256_16": "4e0447ae59e76a17",
       "slug": "engine-plus-host-shims",
       "source": "precedent",
@@ -433,10 +425,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "6169dc8571afd210",
+      "sha256_16": "a86d69eccd9af7d5",
       "slug": "environment-gotchas",
       "source": "precedent",
-      "source_sha256_16": "6169dc8571afd210"
+      "source_sha256_16": "a86d69eccd9af7d5"
     },
     {
       "level": "universal",
@@ -457,10 +449,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "00b9d64382fe49bf",
+      "sha256_16": "0a74f27703862c1c",
       "slug": "filename-separator",
       "source": "precedent",
-      "source_sha256_16": "00b9d64382fe49bf"
+      "source_sha256_16": "0a74f27703862c1c"
     },
     {
       "level": "universal",
@@ -473,14 +465,6 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "f3656745f67a49af",
-      "slug": "fix-the-original",
-      "source": "precedent",
-      "source_sha256_16": "f3656745f67a49af"
-    },
-    {
-      "level": "universal",
-      "links_rewritten": false,
       "sha256_16": "155c29c80b8f5bf9",
       "slug": "fixture-owns-its-state",
       "source": "precedent",
@@ -489,10 +473,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "7b7270565499af87",
+      "sha256_16": "5289d524373a275d",
       "slug": "frame-from-audience-question",
       "source": "precedent",
-      "source_sha256_16": "7b7270565499af87"
+      "source_sha256_16": "5289d524373a275d"
     },
     {
       "level": "universal",
@@ -505,26 +489,26 @@
     {
       "level": "universal",
       "links_rewritten": true,
-      "sha256_16": "82ed43875dfe6fb7",
+      "sha256_16": "37b50d0e47469fa2",
       "slug": "full-practice-audit",
       "source": "precedent",
-      "source_sha256_16": "db54e751105efe0c"
+      "source_sha256_16": "b4169fb6158e5e97"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "6cb9364f8d56892d",
+      "sha256_16": "c6b6b279eba949d9",
       "slug": "gate-ledger",
       "source": "precedent",
-      "source_sha256_16": "6cb9364f8d56892d"
+      "source_sha256_16": "c6b6b279eba949d9"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "995c0ab0e9cff939",
+      "sha256_16": "37a400e63d07611f",
       "slug": "gates-fail-fast",
       "source": "precedent",
-      "source_sha256_16": "995c0ab0e9cff939"
+      "source_sha256_16": "37a400e63d07611f"
     },
     {
       "level": "universal",
@@ -561,18 +545,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "87db2c51b97ecca8",
+      "sha256_16": "921ac9edf74c644c",
       "slug": "go-update",
       "source": "precedent",
-      "source_sha256_16": "87db2c51b97ecca8"
+      "source_sha256_16": "921ac9edf74c644c"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "b8ec9a0e9d926fe4",
+      "sha256_16": "69118d18b31d16bc",
       "slug": "grep-before-search",
       "source": "precedent",
-      "source_sha256_16": "b8ec9a0e9d926fe4"
+      "source_sha256_16": "69118d18b31d16bc"
     },
     {
       "level": "universal",
@@ -585,34 +569,34 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "96b75f833b733e5e",
+      "sha256_16": "95f099b96cd19336",
       "slug": "headline-capitalization",
       "source": "precedent",
-      "source_sha256_16": "96b75f833b733e5e"
+      "source_sha256_16": "95f099b96cd19336"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "754c23e326d63b27",
+      "sha256_16": "64a6c6828ec31c26",
       "slug": "index-remembers-past",
       "source": "precedent",
-      "source_sha256_16": "754c23e326d63b27"
+      "source_sha256_16": "64a6c6828ec31c26"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "401f6ee125e21cd5",
+      "sha256_16": "eece89f977eddd6d",
       "slug": "item-closes-on-its-condition",
       "source": "precedent",
-      "source_sha256_16": "401f6ee125e21cd5"
+      "source_sha256_16": "eece89f977eddd6d"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "9f798abffd26f563",
+      "sha256_16": "cf25f242f0958eba",
       "slug": "judgment-check-or-tool",
       "source": "precedent",
-      "source_sha256_16": "9f798abffd26f563"
+      "source_sha256_16": "cf25f242f0958eba"
     },
     {
       "level": "universal",
@@ -649,10 +633,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "5f09f539ce70bf0c",
+      "sha256_16": "831dbbf4164a290e",
       "slug": "lease-in-flight-work",
       "source": "precedent",
-      "source_sha256_16": "5f09f539ce70bf0c"
+      "source_sha256_16": "831dbbf4164a290e"
     },
     {
       "level": "universal",
@@ -665,26 +649,26 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "8aba303590c34813",
+      "sha256_16": "dfc12447be2cb918",
       "slug": "migration-scrubs-vocabulary",
       "source": "precedent",
-      "source_sha256_16": "8aba303590c34813"
+      "source_sha256_16": "dfc12447be2cb918"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "154e391fc62417dc",
+      "sha256_16": "44935e6c58522ef7",
       "slug": "mistakes-become-rules",
       "source": "precedent",
-      "source_sha256_16": "154e391fc62417dc"
+      "source_sha256_16": "44935e6c58522ef7"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "d8f8be97a498ff1a",
+      "sha256_16": "9c85f33b73cce3a5",
       "slug": "my-options",
       "source": "precedent",
-      "source_sha256_16": "d8f8be97a498ff1a"
+      "source_sha256_16": "9c85f33b73cce3a5"
     },
     {
       "level": "universal",
@@ -697,10 +681,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "fa43506feedbcc63",
+      "sha256_16": "ecc3e1b0cc1d250f",
       "slug": "never-delete-a-remote-branch",
       "source": "precedent",
-      "source_sha256_16": "fa43506feedbcc63"
+      "source_sha256_16": "ecc3e1b0cc1d250f"
     },
     {
       "level": "universal",
@@ -721,18 +705,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "8263a7e8c21b6b95",
+      "sha256_16": "624fda9b8bdfae36",
       "slug": "no-version-suffix",
       "source": "precedent",
-      "source_sha256_16": "8263a7e8c21b6b95"
+      "source_sha256_16": "624fda9b8bdfae36"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "20142996ce718b7c",
+      "sha256_16": "6068aba505b524ab",
       "slug": "one-formatter-per-quantity",
       "source": "precedent",
-      "source_sha256_16": "20142996ce718b7c"
+      "source_sha256_16": "6068aba505b524ab"
     },
     {
       "level": "universal",
@@ -745,18 +729,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "7a16825751274913",
+      "sha256_16": "6178df0d923e34e6",
       "slug": "orientation-map",
       "source": "precedent",
-      "source_sha256_16": "7a16825751274913"
+      "source_sha256_16": "6178df0d923e34e6"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "f4b150e92fc3cd96",
+      "sha256_16": "938e2ec661001ff7",
       "slug": "outward-summary-discipline",
       "source": "precedent",
-      "source_sha256_16": "f4b150e92fc3cd96"
+      "source_sha256_16": "938e2ec661001ff7"
     },
     {
       "level": "universal",
@@ -833,10 +817,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "1eab83c834bec32b",
+      "sha256_16": "9a14bda68517a78c",
       "slug": "produce",
       "source": "precedent",
-      "source_sha256_16": "1eab83c834bec32b"
+      "source_sha256_16": "9a14bda68517a78c"
     },
     {
       "level": "repo-local",
@@ -857,18 +841,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "f6a17e8b2b34ee66",
+      "sha256_16": "0a5ef93c08a2e85f",
       "slug": "promote",
       "source": "precedent",
-      "source_sha256_16": "f6a17e8b2b34ee66"
+      "source_sha256_16": "0a5ef93c08a2e85f"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "12508127e741ba20",
+      "sha256_16": "df5b52f8c3fbdea4",
       "slug": "prompt-please",
       "source": "precedent",
-      "source_sha256_16": "12508127e741ba20"
+      "source_sha256_16": "df5b52f8c3fbdea4"
     },
     {
       "level": "universal",
@@ -881,34 +865,34 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "205b37910a4cf3bd",
+      "sha256_16": "db4dd01632ef3105",
       "slug": "quick-index",
       "source": "precedent",
-      "source_sha256_16": "205b37910a4cf3bd"
+      "source_sha256_16": "db4dd01632ef3105"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "f08056af1900c697",
+      "sha256_16": "a2f6ec60d03ff220",
       "slug": "quote-discipline",
       "source": "precedent",
-      "source_sha256_16": "f08056af1900c697"
+      "source_sha256_16": "a2f6ec60d03ff220"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "9aa5cc326c67af91",
+      "sha256_16": "d3949f4ee901b9ad",
       "slug": "readers-vocabulary",
       "source": "precedent",
-      "source_sha256_16": "9aa5cc326c67af91"
+      "source_sha256_16": "d3949f4ee901b9ad"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "c476bc9091fc87c2",
+      "sha256_16": "079ac983c7483b32",
       "slug": "reduction-pass",
       "source": "precedent",
-      "source_sha256_16": "c476bc9091fc87c2"
+      "source_sha256_16": "079ac983c7483b32"
     },
     {
       "level": "universal",
@@ -929,18 +913,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "99c35d903d13e662",
+      "sha256_16": "f403db33a0164c3d",
       "slug": "rename-updates-links",
       "source": "precedent",
-      "source_sha256_16": "99c35d903d13e662"
+      "source_sha256_16": "f403db33a0164c3d"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "45a53cace7c081a6",
+      "sha256_16": "fefbeef2d0cf885b",
       "slug": "repair-cannot-discard-work",
       "source": "precedent",
-      "source_sha256_16": "45a53cace7c081a6"
+      "source_sha256_16": "fefbeef2d0cf885b"
     },
     {
       "level": "universal",
@@ -961,10 +945,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "3dac2d61b7ea877d",
+      "sha256_16": "5babb31e487b27af",
       "slug": "review-against-a-contract",
       "source": "precedent",
-      "source_sha256_16": "3dac2d61b7ea877d"
+      "source_sha256_16": "5babb31e487b27af"
+    },
+    {
+      "level": "universal",
+      "links_rewritten": false,
+      "sha256_16": "e9220b28bc7db46a",
+      "slug": "root-issues",
+      "source": "precedent",
+      "source_sha256_16": "e9220b28bc7db46a"
     },
     {
       "level": "universal",
@@ -977,34 +969,26 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "e3e967e758413f0e",
+      "sha256_16": "70b36dddd9b57135",
       "slug": "scripts-assert-properties",
       "source": "precedent",
-      "source_sha256_16": "e3e967e758413f0e"
+      "source_sha256_16": "70b36dddd9b57135"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "8849b59280e5a486",
+      "sha256_16": "d24d50426e8b1348",
       "slug": "scrub-gate",
       "source": "precedent",
-      "source_sha256_16": "8849b59280e5a486"
+      "source_sha256_16": "d24d50426e8b1348"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "7ff51f9d5ca070b2",
+      "sha256_16": "0bc681a679247993",
       "slug": "search-by-purpose",
       "source": "precedent",
-      "source_sha256_16": "7ff51f9d5ca070b2"
-    },
-    {
-      "level": "universal",
-      "links_rewritten": false,
-      "sha256_16": "ea451ba044d7bbc7",
-      "slug": "second-pass-capture",
-      "source": "precedent",
-      "source_sha256_16": "ea451ba044d7bbc7"
+      "source_sha256_16": "0bc681a679247993"
     },
     {
       "level": "universal",
@@ -1065,26 +1049,26 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "188f56491561fb45",
+      "sha256_16": "1ebfe831e8e0fab9",
       "slug": "session-trailer",
       "source": "precedent",
-      "source_sha256_16": "188f56491561fb45"
+      "source_sha256_16": "1ebfe831e8e0fab9"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "3b09057236128a77",
+      "sha256_16": "3541a3804b8fbdf2",
       "slug": "shared-result-cache",
       "source": "precedent",
-      "source_sha256_16": "3b09057236128a77"
+      "source_sha256_16": "3541a3804b8fbdf2"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "7f3c7bf4d864e496",
+      "sha256_16": "75039a48ccbc0677",
       "slug": "slow-steps-report-and-cache",
       "source": "precedent",
-      "source_sha256_16": "7f3c7bf4d864e496"
+      "source_sha256_16": "75039a48ccbc0677"
     },
     {
       "level": "universal",
@@ -1105,10 +1089,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "8886dcc1ca10e84e",
+      "sha256_16": "763bda89834a8c91",
       "slug": "source-sets-run-no-ci",
       "source": "precedent",
-      "source_sha256_16": "8886dcc1ca10e84e"
+      "source_sha256_16": "763bda89834a8c91"
     },
     {
       "level": "universal",
@@ -1129,10 +1113,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "fe14ca5a816c1dbf",
+      "sha256_16": "2993bdb8e0c27594",
       "slug": "tabular-shared-renderer",
       "source": "precedent",
-      "source_sha256_16": "fe14ca5a816c1dbf"
+      "source_sha256_16": "2993bdb8e0c27594"
     },
     {
       "level": "universal",
@@ -1145,10 +1129,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "1e0e7b5a171cc996",
+      "sha256_16": "5242f6bdd5ebb0e4",
       "slug": "the-boildown",
       "source": "precedent",
-      "source_sha256_16": "1e0e7b5a171cc996"
+      "source_sha256_16": "5242f6bdd5ebb0e4"
     },
     {
       "level": "universal",
@@ -1169,18 +1153,18 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "53dacc868c161f92",
+      "sha256_16": "0840dcae91fb90bf",
       "slug": "timestamps-carry-offset",
       "source": "precedent",
-      "source_sha256_16": "53dacc868c161f92"
+      "source_sha256_16": "0840dcae91fb90bf"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "b283b2e1b376e6ca",
+      "sha256_16": "ca8b32d7eeb0a74a",
       "slug": "todo-is-a-handoff",
       "source": "precedent",
-      "source_sha256_16": "b283b2e1b376e6ca"
+      "source_sha256_16": "ca8b32d7eeb0a74a"
     },
     {
       "level": "universal",
@@ -1201,26 +1185,26 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "0fd19add36da7acb",
+      "sha256_16": "baafd28733306a0c",
       "slug": "two-check-levels",
       "source": "precedent",
-      "source_sha256_16": "0fd19add36da7acb"
+      "source_sha256_16": "baafd28733306a0c"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "a6b534e4f0b171a0",
+      "sha256_16": "760c933dc9a6d65c",
       "slug": "upstream-bug-stops-here",
       "source": "precedent",
-      "source_sha256_16": "a6b534e4f0b171a0"
+      "source_sha256_16": "760c933dc9a6d65c"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "2aecd3774cbc2944",
+      "sha256_16": "9c4e9edf0835904e",
       "slug": "upstream-fix",
       "source": "precedent",
-      "source_sha256_16": "2aecd3774cbc2944"
+      "source_sha256_16": "9c4e9edf0835904e"
     },
     {
       "level": "universal",
@@ -1233,34 +1217,34 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "91243d39c9555c94",
+      "sha256_16": "3aa9de497d6dd3b8",
       "slug": "vendor-rollout-disclosed",
       "source": "precedent",
-      "source_sha256_16": "91243d39c9555c94"
+      "source_sha256_16": "3aa9de497d6dd3b8"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "1c952532552b293a",
+      "sha256_16": "7e996364cee997b9",
       "slug": "vendor-update-runbook",
       "source": "precedent",
-      "source_sha256_16": "1c952532552b293a"
+      "source_sha256_16": "7e996364cee997b9"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "86b08c16b7581c54",
+      "sha256_16": "517225300c38ed04",
       "slug": "verdict-not-mechanism",
       "source": "precedent",
-      "source_sha256_16": "86b08c16b7581c54"
+      "source_sha256_16": "517225300c38ed04"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "a263c9d788f9f4be",
+      "sha256_16": "e78295ab3feb02c4",
       "slug": "verify-decomposition",
       "source": "precedent",
-      "source_sha256_16": "a263c9d788f9f4be"
+      "source_sha256_16": "e78295ab3feb02c4"
     },
     {
       "level": "universal",
@@ -1273,10 +1257,10 @@
     {
       "level": "universal",
       "links_rewritten": true,
-      "sha256_16": "3e132b36e93f5665",
+      "sha256_16": "6e4c66c0b3045e43",
       "slug": "very-deep-check",
       "source": "precedent",
-      "source_sha256_16": "06ab05c25f4d3616"
+      "source_sha256_16": "7457af78428003d6"
     },
     {
       "level": "universal",
@@ -1305,18 +1289,10 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "ea2e8d307780aae7",
+      "sha256_16": "dae176952e14012c",
       "slug": "whats-new",
       "source": "precedent",
-      "source_sha256_16": "ea2e8d307780aae7"
-    },
-    {
-      "level": "universal",
-      "links_rewritten": false,
-      "sha256_16": "a712025e00342a59",
-      "slug": "wide-search-needs-asking",
-      "source": "precedent",
-      "source_sha256_16": "a712025e00342a59"
+      "source_sha256_16": "dae176952e14012c"
     },
     {
       "level": "universal",
@@ -1329,29 +1305,24 @@
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "51f89b4a9b0fbf3e",
+      "sha256_16": "d7173ed85899ab2c",
       "slug": "write-it-up",
       "source": "precedent",
-      "source_sha256_16": "51f89b4a9b0fbf3e"
+      "source_sha256_16": "d7173ed85899ab2c"
     },
     {
       "level": "universal",
       "links_rewritten": false,
-      "sha256_16": "d5128d6d3775eee2",
+      "sha256_16": "ab1c918aafa63526",
       "slug": "write-like-a-human",
       "source": "precedent",
-      "source_sha256_16": "d5128d6d3775eee2"
+      "source_sha256_16": "ab1c918aafa63526"
     }
   ],
   "resident": {
     "budget": 2000,
     "over_budget": false,
     "practices": [
-      {
-        "level": "universal",
-        "slug": "bold-key-phrases",
-        "source": "precedent"
-      },
       {
         "level": "universal",
         "slug": "brainstorm-holds-commits",
@@ -1364,22 +1335,7 @@
       },
       {
         "level": "universal",
-        "slug": "environment-gotchas",
-        "source": "precedent"
-      },
-      {
-        "level": "universal",
         "slug": "no-invented-specifics",
-        "source": "precedent"
-      },
-      {
-        "level": "universal",
-        "slug": "orientation-map",
-        "source": "precedent"
-      },
-      {
-        "level": "universal",
-        "slug": "quick-index",
         "source": "precedent"
       },
       {
@@ -1398,7 +1354,7 @@
         "source": "precedent"
       }
     ],
-    "tokens": 915
+    "tokens": 561
   },
   "sources": [
     {
@@ -1418,7 +1374,6 @@
     "assorted-notes",
     "audience-register",
     "auto-delete-branches",
-    "blank-blocklist",
     "brainstorm-citations",
     "branch-links",
     "branch-names-its-repo",
@@ -1441,7 +1396,6 @@
     "durable-list-anchors",
     "file-header",
     "file-mention-links",
-    "fresh-check-escalation",
     "handoff-only-when-blocked",
     "install",
     "ladder-required",
@@ -1453,7 +1407,6 @@
     "mirror-into-agents",
     "my-identity-is-not-private",
     "name-the-branch",
-    "new-rule-placement",
     "no-duplication",
     "no-stale-counts",
     "nonblocking-questions",

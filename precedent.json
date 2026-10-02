@@ -54,35 +54,38 @@
   "kept_template_divergences": {
     "AGENTS.md ## Where things are (quick index — check here BEFORE searching the repo)": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "35da8028a5533b2d895bb32a5e15325bde12973c81c4b3b76ee5ab23ec58e423"
+      "template_sha256": "363609a9c1611adfea6cdd2711c4630816498a80e508fe92200fb3404582774b",
+      "carried_sha256": "35da8028a5533b2d895bb32a5e15325bde12973c81c4b3b76ee5ab23ec58e423"
     },
     "AGENTS.md ### Two check levels": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "fa9278f49f069060855d981c72fd1ca74769bf191b8d12ea0a59bc51db9a833f"
+      "template_sha256": "75e4cf88a608a7601b52c3d005d44dc801e1d0f1db15c28231494ce570ea6dd3",
+      "carried_sha256": "fa9278f49f069060855d981c72fd1ca74769bf191b8d12ea0a59bc51db9a833f"
     },
     "AGENTS.md ### Build-environment gotchas — do NOT rediscover these": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "01f1c4f690e67e5201d09c688c3b2cf62121d759e21f88ce5aa9990b7f06ec00"
+      "template_sha256": "ced36cbd155574bd65e2c23e2900a6e03b834c9ebb3fc830f9853dc01e988664",
+      "carried_sha256": "01f1c4f690e67e5201d09c688c3b2cf62121d759e21f88ce5aa9990b7f06ec00"
     },
     "AGENTS.md ## Git / workflow": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "0b0d3b4471b96309e80cca88f7308e60f775ae5acc8feac23deb20695196e708"
+      "template_sha256": "a39a4ddd311a6418ef25ef3d1cd2caa75938baa8293594c30c8415fcd69bbd4a",
+      "carried_sha256": "0b0d3b4471b96309e80cca88f7308e60f775ae5acc8feac23deb20695196e708"
     },
     "AGENTS.md ### Merging a thread branch (runbook — follow, don't improvise)": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "52660f763b5e3dbab8f85eaae6f4e75793f934676fbbee04363bc526924cff44"
+      "template_sha256": "e80835d1d62582b480e19217f44c135a8e14eae8f056fb0231ff6f55dd359c0b",
+      "carried_sha256": "52660f763b5e3dbab8f85eaae6f4e75793f934676fbbee04363bc526924cff44"
     },
     "AGENTS.md ## Administrator requests you must know how to handle": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "494c0639e010cfa3aff35711b4be0c22ac10715d2946cffc2415741066e6b246"
+      "template_sha256": "841f5c7c0b032341dcbaf88493a9d503931db836ebff983707374ce518453a7e",
+      "carried_sha256": "494c0639e010cfa3aff35711b4be0c22ac10715d2946cffc2415741066e6b246"
     },
     "AGENTS.md ## Practice sources — Precedent loader (policy)": {
       "reason": "The template's <placeholders> are filled with this repo's real names, paths and audits (2026-10-01 migration onto the loader); the template's rules are otherwise carried as written. Re-check when upstream changes the section.",
-      "template_sha256": "de58606f8e0f5ed5c8fc46dcff2e005df62dcc5632d2de50e9a3a5a7a78e7a6b"
-    },
-    "GETTING_STARTED.md": {
-      "reason": "Instantiated from the current template on 2026-10-01 with this repo's values; the flagged line is the template's own instantiation comment with <upstream-docs> filled in as process/upstream, and the CI paragraph is the installer's github_ci_workflows-off text.",
-      "template_sha256": "05baf0b7d516d5009fd8c78a1e23c1e2a0ed14d672dd0d2b7c5f2e5fba5979d3"
+      "template_sha256": "ff67e9fe82ea3b1ac2d434540e2d5d1f3c74162ea0e7d213f3cd8c39e57fbbca",
+      "carried_sha256": "de58606f8e0f5ed5c8fc46dcff2e005df62dcc5632d2de50e9a3a5a7a78e7a6b"
     }
   }
 }

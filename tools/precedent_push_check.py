@@ -102,8 +102,11 @@ lives in precedent_branches.py, not here. A full pass satisfies a basic
 gate; a basic pass never satisfies a full one.
 
 Run:
-  python3 tools/precedent_push_check.py                  # every check, record a pass
+  python3 tools/precedent_push_check.py                  # your landing branch's tier, record a pass
   python3 tools/precedent_push_check.py --tier basic     # the basic tier only
+  python3 tools/precedent_push_check.py --tier full --because 'why'
+                                  # the full suite; refused without a reason
+                                  # where the landing branch is the quick tier
   python3 tools/precedent_push_check.py --gate           # skip if this tree passed
   python3 tools/precedent_push_check.py --gate --push-command 'origin pre-staging'
                                   # the tier that push needs (what the hook runs)
@@ -196,7 +199,7 @@ SKIP_IS_FINE_WITHOUT_IDENTITY = {'commit_author', 'commit_dates'}
 # a second. On 2026-09-26 a Promote reused another checkout's pass for the
 # same tree in four repositories, and the bot-authored merge commits it had
 # just made went out unjudged; one of those repositories' own full sweep
-# failed on its staging afterwards (practice: durable-fix).
+# failed on its staging afterwards (practice: upstream-fix).
 HISTORY_CHECKS = {'commit_author', 'commit_dates', 'session_trailer'}
 # session_trailer (2026-09-29): a repository that declares the shared set
 # carrying check_session_trailer.py gets it materialized beside the other
@@ -886,6 +889,77 @@ def _changed_since(root, argv):
     return None
 
 
+def _default_destination(root, argv):
+    """A run that names no destination checks what a push to the person's
+    landing branch would get. -> argv, with --push-command added when it
+    was missing.
+
+    Morgan, 2026-10-01, strength: assented. A session ran this bare before
+    every landing on pre-staging, as AGENTS.md's "before push or merge"
+    line read, and bare meant the full ~11-minute suite -- the check that
+    belongs to the Debut into staging -- several times in one day, for work
+    the push gate itself would have checked in seconds. Now the bare run
+    and the push agree: pre-staging gets its basic tier, and staging or
+    main, as a landing branch, still gets full. `--tier full` asks for the
+    full check outright; the push gate, the merge gate and a Promote name
+    their own destination or tier, so none of them is changed by this."""
+    if any(a in argv for a in ('--tier', '--push-command', '--changed-files-check')):
+        return argv
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_branches
+        landing = precedent_branches.landing_branch(root)[0]
+    except Exception:                                        # noqa: BLE001
+        return argv
+    finally:
+        sys.path.pop(0)
+    if not landing:
+        return argv
+    print(f'precedent_push_check: no destination named, so this checks what '
+          f'a push to {landing}, your landing branch, gets. The full check is the Debut\'s: '
+          f'--tier full --because "<reason>".', flush=True)
+    return list(argv) + ['--push-command', f'origin HEAD:{landing}']
+
+
+def _full_tier_refusal(root, argv):
+    """-> why `--tier full` is refused before anything runs, or None.
+
+    Morgan, 2026-10-01, strength: decided ("Go, do both, then Booked"). The
+    bare run already checks at the landing branch's tier (_default_destination),
+    and on the same day a session still paid the ~12-minute suite three times
+    for work going to pre-staging -- by typing `--tier full` itself, and by
+    writing it into every helper's brief, because "deep check before push"
+    read as "the thorough one". Pre-staging is the quick tier on purpose; the
+    full check belongs to the Debut into staging, which runs it for you. So
+    asking for full where the landing branch is the quick tier now needs a
+    stated reason: `--because "<why>"`. A machine caller (`--gate`), a named
+    push (`--push-command`) and a landing branch that is fully checked are
+    untouched."""
+    if '--tier' not in argv:
+        return None
+    i = argv.index('--tier')
+    if (argv[i + 1] if i + 1 < len(argv) else '') != FULL:
+        return None
+    if any(a in argv for a in ('--gate', '--push-command', '--because')):
+        return None
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_branches
+        landing = precedent_branches.landing_branch(root)[0]
+        tier = precedent_branches.tier_for_branch(root, landing)[0]
+    except Exception:                                        # noqa: BLE001
+        return None
+    finally:
+        sys.path.pop(0)
+    if tier != BASIC:
+        return None
+    return (f'--tier full asks for the ~12-minute suite, and your landing '
+            f'branch, {landing}, takes the quick check: run this bare, which '
+            f'is what Booked needs. The full check is the Debut\'s, and it '
+            f'runs it for you. If you really mean it, say why: '
+            f'--tier full --because "<reason>".')
+
+
 def _tier_from_args(root, argv):
     """-> (tier, why). --tier wins; else --push-command names the push and
     precedent_branches.py decides; else FULL, today's behaviour."""
@@ -1273,6 +1347,16 @@ def main(argv):
         precedent_which_repo.warn_if_elsewhere(root, 'precedent_push_check.py')
     except Exception:                                        # noqa: BLE001
         pass
+    argv = _default_destination(root, argv)
+    refused = _full_tier_refusal(root, argv)
+    if refused:
+        print(f'precedent_push_check: REFUSED -- {refused}', file=sys.stderr)
+        return 1
+    if '--because' in argv:
+        i = argv.index('--because')
+        print(f'precedent_push_check: running as asked, because: '
+              f'{argv[i + 1] if i + 1 < len(argv) else "(no reason given)"}',
+              flush=True)
     refused = _promote_only_refusal(root, argv)
     if refused:
         print(f'precedent_push_check: REFUSED -- {refused}', file=sys.stderr)
@@ -1382,8 +1466,18 @@ def main(argv):
         print(f'precedent_push_check: {kind} repository {root.name}, the '
               f'basic check, {len(checks)} check(s) ({why}). Staging and main '
               f'get everything.', flush=True)
+    # The tree is read BEFORE the run as well as after, and a pass is
+    # recorded only when the two agree. Read only afterwards, a commit made
+    # while the suite ran was credited with a pass the suite never gave it:
+    # the isolated harness had copied the commit before it, so a new check
+    # with no planted case (whats-new, 2026-10-01) went green in the full
+    # check and was refused minutes later by the merge gate's quick one.
+    tree_before = clean_tree(root)
     failed, missing, total, findings = run(root, checks, landed, reported)
     tree = clean_tree(root)
+    moved = tree is not None and tree != tree_before
+    if moved:
+        tree = None
     if failed:
         # Said again at the very end, because the end is what every caller
         # that truncates -- the push gate, the merge gate -- keeps.
@@ -1416,6 +1510,12 @@ def main(argv):
               f'for tree {tree[:12]} ({tier}), so a push of this commit will '
               f'not re-run them.')
         publish_pass(root, rec)
+    elif moved:
+        print(f'\nprecedent_push_check: all passed in {total:.0f}s, but the '
+              f'commit changed while it ran -- NOT recorded. Part of the run '
+              f'copied the commit it started on, so this pass says nothing '
+              f'about the one checked out now. Run it again, without '
+              f'committing until it ends.')
     else:
         print(f'\nprecedent_push_check: all passed in {total:.0f}s, over a '
               f'working tree with uncommitted changes -- NOT recorded, since '
@@ -1429,7 +1529,7 @@ def main(argv):
 # than ignored: a PR template naming a flag this file never had
 # (--changed-files-only) ran the full ~14-minute suite twice, silently
 # (2026-09-30).
-VALUE_OPTIONS = ('--tier', '--changed-since', '--push-command')
+VALUE_OPTIONS = ('--tier', '--changed-since', '--push-command', '--because')
 OPTIONAL_VALUE_OPTIONS = ('--changed-files-check',)
 FLAG_OPTIONS = ('--gate', '--list', '--help', '-h')
 

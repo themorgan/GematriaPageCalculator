@@ -2326,6 +2326,7 @@ TOOLS_DESCRIPTIONS = {
         "never generated",
     'precedent_whats_new.py': "The mechanics behind \"What's new?\": which finished days on main a project's running log lacks, what changed on each, today so far, and marking the log current -- the entries themselves are the session's to write",
     'precedent_push_check.py': "Everything GitHub CI used to run on a push, per kind of repository, run locally before it -- `push-check-gate.sh` refuses a push until it passes; a push to a working branch or pre-staging runs its basic tier only",
+    'precedent_branch_name.py': "The name for a session's feature branch, built the same way every time -- `claude/<date>-<slug>-<id>`, the id being the end of the session's ID, or random characters when there is none (practice: act)",
     'precedent_branches.py': "The three branch tiers -- which branch is pre-staging, staging and main here, and whether a push to one gets the basic or the full push check (spec/BRANCH_TIERS_PLAN.md)",
     'precedent_consumer_shape.py': "A practice source's check tests run the way a consuming repository runs them -- with git ignoring what a consumer typically ignores, in a copy without the source's own tools/ (only the engine, tools/checks/ and what practices ship) -- so a test that passes only in its home layout fails at home; a source's push check runs it",
     'precedent_merge_check.py': "The push check on the merge GitHub would make, at its base branch's tier -- `merge-check-gate.sh` runs it before a pull request is merged through GitHub, a push no push gate sees, and again on the merge commit after it, reverting a merge that fails because the base moved in between",
@@ -2453,10 +2454,31 @@ def render_glossary_md(practices, root=None):
 # ENGINE_MANIFEST.json -- the only file that knows where this copy came
 # from -- and with no manifest and no local file the link markup is dropped
 # rather than guessed at, leaving a backticked path that misleads nobody.
+def _stays_home(root, see):
+    """True when `see` is a file this repo keeps out of the catalogue copy
+    it ships (tools/checkin.py's VENDORING_RULES), so a relative link to it
+    from a shipped file is broken in every consumer (2026-10-01)."""
+    if (pathlib.Path(root) / 'tools' / 'ENGINE_MANIFEST.json').is_file():
+        return False          # a consumer or set receives the copy, ships none
+    try:
+        import checkin
+        rule = checkin.vendoring_rule(see)
+    except Exception:                                         # noqa: BLE001
+        return False
+    return bool(rule) and rule[1] is False
+
+
 def _travel_link(root, see):
     if not see:
         return '—'
     root = pathlib.Path(root) if root else ROOT
+    if (root / see).exists() and _stays_home(root, see):
+        try:
+            branch = json.loads((root / 'precedent.json').read_text(
+                encoding='utf-8')).get('base_branch') or 'staging'
+        except (OSError, ValueError):
+            branch = 'staging'
+        return f'[{see}](https://github.com/alex137/BestPractice/blob/{branch}/{see})'
     if (root / see).exists():
         return f'[{see}]({see})'
     try:

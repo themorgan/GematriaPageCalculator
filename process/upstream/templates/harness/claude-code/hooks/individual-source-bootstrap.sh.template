@@ -35,13 +35,11 @@
 # normally.
 set -uo pipefail
 
-# The repo's own vendored engine first; the catalogue copy's tools/ only
-# for an install that predates it (that copy leaves tools/ out once the
-# engine carries checkin.py, 2026-09-30).
+# The repo's own vendored engine. No install still has the catalogue
+# copy's tools/: the update that ships this hook moves the engine there
+# (2026-09-30), and a fallback to it named a path the consumer's own check
+# then refused as a stale reference (2026-10-01).
 ENGINE="${CLAUDE_PROJECT_DIR:-.}/tools/precedent_source_bootstrap.py"
-if [ ! -f "$ENGINE" ]; then
-  ENGINE="${CLAUDE_PROJECT_DIR:-.}/process/upstream/tools/precedent_source_bootstrap.py"
-fi
 
 # WHOSE individual set. An individual set belongs to ONE person, but this
 # hook is committed to a SHARED project -- so the account baked in at
@@ -117,8 +115,13 @@ fi
 # own value.
 DEFAULT_REPO_URL="{{SOURCE_REPO_URL}}"
 if [ "{{SOURCE_REPO_URL_SUBSTITUTED}}" != "yes" ]; then
-  # Still a raw template: the placeholder above is a literal, not a URL.
-  DEFAULT_REPO_URL=""
+  # Still a raw template: the placeholder above is a literal, not a URL, and
+  # the set's name below is one too. Running on derived a URL from the
+  # environment and cloned and linked a path named after the placeholder: a
+  # test run of this raw file left one in a real home directory (found
+  # 2026-10-01). Nothing here is set up until the file is instantiated.
+  echo "individual-source bootstrap: no repository URL -- this is the raw template, never instantiated, so there is nothing to set up." >&2
+  exit 0
 fi
 
 # LAST RESORT, and the reason a public repo need bake in no account at all.
@@ -148,7 +151,7 @@ _pbase="${PRECEDENT_SOURCE_BASE_URL:-}"
 # Unset, the engine works it out: the value kept in the user config, else the
 # account the token belongs to (precedent_source_credentials.py --base-url).
 if [ -z "$_pbase" ] && [ -z "${DEFAULT_REPO_URL:-}" ] && command -v python3 >/dev/null 2>&1; then
-  for _pc in "${CLAUDE_PROJECT_DIR:-.}/tools/precedent_source_credentials.py" "${CLAUDE_PROJECT_DIR:-.}/process/upstream/tools/precedent_source_credentials.py"; do
+  for _pc in "${CLAUDE_PROJECT_DIR:-.}/tools/precedent_source_credentials.py"; do
     if [ -f "$_pc" ]; then _pbase="$(python3 "$_pc" --base-url 2>/dev/null || true)"; break; fi
   done
   unset _pc

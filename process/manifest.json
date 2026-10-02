@@ -2,9 +2,9 @@
   "upstream": {
     "repo": "https://github.com/alex137/BestPractice",
     "vendored_at": "process/upstream",
-    "commit": "f8d6d7abfed476aa0ca69de95b5e97deec9887e6",
-    "synced_from": "f8d6d7abfed476aa0ca69de95b5e97deec9887e6",
-    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-01; verified tree-identical)."
+    "commit": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
+    "synced_from": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
+    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-02; verified tree-identical)."
   },
   "entries": [
     {
