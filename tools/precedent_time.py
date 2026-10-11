@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""One formatter for the quantity kind "a moment in time" (practice: one-formatter-per-quantity).
+"""The ONE emitter for every date and time this repo writes down — resolves whose zone, always carries the offset; run it bare to see which rung answered
+
+One formatter for the quantity kind "a moment in time" (practice: one-formatter-per-quantity).
 
 WHAT THIS IS FOR. Two records say "Morgan 19:00" and "John 18:00" and
 nobody can order them, because neither says which zone it is. That is not
@@ -39,7 +41,7 @@ registry-source-of-truth).
      fallback, in case there is no defined individual timezone defined"
      (strength: decided). What the morning change was right about stays:
      his zone is not AUDITED against a shared repo's history, where other
-     people's commits live (check_buenos_aires_dates.py stands down
+     people's commits live (check_commit_dates.py stands down
      outside an individual source). It is only applied to his own records.
   4. TZ in the environment          — the harness `env` block, itself derived
                                       from identity.json at session start

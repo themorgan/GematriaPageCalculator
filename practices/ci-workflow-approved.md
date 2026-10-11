@@ -7,17 +7,18 @@ applies_to:  [".github/workflows/**"]
 applies_to_why: "Its own applies_to. The moment it matters is a session about to add or edit a workflow file, which is exactly the glob; the push gate runs the check whatever the path channel did, so a miss here costs a refused push, not a billed run. Decided: 2026-09-25, when the practice landed."
 occasion:    "a .github/workflows file is added, edited, or found in an update or migration"
 gates:       ["push"]
-gates_why:   "The push check refuses a workflow file without the person's recorded approval, and workflow-write-gate.sh refuses one written through the GitHub tools before it lands, so a session that never saw the rule is stopped before a billed run. index_required: false records that judgment: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+gates_why:   "The push check refuses a workflow file without the person's recorded approval, and workflow-write-gate.sh refuses one written through the GitHub tools before it lands, so a session that never saw the rule is stopped before a billed run. index_required: false records that judgment: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)."
 index_clause: "no new workflow or CI minutes without the person's words; a fix is maintenance"
 index_required: false
 checked_by:  "tools/precedent_check.py"
 defines:     []
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       "2026-09-25"
-approved_by: "Morgan, 2026-09-25 (\"we need to absolutely put a hard stop to this ever happening again ... It's a priority\", strength: decided); index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+approved_by: "Morgan, 2026-09-25 (\"we need to absolutely put a hard stop to this ever happening again ... It's a priority\", strength: decided); index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)"
 ---
 ## Rule
 **A session never adds a GitHub Actions workflow, or adds CI work to one,
@@ -92,6 +93,12 @@ is what the check reads for it, so it needs no approval entry.
 Re-baselining an edited engine workflow with `record-ci` is an approval
 too, and needs the same words.
 
+An approved workflow of the repository's own is also run before the push,
+as far as it can be (2026-10-10): the push check runs each of its
+steps that is a plain `python3 tools/<x>.py` call, at every tier, and Update
+Vendors names any other step, which only GitHub runs. A check meant to stop
+a push belongs in such a script.
+
 ## Why
 Cost follows the trigger, and the trigger is one line. A session tuning a
 workflow sees a good reason for that line in front of it. It does not see the
@@ -131,7 +138,7 @@ control? It's a priority."
 
 **2026-09-27, the same repository, on its next Update Vendors.** Its
 hand-made `light-check.yml` still ran on every push to `main` and on every
-pull request, re-running [doc_lint.py](../tools/doc_lint.py) and its own light check, both of which
+pull request, re-running [doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py) and its own light check, both of which
 its local push check already ran. The update left the file alone, because the
 light check was written at install and never refreshed. This check then
 blocked every push with "show the person the file and ask", and the session
@@ -146,14 +153,14 @@ an unapproved workflow on its own.
 
 ## Install
 Enforced by `_ci_workflow_approved` in
-[tools/precedent_check.py](../tools/precedent_check.py), run by
-[tools/precedent_push_check.py](../tools/precedent_push_check.py) as
+[tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py), run by
+[tools/precedent_push_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_push_check.py) as
 `ci_workflows` in the basic tier, so it runs before every push a session
 makes. It binds any repo that keeps a `.github/workflows/` directory
 (`binds_when`), whether or not the practice text resolved there, and reports
 "not applicable" in BestPractice itself, which has no engine manifest.
 In a consuming repo the refresh in
-[tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)
+[tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py)
 does the settling: `_refresh_ci_workflow_files` writes the shipped
 workflows from their templates, and `_remove_unapproved_workflows` removes
 the rest (`CI_CONVERGES_KINDS`).

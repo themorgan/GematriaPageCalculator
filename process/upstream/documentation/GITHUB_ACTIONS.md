@@ -12,8 +12,8 @@ Two workflows run on this repo itself, in [.github/workflows/](https://github.co
 
 - **`deep-check.yml`** — added by a 2026-09-03 deep-check audit. Runs
   [tools/verify_harness.py](https://github.com/alex137/BestPractice/blob/staging/tools/verify_harness.py),
-  [tools/precedent_check.py](../tools/precedent_check.py) and
-  [tools/doc_sync.py](../tools/doc_sync.py) — the three of AGENTS.md's five
+  [tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py) and
+  [tools/doc_sync.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_sync.py) — the three of AGENTS.md's five
   named "deep check" tools that had no continuous-integration (CI) check
   of their own until this landed, having been session discipline only.
   That gap is exactly where
@@ -27,10 +27,21 @@ Two workflows run on this repo itself, in [.github/workflows/](https://github.co
   those exact files already passed it -- this repo's one GitHub test
   ([spec/BRANCH_TIERS_PLAN.md](https://github.com/alex137/BestPractice/blob/staging/spec/BRANCH_TIERS_PLAN.md)); every other
   push is checked locally by the push check first.
+  **Since 2026-10-07 it is one job that runs the suite with
+  `verify_harness.py --as-ci`**, the command a session runs, so the suite
+  is split across the runner's cores the same way it is here. Before that,
+  the workflow kept its own copy of the split in three jobs. The local copy
+  got faster and GitHub's didn't, so every pull request into `main` waited
+  about 30 minutes on one core
+  ([the gotcha](../gotchas/gotcha-2026-10-07-a-speed-fix-to-a-mirrored-test-reached-only-the-local-copy.md)).
+  The harness now refuses any other way of running the suite in this
+  workflow.
 - **`leak-gate.yml`** — added at phase 2 of the Precedent rewrite
-  (`b3bfb54`). Runs [tools/leak_gate.py](../tools/leak_gate.py)'s structural
-  layer on every push and every pull request, on every branch (this repo is
-  the branch being published, not just its default). It is the unbypassable
+  (`b3bfb54`). Runs [tools/leak_gate.py](https://github.com/alex137/BestPractice/blob/staging/tools/leak_gate.py)'s structural
+  layer on a push to `main`. Until 2026-10-10 it ran on every push to every
+  branch; every branch is now checked before it is published, locally, by
+  the leak gate in the global pre-push hook (Morgan, 2026-10-10: "the check
+  must be local to avoid lots of github minutes billing issues"). It is the unbypassable
   backstop for the private-source separation described in
   [spec/PRACTICE_ENGINE_PLAN.md](https://github.com/alex137/BestPractice/blob/staging/spec/PRACTICE_ENGINE_PLAN.md)'s "Source — Who a
   Practice Belongs To": a `git push --no-verify` can skip the local
@@ -109,7 +120,7 @@ warnings. It is the whole-tree sweep mode, and its one caller is a very
 deep check ([practices/very-deep-check.md](../practices/very-deep-check.md)).
 *(Those two lines said `--strict` until 2026-09-21 — added by the very
 commit that withdrew the flag, so they were stale on arrival.
-[doc_lint.py](../tools/doc_lint.py) ignored unknown options silently, so
+[doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py) ignored unknown options silently, so
 anyone following them ran the ordinary lint and got a pass either way.
 Unknown options are refused now.)*
 
@@ -123,7 +134,7 @@ that had that gap, the CI check is not optional.
 
 **First vendored 2026-09-20** (spec/CI_MINUTES_PLAN.md item 12) —
 [leak-gate.yml.template](../templates/github-actions/leak-gate.yml.template)
-runs [tools/leak_gate.py](../tools/leak_gate.py)'s structural layer, same as
+runs [tools/leak_gate.py](https://github.com/alex137/BestPractice/blob/staging/tools/leak_gate.py)'s structural layer, same as
 this repo's own `leak-gate.yml` above, but is not simply a copy of it: this
 repo runs unconditionally on every branch because it is public and a leak
 here is already published; a dependent repo may not be. The template reads
@@ -144,10 +155,12 @@ Runs No CI" below).
 **What a new install gets, since 2026-09-25** ([spec/BRANCH_TIERS_PLAN.md](https://github.com/alex137/BestPractice/blob/staging/spec/BRANCH_TIERS_PLAN.md)):
 one GitHub test and no more. `light-check.yml` runs only on a pull request
 into `main`, about one billed minute per merge into main in a private repo;
-`leak-gate.yml` runs on every push in a public repo, where a push is
-publication, and never in a private one, where its job is skipped before a
-runner starts. Every other push is checked on the person's own machine by
-the push check. **The installer writes these by default**; a declared
+`leak-gate.yml` runs on a pull request in a public repo, and never in a
+private one, where its job is skipped before a runner starts. Every push,
+to any branch, is checked on the person's own machine: by the push check,
+and by the leak gate in the global pre-push hook every session start writes
+(since 2026-10-10; until then `leak-gate.yml` also ran on every push, one
+billed job each). **The installer writes these by default**; a declared
 `"github_ci_workflows": "disabled"` still installs nothing. **Since
 2026-09-27 the engine owns both**: every Update Vendors writes them from the
 templates over any hand-made or hand-edited copy, and removes every other
@@ -155,7 +168,7 @@ workflow upstream does not ship that the person did not approve in their own
 words. It checks first that nothing needed is lost: a file running anything
 the local push check does not is left alone, under a loud banner, with what to
 move named and an open item written to `todo/`. It asks nobody (`CI_CONVERGES_KINDS` in
-[tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)). The `[skip ci]` line the commit hook adds in a private
+[tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py)). The `[skip ci]` line the commit hook adds in a private
 repo stays on as a backstop until every install carries these files.
 
 **A workflow file nobody approved fails every push, since 2026-09-25**
@@ -177,7 +190,7 @@ everywhere.
 
 (Named `ci_workflows` until 2026-09-25; the old name is still read.)
 So the installer resolves `"github_ci_workflows"` from the individual or shared
-source it can reach ([tools/precedent_identity.py](../tools/precedent_identity.py)'s
+source it can reach ([tools/precedent_identity.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_identity.py)'s
 `ci_preference()`, same resolution order as `relayed_authorization`: the
 repo's own `identity.json` when it IS an individual source, else the one
 the user-level config names) and installs the workflow only when that
@@ -220,8 +233,8 @@ individual's own practice set or dependent project.
   13). GitHub bills **per job, rounded up to a whole minute**, so what a
   workflow costs on a trigger that fires is mostly its job count, not its
   run time. Measured on a real installed practice set:
-  [precedent_check.py](../tools/precedent_check.py) takes **0.35s** and
-  [build_views.py](../tools/build_views.py) `--check` **0.12s** — 0.47 seconds of
+  [precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py) takes **0.35s** and
+  [build_views.py](https://github.com/alex137/BestPractice/blob/staging/tools/build_views.py) `--check` **0.12s** — 0.47 seconds of
   work that the three-job shape billed as **three minutes**, paying for
   three checkouts and three Python setups to carry it. Both templates of
   that day (the Markdown lint, retired 2026-09-21, and the practice-set
@@ -300,7 +313,7 @@ in one day). Its checks run in the session before every push:
 `python3 tools/precedent_check.py --full-sweep`, which includes the
 generated-views drift check (`generated-artifact-provenance`, the same
 comparison `python3 tools/build_views.py --check` makes). A set created by
-[tools/precedent_bootstrap_source.py](../tools/precedent_bootstrap_source.py)
+[tools/precedent_bootstrap_source.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_bootstrap_source.py)
 gets no workflow, and the engine refresh deletes one an older set still
 carries. The workflow template sets used to run was retired on
 2026-10-01.
@@ -355,7 +368,7 @@ does not is left alone, under a loud banner, with what to move named and an
 open item written to `todo/`. A retired workflow, such as
 `bestpractice-docs.yml`, is deleted the same way
 (`RETIRED_CI_WORKFLOW_FILES` in
-[tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)).
+[tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py)).
 
 ## Limits
 
@@ -385,7 +398,7 @@ Found 2026-09-10 in a real practice set, by a refresh workflow that had been
 mis-authoring **every** commit it ever made. Nobody had seen it because the
 two checks that would have caught it were themselves reporting SKIPPED —
 they could not resolve an identity inside a practice set until
-[tools/precedent_identity.py](../tools/precedent_identity.py) moved into the
+[tools/precedent_identity.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_identity.py) moved into the
 vendored engine that same day. The moment they went live, the workflow's own
 commit was the first thing they flagged. **Two silent failures were holding
 each other up**, which is the general shape worth remembering: a check that
@@ -396,12 +409,12 @@ cannot run is not evidence that what it checks is fine.
 a sibling clone outside the repo, an individual source resolves through a
 private user-level config. Neither exists in a bare CI checkout, so there is
 nothing on the runner to regenerate the views *from* — and
-[tools/build_views.py](../tools/build_views.py) deliberately exits 0 rather
+[tools/build_views.py](https://github.com/alex137/BestPractice/blob/staging/tools/build_views.py) deliberately exits 0 rather
 than writing a block from an incomplete source set, which is the shape a
 green-but-blind check would take. So no workflow a consuming repo gets
 checks its views. What covers a consuming repo today is a session running
 `python3 tools/precedent_sync_views.py --repo . --check` where the sources
-do resolve; [TODO.md](https://github.com/alex137/BestPractice/blob/staging/TODO.md)'s
+do resolve; [todo/TODO.md](https://github.com/alex137/BestPractice/blob/staging/todo/TODO.md)'s
 `consumer-views-drift-uncheckable-in-ci` item holds the question of whether
 anything better is possible.
 
@@ -415,7 +428,7 @@ calls of a 15,000/hour account pool spent in the same window. The runs were
 not it. **The allowances a busy fleet of sessions actually exhausts are
 `search` (30 requests a MINUTE, shared by every open session) and the
 secondary limit on creating content (a commit, a branch, a pull request, a
-comment, a merge).** [tools/github_budget.py](../tools/github_budget.py) prints
+comment, a merge).** [tools/github_budget.py](https://github.com/alex137/BestPractice/blob/staging/tools/github_budget.py) prints
 what is left and what a tool spent; the rule is
 [github-api-budget](../practices/github-api-budget.md).
 

@@ -4,7 +4,7 @@ title:       "Two named check levels: a fast one for every commit, a full one be
 tier:        on-demand
 severity:    default
 applies_to:  ["AGENTS.md", "CLAUDE.md", "GLOSSARY.md", "**/GLOSSARY.md"]
-applies_to_why: "The files its check reads: the instructions file (AGENTS.md, or CLAUDE.md where there is none) that names the two levels, and the glossary that defines them. Naming the levels happens in those files, so the path channel fires at that moment. Decided: phase 4 routing pass; real paths, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+applies_to_why: "The files its check reads: the instructions file (AGENTS.md, or CLAUDE.md where there is none) that names the two levels, and the glossary that defines them. Naming the levels happens in those files, so the path channel fires at that moment. Decided: phase 4 routing pass; real paths, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)."
 occasion:    "naming what \"run the checks\" means in a repo"
 gates:       []
 index_clause: "name a fast check and a full check; say which gates what"
@@ -15,7 +15,7 @@ in_force_at: null
 supersedes:  []
 overrides:   null
 added:       null
-approved_by: "BestPractice (pre-fork); real paths, index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+approved_by: "BestPractice (pre-fork); real paths, index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05); the two uses of \"deep check\" separated: Morgan, 2026-10-06 (strength: assented -- he delegated the wording)"
 source_practice_number: 44
 ---
 ## Rule
@@ -28,6 +28,9 @@ check* and *deep check* reads well, but any repo-chosen pair is fine — so a
 person or a session can ask for one or the other unambiguously ("run the
 light check before you commit that" vs. "this needs a deep check before we
 merge") instead of re-describing what "check" means every time.
+Where the full level is called the deep check, it is the check before a
+push; a person asking for a "deep check" by name additionally gets the
+whole-repo read [deep-check](deep-check.md) describes.
 
 ## Detail
 **The fast level holds one cheap, mechanical audit, and it runs on every
@@ -104,7 +107,7 @@ suite everyone has learned to read past no longer gates anything.
 
 **The source's half: its own push check runs its tests a second time shaped
 like a consumer**, with git ignoring what consuming repositories commonly
-ignore ([tools/precedent_consumer_shape.py](../tools/precedent_consumer_shape.py)),
+ignore ([tools/precedent_consumer_shape.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_consumer_shape.py)),
 so a test that only works in its home layout fails before it ships. A test
 that plants a fixture file stages it with `git add -f`, never a plain
 `git add`.
@@ -158,8 +161,16 @@ a check script that did not move.
 
 **Real paths from 2026-10-01.** The reduction pass for precedent-individual's session-start file ([the session-file open item](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)) gave this rule the files its check reads -- the instructions file and the glossary -- in place of `**`, so it leaves the occasion index and fires where the levels are named. Morgan approved (strength: decided): *"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)"*
 
+**2026-10-06: the asked-for deep check separated from the push suite.** The
+2026-10-05 very deep check found "deep check" meaning two things in
+universal once [deep-check](deep-check.md) was folded in: this rule's push
+suite, and a whole-repo read started by asking for one by name. The Rule now
+says the check before a push is the deep check, and asking for one by name
+adds the read. Morgan, 2026-10-06 (strength: assented -- he delegated the
+wording).
+
 ## Install
-This repo's own [tools/doc_lint.py](../tools/doc_lint.py) is
+This repo's own [tools/doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py) is
 already the fast pass — it scans only the markdown a session touched — and
 [tools/practice_audit.py](https://github.com/alex137/BestPractice/blob/staging/tools/practice_audit.py) is already the full one
 — the public-safe scrub, baseline-hash checks, and everything else that
@@ -170,6 +181,10 @@ merge runbook ([merge-runbook](merge-runbook.md)) and in any CI wiring ([convent
 adds its own extra fast checks (secret-shaped strings, conflict markers,
 JSON/YAML syntax) folds them into the "light" name rather than inventing a
 third gate — two named gate levels is the right number for almost every repo.
+Those four are already run everywhere by the engine's own `light-check` check
+in [tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py) (since 2026-10-05,
+ported from the repository-maintenance set), so a repo gets the minimum audit
+without writing one.
 
 **A rare, on-request audit is not a third level, and does not count against
 that.** The test is whether a session has to run it to land work. Something

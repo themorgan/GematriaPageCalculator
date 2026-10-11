@@ -12,6 +12,7 @@ checked_by:  "tools/precedent_check.py"
 defines:     []
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       "2026-09-20"
@@ -79,7 +80,7 @@ mechanism, before that finding corrected it.
 
 ## Install
 Enforced by `_workflow_file_outside_vendoring` in
-[tools/precedent_check.py](../tools/precedent_check.py), which calls
+[tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py), which calls
 `precedent_vendor_engine._untracked_ci_workflow_files()` — every
 `.github/workflows/*.yml`/`*.yaml` file on disk not listed in this repo's
 own `tools/ENGINE_MANIFEST.json` `ci_workflow_files`, and not a known

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Shared result cache: a heavy solve done once serves every session.
+"""The shared result cache -- code-keyed memos on one snapshot branch, a leased cold solve that peers wait for
+
+Shared result cache: a heavy solve done once serves every session.
 
 Practice `shared-result-cache`. Practice `slow-steps-report-and-cache` memoizes
 a heavy pure solve to a gitignored directory under a key that is the content
@@ -322,16 +324,26 @@ def claim(path):
         l = lease_board.take([name], KIND, note="cold solve in progress",
                              force=True)
         _claims[name] = l["id"]
+        _claimed_at[name] = time.time()
     except (lease_board.BoardUnreachable, lease_board.LeaseConflict):
         pass
 
 
+# When each claim was taken: the release says how long the cold solve took,
+# so a later run can price the same solve before it starts (doc_sync's plan
+# line reads "solve finished: NAME in N s" back from the board's history).
+_claimed_at = {}
+
+
 def release(path):
     _release_local(path)
-    lid = _claims.pop(pathlib.Path(path).name, None)
+    name = pathlib.Path(path).name
+    lid = _claims.pop(name, None)
+    t0 = _claimed_at.pop(name, None)
     if lid:
+        took = f" in {time.time() - t0:.0f} s" if t0 else ""
         try:
-            lease_board.release([lid], "solve finished")
+            lease_board.release([lid], f"solve finished: {name}{took}")
         except lease_board.BoardUnreachable:
             pass
 

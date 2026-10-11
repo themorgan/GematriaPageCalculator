@@ -14,6 +14,7 @@ defines:     ["full practice audit"]
 command:     {"Full practice audit": "Go through every rule in force, one at a time, and report on each — the slow, complete version of the routine checks. Once also called a \"practice check\"."}
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       null
@@ -24,7 +25,7 @@ When a person explicitly asks for a full practice audit, run
 [tools/full_practice_audit.py](https://github.com/alex137/BestPractice/blob/staging/tools/full_practice_audit.py): it enumerates
 every active practice from every source in force for the checkout —
 universal, team, repo-local, and individual, resolved the same way
-[tools/precedent_resolve.py](../tools/precedent_resolve.py) does for ordinary
+[tools/precedent_resolve.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_resolve.py) does for ordinary
 loading — and prints the full Rule text of every practice that has no
 mechanical check and no gate (the set that can only be judged). Judge each
 one against the actual repo state with a closed question, one practice at

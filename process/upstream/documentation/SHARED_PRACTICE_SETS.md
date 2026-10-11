@@ -75,8 +75,8 @@ control.
 
 ## Name It for Its Subject, Not for a Group of People
 
-`precedent-shared-writing`, `precedent-shared-repo-maintenance`,
-`precedent-shared-working-style`. **Not** `precedent-shared-my-team`.
+`precedent-shared-writing`, `precedent-shared-ladder`. **Not**
+`precedent-shared-my-team`.
 
 A subject-named set answers "should this project follow it?" by itself: a
 project that does no writing does not declare the writing set. A
@@ -164,7 +164,7 @@ If a diff surprises you, that line is the first thing to read.
 - [ADOPTING.md](ADOPTING.md) — the non-technical introduction
 - [spec/BOOTSTRAP_NEW_SOURCES.md](https://github.com/alex137/BestPractice/blob/staging/spec/BOOTSTRAP_NEW_SOURCES.md) — the
   full procedure
-  [precedent_bootstrap_source.py](../tools/precedent_bootstrap_source.py)
+  [precedent_bootstrap_source.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_bootstrap_source.py)
   mechanizes, including the
   parts that stay a human step
 - [GITHUB_ACTIONS.md](GITHUB_ACTIONS.md) — what a set's own CI costs and

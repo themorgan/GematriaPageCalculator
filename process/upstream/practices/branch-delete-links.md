@@ -20,7 +20,11 @@ in_force_at: null
 supersedes:  []
 overrides:   null
 added:       "2026-09-21"
-approved_by: "extended 2026-09-22, Morgan (strength: decided) -- a deletion
+approved_by: "extended 2026-10-06, Morgan, \"review and do what you think is
+  best\" on a session's finding (strength: assented; the change is the
+  session's) -- shown to everyone, since the-boildown's item 6 points every
+  reader here, and enforced at the stop hook for a branch that lands during the
+  turn. Earlier, extended 2026-09-22, Morgan (strength: decided) -- a deletion
   offer names the branch the work merged INTO, by name: \"Don't we always say
   which branch they are merged into - I thought that is a practice?!?!?!? It
   should be\". Earlier, extended 2026-09-21, Morgan (strength: decided) -- the link is
@@ -105,14 +109,16 @@ Three things the report must not get wrong, each of which fails silently:
    and the one-click promise is gone.
 3. **Say what success looks like.** After the deletion the filtered page reads
    *"no branches matched"*, which looks like an error and is not.
-4. <a id="never-a-tier-branch"></a>**Never a tier branch.** `main`, `staging`, `pre-staging`, staging's old
-   name `precedent-beta-v01` and Promote's lock branch
-   `precedent-promote-lock` are never offered for deletion, by any route,
-   whatever a merge test says: a Promote fast-forwards the lower tiers, so
-   they read as merged right after one. A filter that would also show one of
-   them on the page says so on the row. Morgan, 2026-09-28 (strength:
-   decided): *"it needs to never never offer to delete pre-staging nor
-   staging."*
+4. <a id="never-a-tier-branch"></a>**Never a long-lived branch.** `main`,
+   any other long-lived branch the repository moves its work through, and
+   any lock branch the engine keeps are never offered for deletion, by any
+   route, whatever a merge test says: a long-lived branch that is
+   fast-forwarded to match another reads as merged right after. A filter
+   that would also show one of them on the page says so on the row. Morgan,
+   2026-09-28 (strength: decided). A branch work no longer moves through is
+   not one of them: one a person has stopped landing on is offered once it
+   holds nothing the branch they land on now lacks, never before
+   (`precedent_branches.never_offered`, 2026-10-09).
 
 ## Detail
 ### Deciding which branches qualify
@@ -120,14 +126,14 @@ Three things the report must not get wrong, each of which fails silently:
 Offline, in a clone, the mechanical test is `git merge-base --is-ancestor` and
 nothing else is needed — every commit on the branch is already on a protected
 branch, so the branch carries nothing. That is what
-[tools/very_deep_check.py](../tools/very_deep_check.py) does for the checkout
+[tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py) does for the checkout
 it runs in.
 
 Over the GitHub API, with no clone, the test is four steps and step 2 is the
 one that gets skipped:
 
 1. List all branches; drop the repository's default branch, any protected
-   integration branch, and every tier branch in [rule 4 above](#never-a-tier-branch).
+   integration branch, and every long-lived branch in [rule 4 above](#never-a-tier-branch).
 2. List **closed** pull requests and keep only those whose `merged_at` is
    non-null. **A closed-unmerged pull request is not a merge.** Closing a pull
    request and deleting its branch destroys the work on it.
@@ -239,7 +245,7 @@ good to do and recommended, but not blocking."* The occasion widened from
 to the reply gate, which is the moment the naming actually happens.
 
 **The mechanism was already written once, in code, and nowhere in prose.**
-[tools/very_deep_check.py](../tools/very_deep_check.py)'s `_branch_url` had
+[tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py)'s `_branch_url` had
 carried the filtered-page form and the `safe=''` encoding since 2026-09-08,
 with Morgan's original ask in its docstring — *"make a list of them in the
 session including direct links to them so I can delete them"*. Nothing pointed
@@ -257,7 +263,7 @@ practice?!?!?!? It should be)"*.
 It was not, and the near-misses are the reason it reads like it should have
 been. This rule already required the link, and required the branch to be named
 as a candidate. A separate rule in Morgan's own set already required any branch
-mentioned to be named literally rather than by role-word. [go-update](go-update.md)
+mentioned to be named literally rather than by role-word. `go-update`
 already required the merge target to be said out loud before a merge — which
 that reply did, at the top, naming `precedent-beta-v01` and `main` for the two
 merges it had just performed. Every neighbouring rule held, and the deletion
@@ -266,11 +272,23 @@ against missing from it. A branch is deletable BECAUSE its work landed; an
 offer that omits where is asking for trust on precisely the question the
 offer rests on.
 
+**2026-10-06: shown to everyone, and enforced when a branch lands.** A
+session in a consumer Booked its branch onto pre-staging and its reply gave
+no delete link. Two causes. Nothing checked this half: the reply gate has
+said NOT YET LANDED since 2026-09-21, and nothing asked for the link once a
+branch did land. And this practice was marked for code owners only, in a
+repository that names none, so the session never saw it -- while
+the-boildown's item 6, which everyone sees, sends every reader here for the
+link's form. The mark came with the 2026-10-05 sorting of rules about
+running a repository; the link is part of the reply the person reads, so it
+goes to everyone. The stop hook now refuses a reply that lands a branch
+without its link (`require_delete_link_when_landed`).
+
 ## Install
 Two surfaces carry this, and both cite it rather than restating it:
 
-- [chief-of-staff](chief-of-staff.md) sweeps the fleet — every repository the
-  person owns carrying a Precedent install.
+- A fleet sweep, where the person's own set provides one, covers every
+  repository the person owns carrying a Precedent install.
 - [very-deep-check](very-deep-check.md)'s pass 4 sweeps the checkout it is
   running in and the sources that are their own git checkouts, and no further.
   Branch hygiene is per-repository bookkeeping, not a seam finding between two
@@ -278,7 +296,7 @@ Two surfaces carry this, and both cite it rather than restating it:
   the Chief of Staff owns and make an already expensive check more expensive
   for no new judgment.
 
-The engine side is [tools/very_deep_check.py](../tools/very_deep_check.py):
+The engine side is [tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py):
 `_branch_url` builds the link, `_delete_row_lines` renders one row, and
 `_write_branch_report` writes the committed page. A fleet sweep has no clone to
 read and works the API steps above instead.

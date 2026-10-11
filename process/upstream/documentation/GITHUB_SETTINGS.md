@@ -180,7 +180,7 @@ a path pattern followed by one or more owners — `@username` or
 **Precedent never writes CODEOWNERS by hand. It is a generated file, and its
 source is a registry** ([registry-source-of-truth](../practices/registry-source-of-truth.md)).
 Two kinds of repository, one generator,
-[tools/build_codeowners.py](../tools/build_codeowners.py):
+[tools/build_codeowners.py](https://github.com/alex137/BestPractice/blob/staging/tools/build_codeowners.py):
 
 | Repository | Registry | Generated file | What it says |
 |---|---|---|---|
@@ -213,8 +213,8 @@ against CODEOWNERS with GitHub's own matching rules and prints the sentence
 to say — *"two of these files are part of the project's machinery, so the
 maintainer has to look at them before this lands; the other three are yours
 to merge. Want those to go in on their own now?"* A documents-only pull
-request is then its author's to merge, with **Booked** (`Go update`), and no reviewer is
-involved. One touching an owned path waits for the maintainer, who reviews
+request is then its author's to merge, by asking the AI Assistant to
+merge it into main, and no reviewer is involved. One touching an owned path waits for the maintainer, who reviews
 it on GitHub like any pull request. The boundary is GitHub's; the tool only
 makes sure nobody meets it as a merge button that will not press.
 
@@ -262,7 +262,7 @@ are simpler:
 - **Private for an individual set; a shared set may be public.** A
   person's own set is the thing a public tree must never receive, and the
   leak gate checks that direction. A shared set written for anyone to
-  declare can be public (the writing and working-style sets are); its
+  declare can be public (the writing set is); its
   `precedent-source.json` records which, and nothing checks the
   repository's own visibility except a person, at creation.
 - **CODEOWNERS** at the root, generated from `approvers.json`, owning `*`.

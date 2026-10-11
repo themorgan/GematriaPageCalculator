@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_materialize.py — bridges precedent_resolve.py's multi-source
+"""Bridges precedent_resolve.py's multi-source resolution to the single-tree loader tools
+
+precedent_materialize.py — bridges precedent_resolve.py's multi-source
 resolution to the single-tree CONTENT tools (build_views.py,
 precedent_paths.py, precedent_gate.py, precedent_check.py), none of which
 understand more than one local practices/ directory.
@@ -68,6 +70,7 @@ import precedent_resolve as pr  # noqa: E402
 # offset. Never a bare datetime.date.today(): that is the container's UTC.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import precedent_time  # noqa: E402
+import precedent_source_pins as psp  # noqa: E402
 
 
 
@@ -375,20 +378,58 @@ cd "$(dirname "$0")"
 owner_of() {
   owner=''
   level=''
+  check=''
+  tsha=''
+  csha=''
   case "$1" in
 """
 RUN_ALL_TAIL = """  esac
 }
 
+# The first 16 hex digits of a file's sha256, as MANIFEST.json records it.
+_sha16() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -c1-16
+  else
+    shasum -a 256 "$1" | cut -c1-16
+  fi
+}
+
 status=0
 failed=()
+found=()
 ran=0
+trusted=0
 for t in test_*.sh; do
   # A repo that materialized no tests leaves the glob unexpanded; without
   # this the driver would try to run a file literally named test_*.sh and
   # report a failure that is really an empty set.
   [ -e "$t" ] || continue
   ran=$((ran + 1))
+  owner_of "$t"
+  # A test a source shipped, still byte-for-byte what it shipped, beside the
+  # check it tests, likewise unchanged: its source already ran it before
+  # shipping, at home and consumer-shaped (precedent_consumer_shape.py). Its
+  # fixtures test the CHECK's code, which nobody here changed; the part that
+  # judges this repo is the check itself, so that is what runs, in seconds
+  # where the self-test took minutes (2026-10-06, a consumer whose every
+  # Update Vendors spent about 7 of its minutes here, nearly all of it
+  # re-testing unchanged shipped checks). A repo-local test, an edited test
+  # or check, and PRECEDENT_RUN_ALL_SELF_TESTS=1 all run the self-test.
+  if [ -n "$owner" ] && [ "$level" != repo-local ] && [ -n "$check" ] \
+     && [ -z "${PRECEDENT_RUN_ALL_SELF_TESTS:-}" ] && [ -f "../$check" ] \
+     && [ "$(_sha16 "$t")" = "$tsha" ] && [ "$(_sha16 "../$check")" = "$csha" ]; then
+    echo "--- $t: unchanged from '$owner', which ran it before shipping; running $check on this repo instead ---"
+    trusted=$((trusted + 1))
+    ( cd ../../.. && python3 "tools/checks/$check" )
+    rc=$?
+    # 2 is a check's "does not apply here" -- a skip, never a failure.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+      status=1
+      found+=("$check")
+    fi
+    continue
+  fi
   echo "--- $t ---"
   if ! bash "$t"; then
     status=1
@@ -403,8 +444,20 @@ if [ "$ran" -eq 0 ]; then
 elif [ "$status" -eq 0 ]; then
   echo "run_all: $ran test(s) run, 0 failed"
 fi
+if [ "$trusted" -gt 0 ]; then
+  echo "run_all: $trusted of them unchanged from their source, so only their check ran on this repo;"
+  echo "    PRECEDENT_RUN_ALL_SELF_TESTS=1 runs their self-tests too"
+fi
 
-if [ "$status" -ne 0 ]; then
+if [ "${#found[@]}" -gt 0 ]; then
+  echo
+  echo "=== ${#found[@]} check(s) found problems in this repo's own files ==="
+  for c in "${found[@]}"; do
+    echo "FAILED: $c -- its findings are above; they are this repo's to fix, not the source's"
+  done
+fi
+
+if [ "${#failed[@]}" -gt 0 ]; then
   echo
   # A test that clones this repo runs the COMMITTED checks, not the ones on
   # disk. With tools/checks/ changed and not committed -- the state an
@@ -446,7 +499,7 @@ exit $status
 """
 
 
-def _run_all_script(test_owners):
+def _run_all_script(test_owners, fingerprints=None):
     """The generated driver, with `test_owners` ({test filename: (source
     name, level)}) written into its owner_of table.
 
@@ -468,12 +521,45 @@ def _run_all_script(test_owners):
     that one, and in none of the source's own runs. Naming the owner, and
     saying that a failure is that owner's bug, is what turns the red line
     into a report someone can act on."""
+    fingerprints = fingerprints or {}
     lines = []
     for name in sorted(test_owners):
         src, level = test_owners[name]
+        extra = ''
+        if name in fingerprints:
+            check, tsha, csha = fingerprints[name]
+            extra = (f" check={shlex.quote(check)}; tsha={tsha}; "
+                     f"csha={csha};")
         lines.append(f"    {shlex.quote(name)}) owner={shlex.quote(src)}; "
-                     f"level={shlex.quote(level)} ;;\n")
+                     f"level={shlex.quote(level)};{extra} ;;\n")
     return RUN_ALL_HEAD + ''.join(lines) + RUN_ALL_TAIL
+
+_CLAIMED_CACHE = {}
+
+
+def _claimed_in_source(source_path):
+    """-> {check and test file names} that any practice file in the source at
+    `source_path` names in `checked_by`, whatever its status."""
+    key = str(pathlib.Path(source_path).resolve())
+    if key in _CLAIMED_CACHE:
+        return _CLAIMED_CACHE[key]
+    names = set()
+    pdir = pathlib.Path(source_path) / 'practices'
+    for pf in (sorted(pdir.glob('*.md')) if pdir.is_dir() else []):
+        try:
+            head = pf.read_text(encoding='utf-8', errors='replace')[:4000]
+        except OSError:
+            continue
+        m = re.search(r'^checked_by:\s*(\S+)', head, re.M)
+        if not m:
+            continue
+        cb = m.group(1).strip('"\'')
+        if cb.endswith('.py') and '/checks/' in cb:
+            stem = pathlib.PurePath(cb).stem
+            names.update({f'{stem}.py', f'{stem.replace("check_", "test_", 1)}.sh'})
+    _CLAIMED_CACHE[key] = names
+    return names
+
 
 def _plan_checks(sources, res=None):
     """Read every source's per-check tools/checks/check_*.py and
@@ -585,6 +671,50 @@ def _plan_checks(sources, res=None):
         owner_of[key] = source_name
         plan.append((rel_label, src_file.name, source_name, src_file.read_bytes()))
 
+    def held_back(name, source_path):
+        """True when a practice file in the script's OWN source names it in
+        `checked_by` -- a rule that source keeps out of force here on
+        purpose (deduplicated, retired), whose check still runs in that
+        source's own repository. Not an orphan, and not worth a line on
+        every sync (reported from a consumer, 2026-10-06: every sync listed
+        the individual set's three such checks)."""
+        return name in _claimed_in_source(source_path)
+
+    # Which sources ship each check and test, so a copy claimed from another
+    # source is judged by whether that source ships one too (claimed_elsewhere).
+    ships = {}
+    for s in sources:
+        d = pathlib.Path(s['path']) / 'tools' / 'checks'
+        for f in ((list(d.glob('check_*.py')) + list((d / 'tests').glob('test_*.sh')))
+                  if d.is_dir() else []):
+            ships.setdefault(f.name, []).append(s['name'])
+    shadowed = []   # (label, the source whose copy runs, the one left behind)
+
+    def claimed_elsewhere(f, label, s):
+        """A copy whose name a practice in force claims from ANOTHER source
+        (unclaimed_here). Claimed is claimed, whichever source supplies the
+        file: where a claiming source ships its own copy, that one runs and
+        this one is left behind, said plainly below unless this source's own
+        practice file keeps it out on purpose (held_back); where none does,
+        this copy is the one the practice in force needs, and is vendored.
+        2026-10-08, a consumer: universal ships scrubbed copies of the
+        individual set's commit-author and buenos-aires-dates checks, the
+        individual set's practices claim them in force there, and every sync
+        listed universal's copies as claimed by nothing."""
+        # A check and its test go together: a claiming source that ships
+        # either one keeps both, so another source's test is never run
+        # against this source's check.
+        stem = f.name[len('check_'):-len('.py')] if f.name.endswith('.py') \
+            else f.name[len('test_'):-len('.sh')]
+        pair = (f'check_{stem}.py', f'test_{stem}.sh')
+        owners = sorted(o for o in claimed_by.get(f.name, ())
+                        if any(o in ships.get(n, ()) for n in pair))
+        if owners:
+            if not held_back(f.name, s['path']):
+                shadowed.append((f'tools/{label}/{f.name}', owners[0], s['name']))
+        elif f'{label}/{f.name}' not in owner_of:
+            claim(f, label, s['name'])
+
     for s in sources:
         src_checks = pathlib.Path(s['path']) / 'tools' / 'checks'
         if not src_checks.is_dir():
@@ -592,9 +722,11 @@ def _plan_checks(sources, res=None):
         for f in sorted(src_checks.glob('*.py')):
             if not f.name.startswith('check_'):
                 skipped.append(f'tools/checks/{f.name} ({s["name"]})')
-            elif claimed_names is not None and (f.name not in claimed_names
-                                                or unclaimed_here(f.name, s['name'])):
-                orphaned.append(f'tools/checks/{f.name} ({s["name"]})')
+            elif claimed_names is not None and f.name not in claimed_names:
+                if not held_back(f.name, s['path']):
+                    orphaned.append(f'tools/checks/{f.name} ({s["name"]})')
+            elif claimed_names is not None and unclaimed_here(f.name, s['name']):
+                claimed_elsewhere(f, 'checks', s)
             else:
                 claim(f, 'checks', s['name'])
         src_tests = src_checks / 'tests'
@@ -608,9 +740,11 @@ def _plan_checks(sources, res=None):
                         undeclared.append(f'{s["name"]} ({f})')
                 elif not f.name.startswith('test_'):
                     skipped.append(f'tools/checks/tests/{f.name} ({s["name"]})')
-                elif claimed_names is not None and (f.name not in claimed_names
-                                                    or unclaimed_here(f.name, s['name'])):
-                    orphaned.append(f'tools/checks/tests/{f.name} ({s["name"]})')
+                elif claimed_names is not None and f.name not in claimed_names:
+                    if not held_back(f.name, s['path']):
+                        orphaned.append(f'tools/checks/tests/{f.name} ({s["name"]})')
+                elif claimed_names is not None and unclaimed_here(f.name, s['name']):
+                    claimed_elsewhere(f, 'checks/tests', s)
                 else:
                     claim(f, 'checks/tests', s['name'])
     if skipped:
@@ -619,6 +753,12 @@ def _plan_checks(sources, res=None):
     if orphaned:
         print(f"precedent_materialize: no practice in force here claims these, "
               f"not vendored: " + ', '.join(orphaned), file=sys.stderr)
+    checks_shadowed = [x for x in shadowed if '/tests/' not in x[0]]
+    if checks_shadowed:
+        print("precedent_materialize: " + '; '.join(
+            f"{label} runs from {runs}, whose practice in force claims it "
+            f"({left}'s copy is not vendored)" for label, runs, left in checks_shadowed),
+            file=sys.stderr)
     if undeclared:
         print(f"precedent_materialize: replaced here by the generated "
               f"driver, and the source's own tools/checks/tests/"
@@ -629,8 +769,20 @@ def _plan_checks(sources, res=None):
     test_owners = {filename: (source_name, level_of.get(source_name, 'unknown'))
                    for rel_label, filename, source_name, _data in plan
                    if rel_label == 'checks/tests'}
+    # Each shipped test's fingerprint, and its check's, as shipped: the
+    # driver runs only the check where both still match (RUN_ALL_TAIL says
+    # why). Hashed exactly as MANIFEST.json's checks[] records them.
+    shipped = {(rel, fn): data for rel, fn, _src, data in plan}
+    fingerprints = {}
+    for filename in test_owners:
+        check = 'check_' + filename[len('test_'):-len('.sh')] + '.py'
+        if ('checks', check) in shipped:
+            fingerprints[filename] = (
+                check,
+                hashlib.sha256(shipped[('checks/tests', filename)]).hexdigest()[:16],
+                hashlib.sha256(shipped[('checks', check)]).hexdigest()[:16])
     plan.append(('checks/tests', RUN_ALL_NAME, GENERATED_SOURCE,
-                 _run_all_script(test_owners).encode('utf-8')))
+                 _run_all_script(test_owners, fingerprints).encode('utf-8')))
     return plan
 
 
@@ -977,6 +1129,51 @@ def _prior_ship_hashes(out_dir):
             if isinstance(s, dict) and isinstance(s.get('path'), str)}
 
 
+# The permanent hook stub (templates/harness/claude-code/hooks/, since
+# 2026-10-07) runs tools/<its own name> and does nothing when that script is
+# missing. A source's adapters started shipping it on 2026-10-08, so a sync
+# in a repo whose engine predates the move replaced three working hooks
+# (commit identity, freshness guard, individual-set setup) with pointers to
+# scripts the repo did not have: each then printed one NOTE and let
+# everything through. Found by a session that read the diff before
+# committing; nothing in the sync said so.
+HOOK_STUB_MARKER = b'# PRECEDENT HOOK STUB.'
+
+
+def _stub_target(data, dest_rel):
+    """-> the script under tools/ a stub runs: the one it names outright
+    (the individual-source form runs tools/individual-source-bootstrap.sh
+    whatever it is installed as), else tools/<its own name>, which the
+    generic stub reads from $0."""
+    named = re.findall(rb'/tools/([A-Za-z0-9_.-]+\.sh)\b', data)
+    if named:
+        return named[0].decode('ascii')
+    return pathlib.PurePosixPath(dest_rel).name
+
+
+def _held_adapter(out_dir, dest_rel, data):
+    """-> (bytes, executable) of the hook to keep in place of `data`, or None
+    to install `data` as usual.
+
+    Kept only when all three hold: `data` is the pointer stub; the script it
+    would run, tools/<basename>, is not in this repo; and a hook that is not
+    itself the stub is installed at the destination. With nothing installed
+    there, the stub loses nothing and is written, and says itself what it
+    is waiting for every time it runs."""
+    if HOOK_STUB_MARKER not in data:
+        return None
+    out_dir = pathlib.Path(out_dir)
+    dest = out_dir / dest_rel
+    if (out_dir / 'tools' / _stub_target(data, dest_rel)).is_file():
+        return None
+    if not dest.is_file():
+        return None
+    have = dest.read_bytes()
+    if HOOK_STUB_MARKER in have:
+        return None
+    return have, os.access(dest, os.X_OK)
+
+
 def _prior_adapter_hashes(out_dir):
     """{destination: sha256_16} from the manifest this tree ALREADY carries --
     what the last sync says it installed, which is what separates an ordinary
@@ -1096,7 +1293,7 @@ def _materialize(sources, res, out_dir, dry_run=False, withheld=None,
         placed = _rewrite_links(data, practice['file'], out_dir,
                                 sibling_slugs=all_slugs,
                                 planned_out=planned_out,
-                                may_name_source_repo=practice['level'] != 'individual',
+                                may_name_source_repo=pr.normalize_level(practice['level']) != 'individual',
                                 forwards=forwards, forward_files=forward_files)
         if not dry_run:
             dest.write_bytes(placed)
@@ -1125,8 +1322,16 @@ def _materialize(sources, res, out_dir, dry_run=False, withheld=None,
     adapters_written = []
     prior_adapters = _prior_adapter_hashes(out_dir)
     adopted = []
+    held = []
     for dest_rel, source_name, data, executable in adapters_plan:
         dest = out_dir / dest_rel
+        keep = _held_adapter(out_dir, dest_rel, data)
+        if keep is not None:
+            # The working hook stays, recorded as what this tree installed,
+            # so --check agrees with it and the next sync after Update
+            # Vendors replaces it as an ordinary update.
+            data, executable = keep
+            held.append(f'{dest_rel} ({source_name})')
         want = hashlib.sha256(data).hexdigest()[:16]
         if dest.is_file():
             have = hashlib.sha256(dest.read_bytes()).hexdigest()[:16]
@@ -1159,6 +1364,15 @@ def _materialize(sources, res, out_dir, dry_run=False, withheld=None,
               "that no declared source publishes any more -- left in place, "
               "not deleted. Remove each by hand once you have checked nothing "
               "still wires it: " + ', '.join(stale_adapters), file=sys.stderr)
+
+    if held:
+        print("precedent_materialize: KEPT the current hook(s) "
+              + ', '.join(held) + ": the source's new version is the "
+              "pointer stub, which runs tools/<the hook's name>, and this "
+              "repo does not have that script yet -- installing it would "
+              "switch the hook off. Run Update Vendors: it brings the "
+              "scripts, and the next sync installs the pointer.",
+              file=sys.stderr)
 
     if adopted and not dry_run:
         print("precedent_materialize: harness adapter(s) whose previous "
@@ -1214,7 +1428,7 @@ def _materialize(sources, res, out_dir, dry_run=False, withheld=None,
                                adapters_written, withheld=withheld,
                                excluded_engine_dev=excluded_engine_dev,
                                ships_written=ships_written,
-                               declined_ships=declined_rows)
+                               declined_ships=declined_rows, base=out_dir)
     if not dry_run:
         write_manifest(out_dir / 'MANIFEST.json', manifest)
     return {'written': written, 'checks': checks_written,
@@ -1240,10 +1454,51 @@ def write_manifest(mf, manifest):
                   encoding='utf-8')
 
 
+# Where a source sits, as the manifest records it. A source inside the
+# directory the manifest describes is recorded relative to it, as
+# precedent.json declares it: the resolved absolute path named the checkout
+# that ran the sync, so the same commit checked from another checkout --
+# the throwaway worktree a Promote checks its composition in, or another
+# machine -- "differed from what a fresh sync writes" with nothing stale
+# (a consumer's Promote, 2026-10-04). A source outside it keeps its absolute
+# path: that is where this machine found it, nothing else can say so, and
+# _check compares only its level and name.
+def _manifest_source_path(path, base):
+    try:
+        rel = pathlib.Path(path).resolve().relative_to(pathlib.Path(base).resolve())
+    except (ValueError, OSError, TypeError):
+        return path
+    return rel.as_posix() or '.'
+
+
+def _outside(entry):
+    """True for a recorded source path outside the manifest's directory."""
+    path = str((entry or {}).get('path') or '')
+    return path.startswith(('/', '~')) or '..' in pathlib.PurePosixPath(path).parts
+
+
+def _source_entry(source, base):
+    """One `sources` entry. A source read from a git checkout outside this
+    tree also records the COMMIT it was read at (precedent_source_pins.py):
+    the views check reads the source back at that commit, so its answer
+    depends on neither the clone's checkout nor how far the source has moved
+    since. A checkout with uncommitted changes records none -- those changes
+    are on no commit anybody else can read."""
+    shown = source.get('clone_path') or source['path']
+    entry = {'level': source['level'], 'name': source['name'],
+             'path': (shown if base is None
+                      else _manifest_source_path(shown, base))}
+    if base is not None and _outside(entry):
+        commit = psp.head_commit(source['path'])
+        if commit and not psp.is_dirty(source['path']):
+            entry['commit'] = commit
+    return entry
+
+
 def _build_manifest(sources, written, checks_written, rstats,
                     adapters_written=(), withheld=None,
                     excluded_engine_dev=None, ships_written=(),
-                    declined_ships=()):
+                    declined_ships=(), base=None):
     """`withheld` names the slugs a PUBLIC repo's visibility keeps out of this
     tree -- recorded because "absent" and "never existed" look identical on
     disk, and several checks turn that difference into a finding.
@@ -1271,8 +1526,7 @@ def _build_manifest(sources, written, checks_written, rstats,
                 'precedent_materialize.py with the same --repo/--user-config; '
                 'this file records exactly what produced the snapshot so drift '
                 'is visible, per generated-artifact-provenance.',
-        'sources': [{'level': s['level'], 'name': s['name'], 'path': s['path']}
-                    for s in sources],
+        'sources': [_source_entry(s, base) for s in sources],
         'resident': rstats,
         'practices': written,
         'checks': checks_written,
@@ -1415,7 +1669,7 @@ def drift(sources, res, out_dir, withheld=None):
                            adapters_written, withheld=withheld,
                            excluded_engine_dev=excluded_engine_dev,
                            ships_written=plan['ships'],
-                           declined_ships=plan['declined_ships'])
+                           declined_ships=plan['declined_ships'], base=out_dir)
     if not mf.is_file():
         found.append('MANIFEST.json is missing -- a fresh sync writes it')
     else:
@@ -1428,6 +1682,17 @@ def drift(sources, res, out_dir, withheld=None):
             have.pop('generated_at_utc', None)
             want_cmp = dict(want)
             want_cmp.pop('generated_at_utc', None)
+            # A source outside this directory is compared by level and name:
+            # its path is where the checkout that synced found it, which
+            # another machine's layout changes with nothing stale. Its
+            # commit is provenance, like the timestamp: the content it
+            # produced is what is compared, file by file, above.
+            for side in (have, want_cmp):
+                if isinstance(side.get('sources'), list):
+                    side['sources'] = [
+                        {k: v for k, v in e.items() if k not in ('path', 'commit')}
+                        if isinstance(e, dict) and _outside(e) else e
+                        for e in side['sources']]
             if have != want_cmp:
                 found.append('MANIFEST.json differs from what a fresh sync writes '
                               '(ignoring its generated_at_utc timestamp)')

@@ -39,8 +39,21 @@ local_session="${PRECEDENT_LOCAL_SESSION:-}"
 if [ "$local_session" = "1" ]; then
   echo "NOTE: local session -- skipped pip install (cmarkgfm markdown); this machine manages its own packages. doc_lint's strikethrough check needs cmarkgfm installed by hand." >&2
 else
-  pip install --quiet cmarkgfm markdown 2>/dev/null || \
-    echo "WARN: pip install failed - doc_lint strikethrough check will be skipped" >&2
+  # pip's own last line goes into the warning, and the import is checked
+  # after: a consumer's first prompt warned the markdown package was
+  # missing, the push check later installed it without trouble, and with
+  # the error thrown away nothing said why (2026-10-04). A `pip` that
+  # belongs to another Python than python3 installs quietly and fails the
+  # import check, so that case is said too.
+  _pip_rc=0
+  _pip_log="$(mktemp 2>/dev/null || echo /tmp/precedent-pip.$$)"
+  pip install --quiet cmarkgfm markdown 2>"$_pip_log" >/dev/null || _pip_rc=$?
+  if [ "$_pip_rc" -ne 0 ]; then
+    echo "WARN: pip install failed - doc_lint strikethrough check will be skipped: $(tail -n 1 "$_pip_log")" >&2
+  elif ! python3 -c 'import cmarkgfm, markdown' 2>/dev/null; then
+    echo "WARN: pip install reported success but $(command -v python3) cannot import cmarkgfm and markdown -- pip may belong to another Python: $(command -v pip)" >&2
+  fi
+  rm -f "$_pip_log"
 fi
 
 # Set the commit author to whoever is actually running this session, not
@@ -62,6 +75,14 @@ if [ "$local_session" != "1" ] && [ -f .claude/hooks/commit-identity.sh ]; then
     echo "WARN: commit-identity.sh failed - commits may be authored as whatever git is already configured with" >&2
 fi
 
+# Where this session starts, recorded now: the branch and commit, so the
+# session check's "still on the branch it started on" row compares against
+# the real start and not against wherever its first run happened to be
+# (2026-10-09). Overwrites any earlier record; prints nothing.
+if [ -f tools/precedent_session_check.py ]; then
+  python3 tools/precedent_session_check.py --stamp-start 2>/dev/null || true
+fi
+
 # Clone every shared practice set precedent.json declares, beside this repo,
 # where the environment carries a credential (PRECEDENT_GIT_TOKEN and
 # PRECEDENT_SOURCE_BASE_URL -- documentation/PER_MACHINE_SETUP.md); pull the
@@ -80,6 +101,18 @@ fi
 # declares a shared set and wires nothing that clones it.
 if [ -f precedent.json ] && [ -f tools/precedent_source_bootstrap.py ]; then
   python3 tools/precedent_source_bootstrap.py --sources-from . --remote-only false || true
+fi
+
+# The practices in force here that AGENTS.md cannot carry -- a set the person
+# brings, above all -- written to .precedent/SESSION_PRACTICES.md and PRINTED,
+# since this script's output is what reaches the session. Until 2026-10-04 no
+# consumer step ran it: a set's own hook did, and a consumer declines that
+# hook, so the ladder's stage words reached a consumer session nowhere and a
+# session there searched the clones for "Debut". After the clone above, so a
+# set it brings is on disk to render.
+if [ -f precedent.json ] && [ -f tools/precedent_session_practices.py ]; then
+  python3 tools/precedent_session_practices.py || \
+    echo "WARN: could not write .precedent/SESSION_PRACTICES.md - this session is not being shown the practices in force here that AGENTS.md does not carry" >&2
 fi
 
 # Repair a single-branch clone's refspec before anything tries to fetch.
@@ -106,6 +139,17 @@ if git rev-parse --git-dir >/dev/null 2>&1 && git remote get-url origin >/dev/nu
     git config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' 2>/dev/null && \
       echo "NOTE: this clone fetched only one branch; widened remote.origin.fetch so other branches resolve. (See AGENTS.md gotchas: a single-branch clone makes every other branch read as 'unpushed' forever.)" >&2
   fi
+  # A DELETED BRANCH'S TRACKING REF IS PRUNED (2026-10-08). When a person
+  # deletes a merged branch on GitHub, nothing here removed origin/<branch>,
+  # so the cloud stop hook kept comparing HEAD with it: after the
+  # fast-forward below, already-merged commits read as "unpushed", and the
+  # push it asked for re-created the branch the person had just deleted
+  # (a consumer, 2026-10-07, twice). fetch.prune makes every later fetch
+  # drop such refs; the one prune here clears what is stale already, since
+  # the fetches below name one branch and prune nothing else. It removes
+  # only remote-tracking refs, never a local branch or a commit.
+  git config fetch.prune true 2>/dev/null
+  timeout 30 git remote prune origin >/dev/null 2>&1 || true
 fi
 
 # Is THIS checkout current with its own origin -- and if not, MAKE it current.
@@ -279,7 +323,7 @@ fi
 # the session.
 if [ -f tools/precedent_sync_views.py ] && [ -f precedent.json ]; then
   if ! python3 tools/precedent_sync_views.py --repo . --check >/dev/null 2>&1; then
-    echo "WARN: AGENTS.md's generated loader block is out of date with precedent.json's sources. Fix: python3 tools/precedent_sync_views.py --repo ., review the diff, commit." >&2
+    echo "WARN: this repository's generated views (AGENTS.md's loader block, MAP.md, GLOSSARY.md) are out of date: a practice source it declares changed since the last sync. Fix: python3 tools/precedent_sync_views.py --repo ., review the diff, commit -- the push check refuses a stale view from the next push on." >&2
   fi
 fi
 
@@ -329,8 +373,14 @@ fi
 # The repo's own tools/ only: the catalogue copy leaves tools/ out once the
 # vendored engine carries checkin.py, and only an update writes this file,
 # so no repo running it still has process/upstream/tools/ (2026-09-30).
+#
+# Not where the notice below runs (2026-10-10): precedent_engine_freshness.py
+# reads process/manifest.json too, so the same upstream move came out here
+# as "NOTICE: BestPractice upstream has moved" and again there, three lines
+# for one fact. This line is kept for an install that has no such tool.
 for _ck in tools/checkin.py; do
-  if [ -f process/manifest.json ] && [ -f "$_ck" ]; then
+  if [ -f process/manifest.json ] && [ -f "$_ck" ] && \
+     [ ! -f tools/precedent_engine_freshness.py ]; then
     python3 "$_ck" fresh || \
       echo "WARN: upstream freshness check failed - not verified" >&2
     break
@@ -388,6 +438,15 @@ if [ -f tools/precedent_check.py ] && [ -f tools/ENGINE_MANIFEST.json ] && \
     { grep -E '^    \.github/workflows/' <<<"$_wf_out" | cut -c1-400 >&2; } || true
     echo "  Show the person each one and ask before doing anything else (practice: ci-workflow-approved)." >&2
   fi
+fi
+
+# OPEN FAILURES (2026-10-08): a failure an unattended job could not report
+# anywhere else (no issues API, `gh` not signed in) is filed as an open
+# blocker item under todo/ and pushed (tools/open_failures.py, practice:
+# automation-issues). Listed here, on stdout, so a session's first context
+# names it, whichever harness started the session. Never gates.
+if [ -f tools/open_failures.py ]; then
+  python3 tools/open_failures.py 2>/dev/null || true
 fi
 
 # THIS REPOSITORY'S OWN STEPS go in tools/bootstrap.local.sh, never in this

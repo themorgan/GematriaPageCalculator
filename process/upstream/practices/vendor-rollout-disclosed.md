@@ -7,23 +7,24 @@ applies_to:  ["practices/*.md", "templates/**", ".claude/hooks/*.sh"]
 applies_to_why: "A real locus for most of what it governs -- a practice file, a template, a hook script -- but not all of it: the engine files this also covers are named individually in tools/precedent_vendor_engine.py's ENGINE_FILES/CONSUMER_ENGINE_FILES lists rather than matched by a path glob, since that set is a curated allowlist, not every *.py file under tools/. Reached for those by the gates below instead. Decided: 2026-09-18, when the practice landed."
 occasion:    "committing a shipped practice, hook, template or engine file, before push or merge"
 gates:       ["merge", "push"]
-gates_why:   "The disclosure has to land before the shared-branch step, not after -- both moments a change could reach a consumer without it. index_required: false: the push and merge gates print it before anything ships, and the vendoring-decided check refuses a new file with no vendoring rule. Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+gates_why:   "The disclosure has to land before the shared-branch step, not after -- both moments a change could reach a consumer without it. index_required: false: the push and merge gates print it before anything ships, and the vendoring-decided check refuses a new file with no vendoring rule. Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)."
 index_clause: "say whether shipped content must reach consumers, if it will, how it migrates"
 index_required: false
 checked_by:  null
 defines:     []
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       "2026-09-18"
-approved_by: "Morgan, 2026-09-18; the third question, Morgan, 2026-09-29 (decided); the fourth question, Morgan, 2026-09-29 (assented); the fifth question, Morgan, 2026-09-30 (decided); index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+approved_by: "Morgan, 2026-09-18; the third question, Morgan, 2026-09-29 (decided); the fourth question, Morgan, 2026-09-29 (assented); the fifth question, Morgan, 2026-09-30 (decided); index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05); requires: named for engine features, Morgan F, 2026-10-07 (decided)"
 strength:    assented
 ---
 ## Rule
 Before a commit that touches shipped content -- a file under `practices/`,
 `templates/`, `.claude/hooks/`, or one of the exact filenames in
-[tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)'s
+[tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py)'s
 `ENGINE_FILES`/`CONSUMER_ENGINE_FILES` lists -- or that adds a file
 anywhere, reaches the push or merge side of the chain, say five things out
 loud, not one:
@@ -52,9 +53,18 @@ loud, not one:
    older repository lacks means the old behaviour, never a refusal**; an
    older engine reading the new shape keeps working; Update Vendors or the
    installer brings the new piece forward on its own; and a test plants the
-   not-yet-updated shape and shows it still builds. A change that cannot be
+   not-yet-updated shape and shows it still builds. **A practice that needs
+   an engine feature names it in `requires:`** (`engine:practice-hooks`),
+   so an older engine holds it back, check and all, rather than install a
+   check it cannot pass; a set moves on its own schedule and cannot know
+   which engine it lands on. A change that cannot be
    made safe that way says so here, with what a repository has to do
-   first.
+   first. **A format rule that tightens names every file it binds, a
+   consumer's own repo-local practices included, not only the sets'**:
+   tidying the sets is not the rollout when consumers hold practice files
+   of their own. Reported 2026-10-06: the 2026-10-05 field-order check
+   was made hard after the sets were tidied, and 23 of one consumer's
+   repo-local practices failed on its next update.
 4. **Has a new or changed check run in a consuming repo that received
    other sources' files?** A consumer holds practices and checks its sets
    wrote, and the vendored engine, and a check can judge those copies
@@ -65,7 +75,7 @@ loud, not one:
 5. **Should each new file ship to consumers at all?** Run
    `python3 tools/checkin.py rules`: it lists every file added since the
    landing branch, whether it ships, and the rule in
-   [tools/checkin.py](../tools/checkin.py)'s `VENDORING_RULES` that says so.
+   [tools/checkin.py](https://github.com/alex137/BestPractice/blob/staging/tools/checkin.py)'s `VENDORING_RULES` that says so.
    **A file ships only if a consumer runs it, instantiates it, or its
    people read it to adopt and use Precedent. Ship the machinery, never
    this project's own records:** a consumer gets the tools that keep an
@@ -134,6 +144,19 @@ using Precedent runs into, and environment-gotchas tells it to search them
 
 **Off the occasion index from 2026-10-01** (`index_required: false`). The reduction pass for precedent-individual's session-start file ([the session-file open item](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)) counted this among the lines the push already covers: the push and merge gates print it before anything ships, and the vendoring-decided check refuses a new file with no rule. Its paths still reach it. Morgan approved (strength: decided): *"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)"*
 
+
+2026-10-07: precedent-shared-writing's dated-download-names declared a hook
+in `hooks:` and shipped a check requiring it. A consumer whose vendored
+engine predated wiring declared hooks synced the set, got the check, could
+not satisfy it (and could not edit its own `.claude/settings.json`), and an
+unrelated merge into pre-staging was refused. The rule above already said
+a new check must mean the old behaviour where the update has not arrived;
+what was missing was a way for a set to say so. `requires:` had held
+practices back on a missing capability since 2026-10-02, so the engine now
+lists its own (`ENGINE_CAPABILITIES` in tools/precedent_resolve.py), and a
+sync says which practices it holds back for a newer engine (Morgan F,
+"go ahead and do the fixes you think are best at the root level",
+strength: decided).
 ## Install
 No mechanical check, and this is a considered gap, not the first
 plausible-sounding reason. Two designs were considered and both fail for

@@ -1,4 +1,6 @@
-"""A memo key over the code a solve actually reaches (practice
+"""A memo key over the code a solve can reach -- syntax trees of the definitions and constants an entry function touches, so an edit the solve never runs re-keys nothing
+
+A memo key over the code a solve actually reaches (practice
 `slow-steps-report-and-cache`: a heavy solve caches to disk, keyed on what
 can change its result; companion of `shared-result-cache`).
 
@@ -743,7 +745,15 @@ def reach_key(path, entries, search_dirs=(), extra=b"", root=None, trace=None, s
                 continue
             closure.add(p)
             m = R.load(p)
-            for q in _all_imports(R, m):
+            # one module's imports resolve the same for every entry that
+            # reaches it: walked once per session, not once per entry
+            ik = ("imports", m, dirs_key)
+            qs = _SESSION.get(ik) if _SESSION is not None else None
+            if qs is None:
+                qs = _all_imports(R, m)
+                if _SESSION is not None:
+                    _SESSION[ik] = qs
+            for q in qs:
                 if q not in closure:
                     todo.append(q)
         if _SESSION is not None:

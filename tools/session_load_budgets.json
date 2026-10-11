@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Seeded at Update Vendors (practice: session-load-budget) so the early-warning notice starts ON. headroom_floor_pct matches BestPractice's own value; each surface's ceiling is measured plus ~20% headroom, the convention every hand-written entry in that repo already uses. .precedent/SESSION_PRACTICES.md is regenerated at every session start and grows with the universal catalogue, so re-measure it when it trips rather than reading the trip as this set growing. A ceiling is a watermark, not an endorsement: review and reduce, never just raise, when it is crossed for real."
+  ],
+  "headroom_floor_pct": 5,
+  "surfaces": {
+    "AGENTS.md": {
+      "ceiling": 7950,
+      "_note": "6592 tokens measured at Update Vendors (2026-10-11). Ceiling is current + ~20%."
+    },
+    "CLAUDE.md": {
+      "ceiling": 50,
+      "_note": "1 tokens measured at Update Vendors (2026-10-11). Ceiling is current + ~20%."
+    },
+    ".precedent/SESSION_PRACTICES.md": {
+      "ceiling": 2000,
+      "_note": "1652 tokens measured at Update Vendors (2026-10-11). Ceiling is current + ~20%."
+    }
+  },
+  "approved_budgets": {
+    "occasion_index": {
+      "max": 2900,
+      "strength": "baseline",
+      "approved_by": "baseline 2026-10-11: seeded by Update Vendors with the registry, at the values in force"
+    },
+    "resident_block_tokens": {
+      "max": 2000,
+      "strength": "baseline",
+      "approved_by": "baseline 2026-10-11: seeded by Update Vendors with the registry, at the values in force"
+    },
+    "surfaces/.precedent/SESSION_PRACTICES.md": {
+      "max": 2000,
+      "strength": "baseline",
+      "approved_by": "baseline 2026-10-11: seeded by Update Vendors with the registry, at the values in force"
+    },
+    "surfaces/AGENTS.md": {
+      "max": 7950,
+      "strength": "baseline",
+      "approved_by": "baseline 2026-10-11: seeded by Update Vendors with the registry, at the values in force"
+    },
+    "surfaces/CLAUDE.md": {
+      "max": 50,
+      "strength": "baseline",
+      "approved_by": "baseline 2026-10-11: seeded by Update Vendors with the registry, at the values in force"
+    }
+  }
+}

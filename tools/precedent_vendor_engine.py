@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_vendor_engine.py — vendors Precedent's engine into a repo that
+"""Vendors the minimal source-repo engine (this file, precedent_gate/paths/show.py, split_practices.py, a trimmed routing_scope.json) into an individual or shared set, and keeps it refreshable
+
+precedent_vendor_engine.py — vendors Precedent's engine into a repo that
 consumes it, as real tracked files instead of an undocumented hand-copy.
 Two KINDS, sharing one mechanism:
 
@@ -209,15 +211,33 @@ Five subcommands:
                                   RETIRED_CI_WORKFLOW_FILES entry the
                                   manifest still carries.
 
+  drop-retired [REPO] [--dry-run] [--offline]
+                                 Clone-free. Drop from REPO's precedent.json
+                                  every shared or individual set that says
+                                  it is retired (`"retired"` in its own
+                                  precedent-source.json) or that GitHub
+                                  reports archived -- but only when every
+                                  active rule it holds is in force in
+                                  another declared source; otherwise it is
+                                  kept and the rule is named. "Not Found"
+                                  is reported, never acted on. Update
+                                  Vendors runs this on its own.
+
 Run (from an already-vendored repo's own checkout, either kind):
   python3 tools/precedent_vendor_engine.py fresh
   python3 tools/precedent_vendor_engine.py status  ../BestPractice
   python3 tools/precedent_vendor_engine.py refresh ../BestPractice
   python3 tools/precedent_vendor_engine.py record-ci
+  python3 tools/precedent_vendor_engine.py drop-retired .
 
 Run once, from BestPractice's own checkout, to vendor a NEW consumer repo
 (status/refresh above then work unchanged, kind auto-detected):
   python3 tools/precedent_vendor_engine.py seed <consumer-repo> --kind consumer
+
+seed copies this checkout's HEAD, and refuses a HEAD that main does not
+contain: such an engine is one main has never had, and no refresh brings
+it current until that work lands. --off-main does it on purpose, and the
+manifest then names the real branch as seeded_from_branch (2026-10-02).
 
 SOURCE_BRANCH is 'main', for every install at once, since 2026-09-25 --
 the branch whose content has passed every local check AND the GitHub test
@@ -249,7 +269,128 @@ HERE = pathlib.Path(__file__).resolve()
 ENGINE_DIR = HERE.parent
 ROOT = ENGINE_DIR.parent
 SOURCE_REPO = 'https://github.com/alex137/BestPractice'
-SOURCE_BRANCH = 'main'  # every install follows it -- see docstring
+SOURCE_BRANCH = 'main'  # the default every install follows -- see docstring
+
+# A BestPractice clone is known by its origin, not its directory name.
+# 2026-10-08, from a consumer: the attach tool cloned it at a lowercase
+# <owner>/<repo> path (alex137/bestpractice), and the runbook's
+# ../BestPractice found nothing there. Any host, any case, .git or not.
+_SOURCE_ORIGIN = re.compile(r'[/:]alex137/bestpractice(?:\.git)?/*$', re.I)
+
+
+def is_source_clone(path):
+    """True when `path` is the top of a git checkout whose origin is
+    BestPractice and which carries tools/precedent_update.py."""
+    path = pathlib.Path(path)
+    if not ((path / '.git').exists()
+            and (path / 'tools' / 'precedent_update.py').is_file()):
+        return False
+    r = subprocess.run(['git', '-C', str(path), 'remote', 'get-url', 'origin'],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and bool(_SOURCE_ORIGIN.search(r.stdout.strip()))
+
+
+def find_source_clones(near):
+    """-> the BestPractice clones near the repository `near`, by origin: its
+    siblings, and one level further down for the attach tool's
+    <owner>/<repo> layout. ../BestPractice first when it is one."""
+    near = pathlib.Path(near).resolve()
+    base = near.parent
+    found = []
+    try:
+        cands = [base / 'BestPractice'] + sorted(base.iterdir()) + sorted(
+            p for d in base.iterdir() if d.is_dir() and d != near
+            and not d.name.startswith('.')
+            for p in (d.iterdir() if os.access(d, os.R_OK | os.X_OK) else ()))
+    except OSError:
+        cands = [base / 'BestPractice']
+    for c in cands:
+        try:
+            c = c.resolve()
+            if c != near and c not in found and c.is_dir() and is_source_clone(c):
+                found.append(c)
+        except OSError:
+            continue
+    return found
+
+# WHICH BRANCH ONE INSTALL FOLLOWS (2026-10-05). SOURCE_BRANCH is the
+# default; a consuming repo may name `staging` instead, in its own
+# precedent.json, as `"upstream_branch": "staging"`. Alex, 2026-10-05, in
+# a consumer session: "Let's do option 2" -- the per-repo choice, offered
+# because a change took about 25 minutes to reach main and only a few to
+# reach staging (strength: decided). Staging has passed every local check
+# and lacks only GitHub's clean-environment test; pre-staging has had
+# seconds of checking, so it is not on the list. Nothing else changes for
+# a repo that names nothing: it follows main, as decided 2026-09-25.
+# spec/BRANCH_TIERS_PLAN.md, "Installs take their updates from main".
+UPSTREAM_BRANCH_KEY = 'upstream_branch'
+FOLLOWABLE_BRANCHES = ('main', 'staging')
+
+
+def declared_upstream_branch(repo):
+    """-> the `upstream_branch` `repo`'s precedent.json declares, verbatim,
+    or None when it declares none (or the file cannot be read)."""
+    try:
+        value = json.loads((pathlib.Path(repo) / 'precedent.json').read_text(
+            encoding='utf-8')).get(UPSTREAM_BRANCH_KEY)
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def followed_branch(repo):
+    """-> the BestPractice branch `repo` takes its updates from: its declared
+    `upstream_branch` when that is one of FOLLOWABLE_BRANCHES, else
+    SOURCE_BRANCH. A value outside the list falls back to SOURCE_BRANCH and
+    is reported by upstream_branch_problem(), never followed."""
+    declared = declared_upstream_branch(repo)
+    return declared if declared in FOLLOWABLE_BRANCHES else SOURCE_BRANCH
+
+
+def upstream_branch_problem(repo):
+    """-> a one-line message when `repo` declares an `upstream_branch` this
+    engine will not follow, else None."""
+    declared = declared_upstream_branch(repo)
+    if declared is None or declared in FOLLOWABLE_BRANCHES:
+        return None
+    return (f"precedent.json declares {UPSTREAM_BRANCH_KEY} {declared!r}, which "
+            f"is not one of {', '.join(FOLLOWABLE_BRANCHES)}; following "
+            f"{SOURCE_BRANCH} instead")
+
+
+# The branch THIS copy's repository follows. In BestPractice's own checkout
+# that is SOURCE_BRANCH (its precedent.json declares no upstream_branch); in
+# a consumer's vendored copy it is that consumer's choice. Code that acts on
+# another repository (precedent_update.py, checkin.py) calls
+# followed_branch(that repo) instead.
+FOLLOWED_BRANCH = followed_branch(ROOT)
+
+# Every real hook script, by the name its stub in .claude/hooks/ carries.
+# Moved out of templates/harness/claude-code/hooks/ on 2026-10-07; see the
+# note at their entry in ENGINE_FILES below.
+HOOK_SCRIPT_FILES = [
+    'artifact-publish-gate.sh',
+    'commit-identity-once.sh',
+    'commit-identity-push-gate.sh',
+    'commit-identity.sh',
+    'doc-lint-gate.sh',
+    'freshness-guard.sh',
+    # The logic behind the individual set's own startup hook, whose
+    # instantiated .template is a stub holding only the person's values.
+    'individual-source-bootstrap.sh',
+    'merge-check-gate.sh',
+    'precedent-hooks.sh',
+    'precedent-paths.sh',
+    'precedent-universal-catalogue.sh',
+    'push-check-gate.sh',
+    'reply-gate.sh',
+    'seeded-prompt-gate.sh',
+    'session-start.sh',
+    'stop-git-check.sh',
+    'stop-reply-check.sh',
+    'wait-loop-gate.sh',
+    'workflow-write-gate.sh',
+]
 
 ENGINE_FILES = [
     'build_views.py',
@@ -273,6 +414,10 @@ ENGINE_FILES = [
     # vendored-engine-file-refs-resolve, on the run that added it -- a
     # vendored build_views.py naming a companion nobody had copied.
     'glossary_terms.json',
+    # The record of shared sets whose repositories are deleted
+    # (precedent_resolve.deleted_sets, 2026-10-08): every person's sessions
+    # and Update Vendors read it, so it travels with the resolver.
+    'deleted_sets.json',
     # A shared set's approvers.json -> CODEOWNERS generator. In the engine
     # rather than in one shared set's own tools/ because that is where it
     # was, and the consequence was a second shared set with declared
@@ -356,6 +501,10 @@ ENGINE_FILES = [
     # manual step, after which precedent_source_credentials.py went from SET
     # to OK. The mechanism was sound; only its distribution was wrong.
     'precedent_source_bootstrap.py',
+    # The lock precedent_source_bootstrap and precedent_update take on a clone
+    # several runs share, so Update Vendors in several repos at once waits its
+    # turn instead of losing a ref lock (2026-10-10). Standard library only.
+    'precedent_clone_lock.py',
     # precedent_check.py imports it at module scope, so a vendored engine
     # without it does not degrade -- it raises ModuleNotFoundError and takes
     # the whole check run down. Found 2026-09-09 by verify_harness the moment
@@ -364,6 +513,24 @@ ENGINE_FILES = [
     # anyway (practice: timestamps-carry-offset); it has no dependencies of
     # its own beyond the standard library.
     'precedent_time.py',
+    # Files a failure an unattended job could not report anywhere else as an
+    # open item under todo/, and lists the open ones at session start
+    # (tools/bootstrap.sh runs it; practice: automation-issues, added
+    # 2026-10-08). In ENGINE_FILES so a practice set's own jobs get it too.
+    'open_failures.py',
+    # The full check of a commit that already landed, run in the background
+    # (`update_full_check: after` in precedent.json); files a failure through
+    # open_failures.py (added 2026-10-08).
+    'precedent_check_after.py',
+    # The lander and its queue (added 2026-10-08): land every queued branch
+    # on the trunk, then take Update Vendors. Built in a consumer repository
+    # on 2026-10-04 and moved here; the repository's own audits, caches and
+    # ledgers are its precedent.json "lander" block.
+    'land_queue.py',
+    'land_next.py',
+    # land_queue.py's git store on the coord branch (also the lease board's
+    # and the result cache's), imported at module level.
+    'branch_store.py',
     # WHO this repo's commits belong to, resolved the way commit-identity.sh
     # already resolves it. In ENGINE_FILES rather than CONSUMER-only,
     # unlike precedent_resolve.py which it was carved out of: a practice
@@ -375,6 +542,22 @@ ENGINE_FILES = [
     # about a catalogue, and only the second reason keeps a file out of a
     # set.
     'precedent_identity.py',
+    # The two commit-identity checks, one copy for every kind of repo
+    # (Morgan, 2026-10-10: "build the shared check"). Before, the individual
+    # set shipped them in tools/checks/ for consumers to materialize and
+    # BestPractice kept a port; the copies drifted, and a consumer's merge
+    # gate refused every GitHub-button merge. precedent_push_check.py runs
+    # them on every gate, and precedent_check.py registers them.
+    'check_commit_author.py',
+    'check_commit_dates.py',
+    # Whether this session's person is one of the repository's code owners,
+    # so a practice marked `visible_to: code-owners` reaches only them
+    # (2026-10-05). Beside precedent_identity.py, which it reads, and in
+    # every kind of repo, since each channel that filters runs in all of them.
+    'precedent_audience.py',
+    # The remote branches a code owner can delete across the session's
+    # repositories, for the ladder set's stale-branch-cleanup (2026-10-05).
+    'precedent_stale_branches.py',
     # The resolver and the untracked-block writer, added 2026-09-13 so a
     # session rooted in a practice SET reads the universal catalogue instead
     # of that set's own practices alone. Until then a set resolved nothing:
@@ -421,6 +604,20 @@ ENGINE_FILES = [
     # design without precedent_resolve.py -- which a source set does not get
     # -- reading that repo's own practices/ and saying so.
     'precedent_vocabulary.py',
+    # Whether the five-stage ladder is in force for the person here
+    # (spec/LADDER_OPT_IN_PLAN.md D5, 2026-10-02). In ENGINE_FILES because
+    # every engine line that says a ladder word asks it first, in a practice
+    # set as much as a consumer, and the hooks call its --in-force exit code.
+    # It imports precedent_resolve, which is in this list too.
+    'precedent_ladder.py',
+    # The upstream review Booked, Debut, Produce and Update Vendors print for
+    # a code owner on the ladder (the ladder set's upstream-review practice,
+    # 2026-10-11). precedent_branches and precedent_update import it in
+    # every kind of repo; without it they simply print no review.
+    'precedent_upstream_review.py',
+    # The one matcher for the ladder's own words (D7), which precedent_check's
+    # ladder-words-stay-in-the-ladder-set imports in every practice set.
+    'ladder_words.py',
     # Its second list, "Our language" (2026-09-29,
     # spec/FIVE_STAGES_AND_OUR_LANGUAGE_PLAN.md step 2): the word list and the
     # loader precedent_vocabulary.py imports to read it. They travel with it
@@ -494,6 +691,13 @@ ENGINE_FILES = [
     # other and accumulates its own open items the same way a consumer does.
     'build_todo_index.py',
     'todo_migrate.py',
+    # The "Drop it" writer (added 2026-10-05): park-it tells every session
+    # to run it, and every kind of repo keeps todo items -- the same reason
+    # build_todo_index.py is here.
+    'todo_disposition.py',
+    # A practice's standing (added 2026-10-05): every source's practices may
+    # carry one, and every channel that shows a practice reads the label.
+    'practice_standing.py',
     # title_case.py was CONSUMER-only until 2026-09-19, since headline
     # capitalization was thought of as a consumer-catalogue concern. Moved
     # here the same day build_todo_index.py was: it imports title_case at
@@ -503,6 +707,11 @@ ENGINE_FILES = [
     # real run, the same failure shape precedent_check.py's own promotion
     # (see below) was caught by.
     'title_case.py',
+    # artifact_publish_gate.py -- docs-track-models rule 4, run by
+    # hooks/artifact-publish-gate.sh. Here rather than consumer-only because
+    # the hooks/ directory reaches both kinds (shipped-hook-carries-its-script);
+    # only a consumer wires it, and in a set it stays unwired.
+    'artifact_publish_gate.py',
     # The one way a generator copies prose into a summary field: links out,
     # then the cut (added 2026-09-25). build_todo_index.py, todo_migrate.py,
     # build_views.py and build_gotcha_index.py all import it at module level,
@@ -580,9 +789,25 @@ ENGINE_FILES = [
     # precedent_gate.py's push/merge moments precisely because a reminder
     # is what already failed.
     'precedent_engine_freshness.py',
+    # The fix to a vendored file goes upstream, set up in one command
+    # (2026-10-06): doc_lint.py's open-item check names it, so every kind
+    # that carries doc_lint.py needs it.
+    'upstream_fix.py',
+    # ...and what takes the notice at a merge (2026-10-02, Alex: "Can we
+    # set up a system so merge also does vendor updates?"): behind, it runs
+    # Update Vendors from the source clone and commits the result on its
+    # own, or takes it all back and says why. Never blocks the merge.
+    'precedent_merge_vendors.py',
     # "What's new?" works in every project, so the log's mechanics ship
     # (practice: whats-new); each project's own log never does.
     'precedent_whats_new.py',
+    # Its other half (Morgan, 2026-10-08): once a day, what OTHER people
+    # landed since the person was last told. The session-start hook and the
+    # reply gate both call it, so a repository without it would carry hooks
+    # naming a file that is not there (the others-did practice, in the ladder set). It
+    # stores nothing on origin: since 2026-10-10 it counts from the person's
+    # own last commit, with only a note in the container's .precedent/.
+    'precedent_others_did.py',
     # EVERY VOCABULARY WORD HAS TO WORK WHERE THE ENGINE IS VENDORED
     # (2026-09-21, Morgan: "ALL of our vocabulary words should"). A standing
     # command a session cannot carry out is worse than one that does not
@@ -620,6 +845,14 @@ ENGINE_FILES = [
     # level, and a practice source's own checks are meant to import it from
     # the engine beside them, so every kind needs it.
     'generated_blocks.py',
+    # The document status header's reader (added 2026-10-06).
+    # precedent_check.py's document-status-header and speculation-is-marked
+    # checks import it, and both practices are universal, so every repo
+    # that runs the check resolves them. Missing from both lists until the
+    # 2026-10-05 very deep check installed a consumer and found both checks
+    # SKIPPED there ("did not import") while the practices were in force.
+    # Standard library only.
+    'doc_lifecycle.py',
     'full_practice_audit.py',
     'session_load_trend.py',
     # The "you are reading a different repo than the one you are standing
@@ -654,6 +887,14 @@ ENGINE_FILES = [
     # tier of the push check a push to each one gets. precedent_push_check.py
     # asks it whenever the push gate names the push; every kind pushes.
     'precedent_branches.py',
+    # The commit backstop's engine fixer (spec/GENERATED_FILES_PLAN.md step
+    # 3): commit-identity.sh's hook runs it from the repository's own copy,
+    # so every kind that receives the hook receives the script it calls.
+    'precedent_regenerate.py',
+    # The one-time move of a hand-written MAP.md / GLOSSARY.md into their
+    # source files (spec/GENERATED_FILES_PLAN.md step 5): a repository runs
+    # its own copy at its next Update Vendors.
+    'precedent_migrate_views.py',
     # The merge gate's engine: the push check, run on the merge GitHub would
     # make, before a session merges a pull request through GitHub -- a push
     # no local hook sees. merge-check-gate.sh calls it; every kind merges.
@@ -665,6 +906,19 @@ ENGINE_FILES = [
     # source-only because a consumer's push check names nothing it needs,
     # and a person in a consumer can still run it by hand on a source clone.
     'precedent_consumer_shape.py',
+    # THE REAL HOOK SCRIPTS (2026-10-07). .claude/hooks/<name>.sh in every
+    # repository is one permanent stub that runs tools/<name>.sh, so a change
+    # to what a hook does travels here, with the engine, and never touches
+    # .claude/ -- where Claude Code's auto mode held every such commit for
+    # the person's yes (templates/harness/claude-code/hooks/README.md).
+    # HOOK_SCRIPT_FILES lists them; every kind gets all of them, and a
+    # script nothing wires is inert (the stub is what wiring reaches).
+    *HOOK_SCRIPT_FILES,
+    # What .claude/hooks/precedent-hooks.sh runs, and the list it reads: the
+    # engine's hooks added from 2026-10-07 on reach a repository here, never
+    # through a new settings.json entry (precedent_hooks.py says why).
+    'precedent_hooks.py',
+    'hook_wiring.json',
     'precedent_vendor_engine.py',
 ]
 
@@ -681,6 +935,10 @@ CONSUMER_ENGINE_FILES = ENGINE_FILES[:-1] + [
     # by the duplicate guard below, which is how this was caught.
     'precedent_materialize.py',
     'precedent_sync_views.py',
+    # The commit each live source was synced at, and reading a source back
+    # at it, so the views check stops depending on the branch a set's clone
+    # has checked out (2026-10-05). Imported by the two above.
+    'precedent_source_pins.py',
     # Whether each declared source repository is still CALLED what this repo
     # calls it (added 2026-09-11). CONSUMER-only for the same reason
     # precedent_resolve.py is -- it reads a multi-source config, which a
@@ -746,7 +1004,9 @@ CONSUMER_ENGINE_FILES = ENGINE_FILES[:-1] + [
     #                       tools/model_audit.py; a consumer's own list is
     #                       tools/model_audit_host.json, never this file)
     #   lease_board.py   -- lease-in-flight-work
-    #   branch_store.py  -- the git store under the lease board and the cache
+    #   (branch_store.py, the git store under the lease board and the
+    #   cache, moved to ENGINE_FILES on 2026-10-08: land_queue.py imports
+    #   it at module level, and a source set gets land_queue.py)
     #   result_cache.py  -- shared-result-cache
     #   reach_key.py     -- the memo key shared-result-cache keys on
     #   fact_ledger.py   -- gate-ledger (doc_sync and model_audit import it)
@@ -755,7 +1015,6 @@ CONSUMER_ENGINE_FILES = ENGINE_FILES[:-1] + [
     'table_fmt.py',
     'model_audit.py',
     'lease_board.py',
-    'branch_store.py',
     'result_cache.py',
     'reach_key.py',
     'fact_ledger.py',
@@ -958,6 +1217,18 @@ MERGE_GATE_MATCHER = 'Bash|mcp__.*__merge_pull_request'
 # The workflow-write gate fires on the tools that write a file straight onto
 # GitHub, the one route a push gate never sees (ci-workflow-approved).
 WORKFLOW_WRITE_MATCHER = 'mcp__.*__(create_or_update_file|push_files)'
+# THE LAST ENTRIES THIS LIST TAKES (2026-10-07). One per hook event, every
+# tool, all running .claude/hooks/precedent-hooks.sh with the event's name,
+# which runs whatever tools/hook_wiring.json and process/practice_hooks.json
+# list for it. A hook added from now on goes in tools/hook_wiring.json, never
+# here: an entry here is a change to .claude/settings.json in every
+# repository, which Claude Code's auto mode holds for the person's yes, and
+# Morgan's call that day was that Update Vendors should no longer ask.
+# verify_harness's check_hook_wiring_takes_no_new_hook holds the list to it.
+DISPATCH_EVENTS = ('SessionStart', 'UserPromptSubmit', 'PreToolUse',
+                   'PostToolUse', 'Stop')
+DISPATCH_WIRING = tuple((ev, None, 'precedent-hooks.sh', ev)
+                        for ev in DISPATCH_EVENTS)
 HOOK_WIRING = {
     'consumer': (
         ('SessionStart', None, 'session-start.sh', ''),
@@ -990,8 +1261,12 @@ HOOK_WIRING = {
         # No workflow file written straight onto GitHub, past the push gate
         # that checks its approval (2026-09-26).
         ('PreToolUse', WORKFLOW_WRITE_MATCHER, 'workflow-write-gate.sh', ''),
+        # Only a fresh render of a registered document reaches a link; a
+        # page typed by hand never meets a model check (2026-10-05).
+        ('PreToolUse', 'Artifact', 'artifact-publish-gate.sh', ''),
         ('Stop', None, 'stop-git-check.sh', ''),
         ('Stop', None, 'stop-reply-check.sh', ''),
+        *DISPATCH_WIRING,
     ),
     # precedent-individual-bootstrap.sh is not here: it is rendered from a
     # .template by precedent_bootstrap_source.py, not shipped as a *.sh this
@@ -1016,6 +1291,7 @@ HOOK_WIRING = {
         ('PreToolUse', MERGE_GATE_MATCHER, 'merge-check-gate.sh', ''),
         ('PostToolUse', MERGE_GATE_MATCHER, 'merge-check-gate.sh', ''),
         ('PreToolUse', WORKFLOW_WRITE_MATCHER, 'workflow-write-gate.sh', ''),
+        *DISPATCH_WIRING,
     ),
 }
 # A hook that needs more than the harness's default time gets its own
@@ -1024,16 +1300,18 @@ HOOK_WIRING = {
 # 840-second deadline inside this one, so an expiry refuses the push instead
 # of the harness killing the hook -- which it treats as a non-blocking error,
 # letting the push through unchecked.
-HOOK_TIMEOUTS = {'push-check-gate.sh': 900, 'merge-check-gate.sh': 900}
+HOOK_TIMEOUTS = {'push-check-gate.sh': 900, 'merge-check-gate.sh': 900,
+                 # Whatever it runs carries its own timeout, inside this one.
+                 'precedent-hooks.sh': 900}
 # Shipped in HOOK_SOURCE_DIR and on NO kind's list, each with the reason. A
 # repo that wires one itself still has it vendored and kept current -- the
 # wiring gate below still applies -- but no refresh adds it anywhere.
 HOOKS_NO_KIND = {
     'commit-identity-push-gate.sh':
-        'runs tools/checks/check_commit_author.py and '
-        'check_buenos_aires_dates.py, which are a repo\'s own and never '
-        'vendored -- in a repo without them the hook is a silent no-op, so '
-        'only a repo that carries them wires it',
+        'runs tools/check_commit_author.py and tools/check_commit_dates.py, '
+        'which every repo\'s push check already runs on every push '
+        '(precedent_push_check.IDENTITY_CHECKS), so wiring it everywhere '
+        'would run them twice; a repo that wires it keeps it',
 }
 
 
@@ -1168,6 +1446,35 @@ def _declined_hook_names(dest_root):
             if isinstance(e, dict) and e.get('path')}
 
 
+def _wiring_base_branch(dest_root, commands):
+    """-> (base, source) for a freshness-guard.sh entry the refresh writes:
+    the branch an existing entry already passes, else precedent.json's
+    `base_branch`, else (None, None).
+
+    The precedent.json fallback, 2026-10-02. Until then only an existing
+    entry counted, so a repo that had never run the guard -- a classic
+    install migrated onto the loader -- could not get it from a refresh:
+    the NOTE said "not guessed. Wire it by hand", and the harness refuses a
+    session hand-editing .claude/settings.json, so the remedy it printed
+    was one no session could carry out. precedent.json's base_branch is not
+    a guess: it is the repo's own declaration, the one _agents_md_subs
+    already reads for the same purpose. An existing entry still wins, so a
+    repo whose guard deliberately watches another branch keeps it."""
+    for cmd in (c for cs in commands.values() for c in cs):
+        m = _BASE_BRANCH_RE.search(cmd)
+        if m:
+            return m.group(1), 'an existing freshness-guard.sh entry'
+    try:
+        branch = json.loads((pathlib.Path(dest_root) / 'precedent.json')
+                            .read_text(encoding='utf-8')).get('base_branch')
+    except (OSError, ValueError, AttributeError):
+        branch = None
+    if isinstance(branch, str) and branch.strip() \
+            and not any(ch.isspace() for ch in branch.strip()):
+        return branch.strip(), "precedent.json's base_branch"
+    return None, None
+
+
 def _hook_wiring_plan(dest_root, kind, hooks_src_dir):
     """-> (to_add, unresolved): HOOK_WIRING[kind] entries this repo does not
     run yet and should, and entries it should but that cannot be written
@@ -1209,12 +1516,7 @@ def _hook_wiring_plan(dest_root, kind, hooks_src_dir):
             for h in (g.get('hooks') or []) if isinstance(g, dict) else []:
                 commands.setdefault(event, []).append(
                     str((h or {}).get('command') or ''))
-    base = None
-    for cmd in (c for cs in commands.values() for c in cs):
-        m = _BASE_BRANCH_RE.search(cmd)
-        if m:
-            base = m.group(1)
-            break
+    base, _source = _wiring_base_branch(dest_root, commands)
     to_add, unresolved = [], []
     for event, matcher, name, args in entries:
         if name not in shipped or name in declined:
@@ -1230,6 +1532,113 @@ def _hook_wiring_plan(dest_root, kind, hooks_src_dir):
         to_add.append((event, matcher, name,
                        args.replace('{base}', base or '')))
     return to_add, unresolved
+
+
+def _add_hook_entry(hooks, event, matcher, command, timeout=None):
+    """Append one command entry to a settings.json `hooks` mapping: into the
+    first group at `event` with the same matcher, or a new group at the end.
+    Add-only -- nothing already there is edited, moved or removed. The one
+    writer for both callers below, so the two cannot disagree about where an
+    entry goes."""
+    entry = collections.OrderedDict([('type', 'command'), ('command', command)])
+    if timeout is not None:
+        entry['timeout'] = timeout
+    groups = hooks.setdefault(event, [])
+    home = next((g for g in groups if isinstance(g, dict)
+                 and g.get('matcher') == matcher
+                 and isinstance(g.get('hooks'), list)), None)
+    if home is None:
+        home = collections.OrderedDict()
+        if matcher is not None:
+            home['matcher'] = matcher
+        home['hooks'] = []
+        groups.append(home)
+    home['hooks'].append(entry)
+
+
+PRACTICE_HOOKS_FILE = 'process/practice_hooks.json'
+
+
+def _settings_commands(dest_root, event):
+    settings_path = pathlib.Path(dest_root) / '.claude' / 'settings.json'
+    try:
+        hooks = json.loads(settings_path.read_text(encoding='utf-8')).get('hooks') or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    return [str((h or {}).get('command') or '')
+            for g in (hooks.get(event) or []) if isinstance(g, dict)
+            for h in (g.get('hooks') or [])]
+
+
+def _registered_practice_hooks(dest_root):
+    try:
+        data = json.loads((pathlib.Path(dest_root) / PRACTICE_HOOKS_FILE)
+                          .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    return [(h.get('event'), h.get('matcher'), h.get('command'))
+            for h in (data.get('hooks') or []) if isinstance(h, dict)]
+
+
+def _practice_hooks_to_register(dest_root, entries):
+    """-> the declared (event, matcher, command) entries .claude/settings.json
+    does not already run (any command at that event naming the same script,
+    from any path), or None when the repo has no settings.json -- it runs no
+    Claude Code hooks from its tree."""
+    out = []
+    for event, matcher, command in entries:
+        have = _settings_commands(dest_root, event)
+        if have is None:
+            return None
+        words = command.split()
+        script = (words[1] if len(words) > 1 else command).rsplit('/', 1)[-1]
+        if not any(script in c for c in have):
+            out.append((event, matcher, command))
+    return out
+
+
+def add_practice_hooks(dest_root, entries):
+    """Write the hooks practices in force declare (build_views.practice_hooks)
+    into PRACTICE_HOOKS_FILE, which .claude/hooks/precedent-hooks.sh runs.
+    -> [commands it did not list before]. Writes nothing, and returns [],
+    when the repo has no .claude/settings.json.
+
+    NOT INTO .claude/settings.json (since 2026-10-07). Until then each was
+    added there, and Claude Code's auto mode holds a commit touching .claude/
+    for the person's yes, so a set adding a hook-declaring practice meant a
+    question in every repository that declares it (precedent_hooks.py). One
+    already wired in settings.json before that date stays there, and is left
+    out of this file so it never runs twice. The file is regenerated whole:
+    a practice that stops declaring a hook drops out of it."""
+    todo = _practice_hooks_to_register(dest_root, entries)
+    if todo is None:
+        return []
+    before = {c for _e, _m, c in _registered_practice_hooks(dest_root)}
+    path = pathlib.Path(dest_root) / PRACTICE_HOOKS_FILE
+    text = json.dumps({
+        '_comment': 'Generated by tools/precedent_sync_views.py from the '
+                    'hooks: fields of the practices in force; run by '
+                    '.claude/hooks/precedent-hooks.sh. Never edit by hand.',
+        'hooks': [collections.OrderedDict([('event', e), ('matcher', m),
+                                           ('command', c)]) for e, m, c in todo],
+    }, indent=2, ensure_ascii=False) + '\n'
+    if todo or path.is_file():
+        old = path.read_text(encoding='utf-8') if path.is_file() else None
+        if old != text:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding='utf-8')
+    return [c for _e, _m, c in todo if c not in before]
+
+
+def missing_practice_hooks(dest_root, entries):
+    """-> the (event, matcher, command) entries neither .claude/settings.json
+    nor PRACTICE_HOOKS_FILE runs yet, writing nothing: what `--check`
+    reports."""
+    todo = _practice_hooks_to_register(dest_root, entries)
+    if not todo:
+        return []
+    have = set(_registered_practice_hooks(dest_root))
+    return [t for t in todo if t not in have]
 
 
 def _apply_hook_wiring(dest_root, kind, hooks_src_dir):
@@ -1251,43 +1660,40 @@ def _apply_hook_wiring(dest_root, kind, hooks_src_dir):
         print(f"NOTE: precedent_vendor_engine: {name} ({event}"
               f"{', ' + matcher if matcher else ''}) is on the {kind} hook "
               f"list and this repo does not run it, but its entry needs the "
-              f"repo's base branch and no freshness-guard.sh entry here says "
-              f"what that is -- not guessed. Wire it by hand from "
-              f"templates/harness/claude-code/settings.json upstream, or "
-              f"decline it in precedent.json's declined_adapters with the "
-              f"reason.", file=sys.stderr)
+              f"repo's base branch, and neither a freshness-guard.sh entry "
+              f"here nor precedent.json's base_branch says what that is -- "
+              f"not guessed. Set base_branch in precedent.json and re-run "
+              f"the refresh, or decline it in precedent.json's "
+              f"declined_adapters with the reason.", file=sys.stderr)
     if not to_add:
         return []
     settings_path = pathlib.Path(dest_root) / '.claude' / 'settings.json'
     data = json.loads(settings_path.read_text(encoding='utf-8'),
                       object_pairs_hook=collections.OrderedDict)
     hooks = data.setdefault('hooks', collections.OrderedDict())
+    before_cmds = [str((h or {}).get('command') or '')
+                   for gs in hooks.values() if isinstance(gs, list)
+                   for g in gs if isinstance(g, dict)
+                   for h in (g.get('hooks') or [])]
     added = []
     for event, matcher, name, args in to_add:
         cmd = f'$CLAUDE_PROJECT_DIR/{HOOK_DEST_DIR}/{name}' + (
             f' {args}' if args else '')
-        entry = collections.OrderedDict([('type', 'command'), ('command', cmd)])
-        if name in HOOK_TIMEOUTS:
-            entry['timeout'] = HOOK_TIMEOUTS[name]
-        groups = hooks.setdefault(event, [])
-        home = next((g for g in groups if isinstance(g, dict)
-                     and g.get('matcher') == matcher
-                     and isinstance(g.get('hooks'), list)), None)
-        if home is None:
-            home = collections.OrderedDict()
-            if matcher is not None:
-                home['matcher'] = matcher
-            home['hooks'] = []
-            groups.append(home)
-        home['hooks'].append(entry)
+        _add_hook_entry(hooks, event, matcher, cmd, HOOK_TIMEOUTS.get(name))
         added.append(f'{event}: {name}' + (f' {args}' if args else ''))
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False)
                              + '\n', encoding='utf-8')
+    based = ''
+    if any(n == 'freshness-guard.sh' for _, _, n, _ in to_add):
+        _b, source = _wiring_base_branch(dest_root, {})
+        if source and not any(_BASE_BRANCH_RE.search(c) for c in before_cmds):
+            based = (f" The freshness-guard.sh entries watch {_b!r}, from "
+                     f"{source}.")
     print(f"precedent_vendor_engine refresh: wired {len(added)} hook "
           f"entr{'y' if len(added) == 1 else 'ies'} this repo's kind "
           f"({kind}) gets and it did not run yet, into .claude/settings.json "
           f"-- added only, nothing already there was changed: "
-          f"{'; '.join(added)}. To opt out of one, remove its entry and "
+          f"{'; '.join(added)}.{based} To opt out of one, remove its entry and "
           f"declare it in precedent.json's declined_adapters with the "
           f"reason; a later refresh then leaves it alone.")
     return added
@@ -1563,7 +1969,8 @@ def _rewrite_manifest_file_list(dest_tools, kind):
                     encoding='utf-8')
 
 
-def _write_engine_files(dest_tools, engine_dir, source_commit, kind=DEFAULT_KIND):
+def _write_engine_files(dest_tools, engine_dir, source_commit, kind=DEFAULT_KIND,
+                        seeded_from=None):
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}, got {kind!r}")
     # Only what _source_tools_at could actually extract: a name this (possibly
@@ -1592,8 +1999,12 @@ def _write_engine_files(dest_tools, engine_dir, source_commit, kind=DEFAULT_KIND
         'format_version': 1,
         'kind': kind,
         'source_repo': SOURCE_REPO,
-        'source_branch': SOURCE_BRANCH,
+        'source_branch': followed_branch(dest_tools.parent),
         'source_commit': source_commit,
+        # Only when seed was told --off-main: the branch the engine really
+        # came from. source_branch stays what refresh follows; links and
+        # the universal clone are built from it. A refresh drops this.
+        **({'seeded_from_branch': seeded_from} if seeded_from else {}),
         'files': files + ['routing_scope.json'],
         'sha256': hashes,
         '_note': (f"The vendored Precedent {kind}-repo engine (see "
@@ -2094,10 +2505,38 @@ def _engine_paths_incomplete(dest_root, manifest):
     return sorted(set(todo))
 
 
+# An upstream path that is a TEMPLATE is kept rendered, never raw: the
+# local copy is what the template renders to, byte for byte the file a
+# consumer's own refresh writes from the same template (_apply_individual_hook).
+# 2026-10-04: precedent-individual's bootstrap/precedent-individual-bootstrap.sh,
+# rendered by hand from individual-source-bootstrap.sh.template, had drifted
+# behind it twice (2026-09-30, 2026-10-04); its adapter ships that copy to every
+# consumer, over the one their refresh rendered, so a consumer could not fix it
+# locally. Declared in the set's own engine_paths like any other path.
+def _rendered_engine_path(up, data):
+    """-> (bytes, executable) for an upstream template this engine renders,
+    or None for an ordinary path copied as it is."""
+    if up == f'{HOOK_SOURCE_DIR}/{INDIVIDUAL_HOOK_TEMPLATE}':
+        return render_individual_hook(data.decode('utf-8')).encode('utf-8'), True
+    return None
+
+
+def _engine_path_blob(clone, commit, up):
+    """-> the bytes `up` holds at `commit` as a declared engine path keeps
+    them (a template rendered), or None when it cannot be read."""
+    r = subprocess.run(['git', '-C', str(clone), 'show', f'{commit}:{up}'],
+                       capture_output=True)
+    if r.returncode != 0:
+        return None
+    rendered = _rendered_engine_path(up, r.stdout)
+    return rendered[0] if rendered else r.stdout
+
+
 def _read_engine_path_sources(clone, commit, mapping):
     """{upstream_rel: (bytes, executable)} read BY BLOB at `commit`, the same
     read-only discipline as _source_tools_at. An upstream path absent at that
-    commit is simply not in the result; the caller warns about it."""
+    commit is simply not in the result; the caller warns about it. A
+    template is returned rendered (_rendered_engine_path)."""
     out = {}
     for up in mapping:
         ok, listing = _git_read(clone, 'ls-tree', commit, '--', up)
@@ -2108,7 +2547,8 @@ def _read_engine_path_sources(clone, commit, mapping):
                               capture_output=True)
         if blob.returncode != 0:
             continue
-        out[up] = (blob.stdout, mode.endswith('755'))
+        out[up] = (_rendered_engine_path(up, blob.stdout)
+                   or (blob.stdout, mode.endswith('755')))
     return out
 
 
@@ -3460,8 +3900,8 @@ def repoint_renamed_sources(dest_root):
             if old != new:
                 s[key] = new
                 swaps.append((json.dumps(old), json.dumps(new)))
-        if s.get('level') == 'team':
-            s['level'] = 'shared'
+        if _declared_level(s) != s.get('level'):
+            s['level'] = _declared_level(s)
             relevelled.append(new_name)
         if (new_name, new_path) != (name, where) or kept:
             done.append((name, new_name, where, new_path, kept))
@@ -3494,6 +3934,704 @@ def repoint_renamed_sources(dest_root):
     if new_text != text:
         path.write_text(new_text, encoding='utf-8')
     return done
+
+
+def retire_level_aliases(dest_root):
+    """-> [source names] whose `"level": "team"` in `dest_root`'s
+    precedent.json this rewrote to `"level": "shared"`, the word in use
+    since 2026-09-18. Every source, not only a renamed set
+    (repoint_renamed_sources): the old word still resolves, and every tool
+    reads it through precedent_resolve.declared_level, but a file that says
+    one thing while the tools mean another is how a raw comparison went
+    wrong for a consumer on 2026-10-09. Idempotent; every other byte is
+    kept (precedent_resolve.retire_level_aliases)."""
+    import precedent_resolve as pr
+    path = pathlib.Path(dest_root) / 'precedent.json'
+    try:
+        text = path.read_text(encoding='utf-8')
+    except OSError:
+        return []
+    new_text, names = pr.retire_level_aliases(text)
+    if new_text != text:
+        path.write_text(new_text, encoding='utf-8')
+    return names
+
+
+# A practice set that has been folded away says so in its own
+# precedent-source.json: {"retired": {"date": "YYYY-MM-DD", "folded_into":
+# [...], "reason": "..."}}. Morgan, 2026-10-06 (strength: decided), choosing
+# option C: Update Vendors and the very deep check drop a declared set that
+# says it is retired, or that GitHub reports archived; a set GitHub only
+# answers "Not Found" for is reported and never dropped, since that is also
+# what lost access looks like. Nothing is dropped while one of the set's
+# active practices is in force nowhere else: that set is kept, and the rule
+# it would lose is named (practice: repair-cannot-discard-work).
+RETIRED_KEY = 'retired'
+_STATUS_ACTIVE_RE = re.compile(r'^status:\s*["\']?active["\']?\s*$', re.M)
+
+
+def source_retirement(clone):
+    """-> the retirement a set declares in its own precedent-source.json, as
+    a dict (possibly empty), or None when it declares none or cannot be
+    read. `"retired": true` counts, with nothing said about where it went."""
+    try:
+        data = json.loads((pathlib.Path(clone) / 'precedent-source.json')
+                          .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    r = data.get(RETIRED_KEY) if isinstance(data, dict) else None
+    if r is True:
+        return {}
+    return r if isinstance(r, dict) else None
+
+
+def _active_practice_slugs(clone):
+    """-> {slug} of practices/*.md with `status: active` in a source tree,
+    or None when it has no practices/ to read."""
+    d = pathlib.Path(clone) / 'practices'
+    if not d.is_dir():
+        return None
+    out = set()
+    for f in d.glob('*.md'):
+        try:
+            head = f.read_text(encoding='utf-8', errors='replace')[:4000]
+        except OSError:
+            continue
+        if head.startswith('---') and _STATUS_ACTIVE_RE.search(head.split('\n---', 1)[0]):
+            out.add(f.stem)
+    return out
+
+
+def _declared_level(s):
+    """A declared source's level with its alias read, `team` -> `shared`:
+    precedent_resolve.declared_level, the one reader. Comparing the raw
+    field let a set declared at the older `team` level slip past the
+    retired- and deleted-set drop, so Update Vendors never removed it (a
+    consumer's update, 2026-10-09)."""
+    import precedent_resolve as pr
+    return pr.declared_level(s)
+
+
+def _person_sets():
+    """-> (deleted {name: info}, [carrier paths]) for the person running this:
+    the sets their individual set says they deleted, and the individual set
+    with every set it brings, which carry rules wherever that person works.
+    Both empty when the engine's resolver or the user config is not there."""
+    try:
+        import precedent_resolve as pr
+    except Exception:                                           # noqa: BLE001
+        return {}, []
+    gone = pr.deleted_sets()
+    ind = pr.person_individual_path()
+    carriers = []
+    if ind is not None and ind.is_dir():
+        carriers.append(ind)
+        carriers += [pathlib.Path(b['path']) for b in pr.brought_sources(ind, warn=False)]
+    return gone, carriers
+
+
+def retired_sources(dest_root, archived=(), person=None):
+    """-> [(name, path, why, uncarried)] for every shared or individual
+    source `dest_root`'s precedent.json declares that is retired: it says so
+    itself (source_retirement), or its name is in `archived` (what GitHub
+    reported, which only the caller can ask), or the person running this
+    deleted it (precedent_resolve.deleted_sets) -- the one case a source with
+    no readable clone is listed, since its repository may be gone. `uncarried`
+    is the sorted list of its active practices that no OTHER declared source
+    carries as active, nor the person's own individual set or a set it
+    brings (2026-10-08: a rule a repo's sets dropped while the person's own
+    set carried it read as lost); empty means dropping the declaration loses
+    no rule. A deleted set is dropped whatever `uncarried` says (the
+    person's word), and the caller names what it held. `person` is
+    _person_sets()'s answer, for a test; None asks it."""
+    gone, carriers = _person_sets() if person is None else person
+    root = pathlib.Path(dest_root)
+    try:
+        cfg = json.loads((root / 'precedent.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    sources = cfg.get('sources') if isinstance(cfg, dict) else None
+    if not isinstance(sources, list):
+        return []
+
+    def where(s):
+        return (root / pathlib.Path(str(s.get('path') or '')).expanduser()).resolve()
+
+    out = []
+    for s in sources:
+        if not isinstance(s, dict) or _declared_level(s) not in ('shared', 'individual'):
+            continue
+        name, clone = str(s.get('name') or ''), where(s)
+        ret = source_retirement(clone)
+        if _declared_level(s) == 'shared' and name in gone:
+            info = gone[name]
+            said = '; '.join(x for x in (info.get('date'), info.get('reason')) if x)
+            why = (DELETED_WHY + (f' ({said})' if said else '')
+                   + (' -- BestPractice\'s record of deleted sets, '
+                      'tools/deleted_sets.json' if info.get('from') == 'engine'
+                      else ' -- your individual set lists it in deleted_sets'))
+        elif ret is not None:
+            why = 'it says it is retired'
+            if ret.get('date'):
+                why += f' (since {ret["date"]}'
+                why += (f', folded into {", ".join(map(str, ret["folded_into"]))})'
+                        if ret.get('folded_into') else ')')
+        elif name in set(archived):
+            why = 'GitHub reports it archived'
+        else:
+            continue
+        mine = _active_practice_slugs(clone) or set()
+        elsewhere = set()
+        for o in sources:
+            if not (isinstance(o, dict) and o is not s and where(o) != clone):
+                continue
+            # A set that is itself retired or archived cannot vouch for a
+            # rule: two retiring sets would otherwise carry each other's
+            # rules out of force together (found 2026-10-06).
+            if (source_retirement(where(o)) is not None
+                    or str(o.get('name') or '') in set(archived)):
+                continue
+            elsewhere |= _active_practice_slugs(where(o)) or set()
+        for c in carriers:
+            if (c.resolve() != clone and source_retirement(c) is None
+                    and c.name not in gone):
+                elsewhere |= _active_practice_slugs(c) or set()
+        out.append((name, str(s.get('path') or ''), why,
+                    sorted(mine - elsewhere)))
+    return out
+
+
+# The words retired_sources gives a set the person deleted; such a set is
+# dropped whether or not every rule it held is carried elsewhere. They say
+# what the record says, never that the repository is gone: on 2026-10-10 a
+# consumer's update printed "its repository is deleted" for two sets whose
+# repositories still answered, because the record said "being deleted".
+# The record's own reason follows them (retired_sources).
+DELETED_WHY = 'it is on the list of deleted sets'
+
+
+def drop_retired_sources(dest_root, archived=(), apply=True, person=None):
+    """Remove from precedent.json each retired source (retired_sources)
+    whose active practices are all carried by another declared source.
+    -> (dropped, kept): dropped [(name, path, why)], kept [(name, path, why,
+    uncarried)] -- a retired set still holding a rule nothing else carries
+    stays declared, and the caller names that rule. With apply=False,
+    nothing is written: what would happen is returned."""
+    found = retired_sources(dest_root, archived, person=person)
+    deleted = DELETED_WHY
+    dropped = [(n, p, w) for n, p, w, u in found if not u or deleted in w]
+    kept = [f for f in found if f[3] and deleted not in f[2]]
+    if not dropped or not apply:
+        return dropped, kept
+    path = pathlib.Path(dest_root) / 'precedent.json'
+    text = path.read_text(encoding='utf-8')
+    cfg = json.loads(text)
+    names = {n for n, _, _ in dropped}
+    cfg['sources'] = [s for s in cfg['sources']
+                      if not (isinstance(s, dict) and s.get('name') in names)]
+    # Each object cut out where it stands, so a hand-kept file keeps its
+    # layout and comments; rewritten whole only when that does not give back
+    # exactly the intended object.
+    new_text = text
+    for n in names:
+        m = re.search(r'"name"\s*:\s*' + re.escape(json.dumps(n)), new_text)
+        if not m:
+            continue
+        lo = new_text.rfind('{', 0, m.start())
+        hi = new_text.find('}', m.end())
+        if lo < 0 or hi < 0:
+            continue
+        end = hi + 1
+        tail = re.match(r'[ \t]*,[ \t]*\n?', new_text[end:])
+        if tail:
+            # Not the last entry: the whole line(s) and its comma go.
+            start = new_text.rfind('\n', 0, lo) + 1
+            end += tail.end()
+        else:
+            # The last entry: the comma before it goes instead.
+            before = re.search(r',\s*$', new_text[:lo])
+            start = before.start() if before else lo
+        new_text = new_text[:start] + new_text[end:]
+    try:
+        ok = json.loads(new_text) == cfg
+    except ValueError:
+        ok = False
+    if not ok:
+        new_text = json.dumps(cfg, indent=2, ensure_ascii=False) + '\n'
+    path.write_text(new_text, encoding='utf-8')
+    return dropped, kept
+
+
+def undeclared_successors(dest_root, dropped, person=None):
+    """-> [(successor, [dropped names], brought)] for each shared set that a
+    set in `dropped` ([(name, path, why)], drop_retired_sources' answer)
+    names as where its rules went -- its deletion record's `successors` or
+    its own `retired` marker's `folded_into`, one reader for both
+    (precedent_resolve.successors_of) -- when `dest_root`'s precedent.json
+    does not declare it. `brought` is True when the person's own individual
+    set brings it (or is it), so its rules are in force for that person
+    only. A successor that is itself deleted is left out. `person` is
+    _person_sets()'s answer, for a test; None asks it.
+
+    2026-10-08: Update Vendors dropped precedent-shared-working-style and
+    never asked whether to declare precedent-shared-writing, where two of
+    its rules went. With one member whose own set brings it, nothing is
+    lost; with more, everyone else silently loses those rules."""
+    try:
+        import precedent_resolve as pr
+    except Exception:                                           # noqa: BLE001
+        return []
+    gone, carriers = _person_sets() if person is None else person
+    root = pathlib.Path(dest_root)
+    try:
+        cfg = json.loads((root / 'precedent.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    sources = cfg.get('sources') if isinstance(cfg, dict) else None
+    declared = {str(s.get('name') or '') for s in sources or []
+                if isinstance(s, dict)}
+    brought = {pathlib.Path(c).name for c in carriers}
+    dropped_names = {n for n, _p, _w in dropped}
+    found = {}
+    for name, path, _why in dropped:
+        clone = (root / pathlib.Path(str(path or '')).expanduser()).resolve()
+        for succ in (pr.successors_of(gone.get(name))
+                     + pr.successors_of(source_retirement(clone))):
+            if succ in declared or succ in dropped_names or succ in gone:
+                continue
+            froms = found.setdefault(succ, [])
+            if name not in froms:
+                froms.append(name)
+    return [(s, froms, s in brought) for s, froms in found.items()]
+
+
+def drop_deleted_brings(dest_root, apply=True, gone=None):
+    """-> [name] of each set `dest_root`'s own precedent-source.json `brings`
+    that is deleted (precedent_resolve.deleted_sets), removed from `brings`
+    unless apply is False. [] for a repository that brings nothing. Only an
+    individual set brings anything; a brought set is never loaded once it
+    is deleted, and this keeps the declaration from naming it forever."""
+    path = pathlib.Path(dest_root) / 'precedent-source.json'
+    try:
+        text = path.read_text(encoding='utf-8')
+        man = json.loads(text)
+    except (OSError, ValueError):
+        return []
+    brings = man.get('brings') if isinstance(man, dict) else None
+    if not isinstance(brings, list):
+        return []
+    if gone is None:
+        try:
+            import precedent_resolve as pr
+            gone = pr.deleted_sets(dest_root)
+        except Exception:                                       # noqa: BLE001
+            gone = {}
+    names = [b.get('name') for b in brings
+             if isinstance(b, dict) and b.get('name') in gone]
+    if names and apply:
+        man['brings'] = [b for b in brings
+                         if not (isinstance(b, dict) and b.get('name') in names)]
+        path.write_text(json.dumps(man, indent=2, ensure_ascii=False) + '\n',
+                        encoding='utf-8')
+    return names
+
+
+def person_names_deleted(repo):
+    """-> [(where, name)] for each deleted set the person's OWN individual set
+    still declares or brings, when that set is not `repo` itself: the person
+    runs Update Vendors there to drop it (Morgan, 2026-10-08: another person's
+    update should notice a deleted set in their own individual set too)."""
+    try:
+        import precedent_resolve as pr
+    except Exception:                                           # noqa: BLE001
+        return []
+    ind = pr.person_individual_path()
+    if ind is None or not ind.is_dir() or ind.resolve() == pathlib.Path(repo).resolve():
+        return []
+    gone = pr.deleted_sets(ind)
+    out = []
+    for f, key in (('precedent-source.json', 'brings'), ('precedent.json', 'sources')):
+        try:
+            data = json.loads((ind / f).read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        for e in (data.get(key) if isinstance(data, dict) else None) or []:
+            if isinstance(e, dict) and e.get('name') in gone:
+                out.append((f'{ind / f} `{key}`', e['name']))
+    return out
+
+
+_GH_SLUG_RE = re.compile(r'github\.com[:/]([A-Za-z0-9][\w-]*)/([\w.-]+?)(?:\.git)?/?$')
+
+
+# What archived_declared_sources notes for a set this environment's proxy
+# would not let it ask about; retired_sources_step folds these into one line.
+PROXY_NOTE = 'not asked -- this environment\'s network proxy refuses GitHub\'s API'
+
+
+def archived_declared_sources(dest_root):
+    """-> (archived {name}, notes [str]). Asks GitHub, one call per declared
+    shared or individual source with a github.com origin, whether it is
+    archived. Never raises. A source GitHub cannot answer for -- no
+    credential, Not Found, no network -- is a note, never "archived": Not
+    Found is also what lost access to a private repository looks like, so it
+    is reported and never acted on (Morgan, 2026-10-06)."""
+    archived, notes = set(), []
+    try:
+        import github_budget as _gb
+    except Exception:                                           # noqa: BLE001
+        return archived, ['could not ask GitHub: tools/github_budget.py did '
+                          'not import']
+    root = pathlib.Path(dest_root)
+    try:
+        cfg = json.loads((root / 'precedent.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return archived, notes
+    # A set on the deleted list is dropped without asking (drop_retired_
+    # sources reads the list itself). Asking anyway reported the same set,
+    # in one run, as dropped and as "could not be read ... left declared"
+    # (2026-10-11: a retired set renamed on archiving, which the proxy would
+    # not follow).
+    try:
+        import precedent_resolve as _pr
+        gone = set(_pr.deleted_sets(root))
+    except Exception:                                           # noqa: BLE001
+        gone = set()
+    for s in cfg.get('sources') or []:
+        if not isinstance(s, dict) or _declared_level(s) not in ('shared', 'individual'):
+            continue
+        name = str(s.get('name') or '')
+        if name in gone:
+            continue
+        clone = root / pathlib.Path(str(s.get('path') or '')).expanduser()
+        url = _rev_text(clone, 'remote', 'get-url', 'origin')
+        m = _GH_SLUG_RE.search(url or '')
+        if not m:
+            continue
+        data, err = _gb.call(f'repos/{m.group(1)}/{m.group(2)}')
+        if err or not isinstance(data, dict) or 'full_name' not in data:
+            # A public set answers without any credential, and the session
+            # proxy serves that. Asked second, so a private set still gets
+            # the authenticated answer (unauthenticated, GitHub says Not
+            # Found for a private repository and a deleted one alike).
+            # 2026-10-10, a consumer: every run told the session to attach a
+            # PUBLIC set with push access, against session start's own
+            # read-only rule.
+            pub, _perr = _gb.call(f'repos/{m.group(1)}/{m.group(2)}', auth=False)
+            if isinstance(pub, dict) and 'full_name' in pub:
+                data, err = pub, None
+        if err or not isinstance(data, dict) or 'full_name' not in data:
+            msg = err or str((data or {}).get('message') or 'no answer')
+            if getattr(_gb, 'is_proxy_refusal', lambda _t: False)(msg):
+                notes.append(f'{name}: {PROXY_NOTE}')
+                continue
+            # NO REMEDY HERE (2026-10-10, a second consumer). This note named
+            # add_repo with access "push" for a session not attached to the
+            # set -- a write grant to answer a read-only question, which even
+            # failed for a public set when GitHub refused the anonymous call
+            # too. Whether a set is archived is a bonus: a set that says it
+            # is retired is dropped all the same (retired_sources). So the
+            # note is one quiet line, the reason kept short.
+            if getattr(_gb, 'attach_remedy', lambda *_a: '')(
+                    msg, f'{m.group(1)}/{m.group(2)}'):
+                msg = 'this session has no GitHub API access to it'
+            notes.append(f'{name}: whether it is archived could not be read '
+                         f'here ({msg[:120]}); left declared -- a set that says '
+                         f'it is retired is still dropped')
+            continue
+        if data.get('archived'):
+            archived.add(name)
+    return archived, notes
+
+
+def _edit_access_logins(dest_root):
+    """-> (logins, None) for the people GitHub lists as able to edit the
+    repository at `dest_root`'s origin -- push, maintain or admin, bots left
+    out -- or (None, why) when GitHub cannot say."""
+    url = _rev_text(dest_root, 'remote', 'get-url', 'origin')
+    m = _GH_SLUG_RE.search(url or '')
+    if not m:
+        return None, 'its origin is not on GitHub'
+    try:
+        import github_budget as _gb
+    except Exception:                                           # noqa: BLE001
+        return None, 'tools/github_budget.py did not import'
+    data, err = _gb.call(f'repos/{m.group(1)}/{m.group(2)}/collaborators'
+                         f'?affiliation=all&per_page=100', cache=False)
+    if err or not isinstance(data, list):
+        msg = err or str((data or {}).get('message') if isinstance(data, dict)
+                         else 'no answer')
+        if getattr(_gb, 'is_proxy_refusal', lambda _t: False)(msg):
+            return None, ('this environment\'s network proxy refuses GitHub\'s '
+                          'API, so GitHub could not list who can edit it')
+        return None, f'GitHub could not list who can edit it ({msg})'
+    logins = []
+    for c in data:
+        if not isinstance(c, dict) or not c.get('login'):
+            continue
+        if c.get('type') == 'Bot' or str(c['login']).endswith('[bot]'):
+            continue
+        perms = c.get('permissions') or {}
+        if perms.get('push') or perms.get('maintain') or perms.get('admin'):
+            logins.append(str(c['login']))
+    return (sorted(set(logins), key=str.lower), None) if logins else \
+        (None, 'GitHub lists nobody with edit access')
+
+
+def seed_maintainers(dest_root, logins=None, today=None, fallback=None):
+    """Name this repository's code owners in precedent.json's `maintainers`
+    when it names none yet: the people who can edit it on GitHub right now,
+    or, when GitHub cannot say, the person running this. -> (written, how):
+    written is the list of logins written, [] when nothing was (how says
+    why). An existing CODEOWNERS file, approvers.json or `maintainers` is
+    never touched -- this is a starting default, and the repository changes
+    it after.
+
+    Morgan, 2026-10-06 (strength: decided): "when a repo is setup, vendored
+    in, upgraded, migrated, etc, that it should define the CODEOWNERS as
+    those who have access to edit *at that moment*. That becomes the started
+    default." Written to `maintainers`, not a CODEOWNERS file, at his
+    agreement: a CODEOWNERS file makes GitHub request those people's review
+    on every pull request, and can hold a merge for it. Before this, a
+    repository that named nobody hid every code-owner practice from
+    everyone, its owner included -- all fifteen of his repos measured that
+    day."""
+    root = pathlib.Path(dest_root)
+    try:
+        import precedent_audience as _pa
+        if _pa.codeowners_file(root) is not None:
+            return [], 'it has a CODEOWNERS file'
+        found, where = _pa._registry_owners(root)
+        if found:
+            return [], f'it already names them in {where}'
+    except Exception:                                           # noqa: BLE001
+        pass
+    path = root / 'precedent.json'
+    try:
+        text = path.read_text(encoding='utf-8')
+        cfg = json.loads(text)
+    except (OSError, ValueError):
+        return [], 'it has no readable precedent.json'
+    if not isinstance(cfg, dict) or cfg.get('maintainers'):
+        return [], 'it already names them in precedent.json\'s maintainers'
+    how = 'everyone GitHub lists with edit access'
+    if logins is None:
+        logins, why = _edit_access_logins(root)
+        if not logins and fallback:
+            # The administrator the installer was told about (--admin)
+            # outranks a guess at whoever happens to be running it
+            # (2026-10-11: --admin was taken and then ignored here).
+            logins, how = list(fallback), f'the administrator named at install ({why})'
+        if not logins:
+            try:
+                import precedent_audience as _pa
+                gh, _email = _pa.viewer(root)
+            except Exception:                                   # noqa: BLE001
+                gh = ''
+            if not gh:
+                return [], (f'{why}, and no GitHub username is declared for '
+                            f'the person running this')
+            logins, how = [gh], f'the person running this ({why})'
+    if today is None:
+        try:
+            import precedent_time
+            today = precedent_time.today()
+        except Exception:                                       # noqa: BLE001
+            today = None    # never the machine's own clock (timestamps-carry-offset)
+    entry = json.dumps([{'github': l} for l in logins], ensure_ascii=False)
+    when = f' {today}' if today else ''
+    note = json.dumps([f'Written{when} at install or update: {how}. A '
+                       f'starting default -- change it here; the engine never '
+                       f'rewrites a list that is already set.'],
+                      ensure_ascii=False)
+    m = re.match(r'\s*\{', text)
+    rest = text[m.end():] if m else ''
+    sep = ',' if rest.strip() not in ('', '}') else ''
+    new_text = (text[:m.end()] + f'\n  "maintainers": {entry},\n'
+                f'  "_maintainers_comment": {note}{sep}' + rest) if m else ''
+    try:
+        ok = json.loads(new_text).get('maintainers') == [{'github': l} for l in logins]
+    except ValueError:
+        ok = False
+    if not ok:
+        cfg = {'maintainers': [{'github': l} for l in logins],
+               '_maintainers_comment': json.loads(note), **cfg}
+        new_text = json.dumps(cfg, indent=2, ensure_ascii=False) + '\n'
+    path.write_text(new_text, encoding='utf-8')
+    return logins, how
+
+
+def timezone_offer(dest_root, user_config=None):
+    """-> one line offering the owner's own zone as precedent.json's
+    `fallback_timezone`, or None. Offered, never written: the person says
+    yes, and the session adds the line.
+
+    Offered only when all of it holds: precedent.json declares no
+    fallback_timezone; it names exactly one maintainer; the person running
+    this is that maintainer (their declared GitHub username); and their
+    identity.json declares a zone that loads.
+
+    WHY (2026-10-08, from a consumer). A single person's repository never
+    declared fallback_timezone, so its GitHub Actions job -- where no
+    person's identity.json reaches -- dated its failure records and issue
+    stamps in the engine's last resort, New York, the right default for a
+    team, instead of its one owner's zone (precedent_time.py, rungs 5-6)."""
+    root = pathlib.Path(dest_root)
+    try:
+        cfg = json.loads((root / 'precedent.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(cfg, dict) or cfg.get('fallback_timezone'):
+        return None
+    people = [m for m in cfg.get('maintainers') or [] if isinstance(m, dict)]
+    if len(people) != 1:
+        return None
+    login = str(people[0].get('github') or '').lstrip('@').lower()
+    try:
+        import precedent_identity as _pid
+        ident = _pid.declared_identity(root, user_config)
+    except Exception:                                           # noqa: BLE001
+        return None
+    me = (os.environ.get('PRECEDENT_GITHUB_USER', '').strip()
+          or str(ident.get('github') or '')).lstrip('@').lower()
+    zone = str(ident.get('timezone') or '').strip()
+    if not login or me != login or not zone:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(zone)
+    except Exception:                                           # noqa: BLE001
+        return None
+    try:
+        import precedent_time as _pt
+        last = _pt.FALLBACK_TZ
+    except Exception:                                           # noqa: BLE001
+        last = 'the engine\'s last-resort zone'
+    return (f'@{login} is this repository\'s only maintainer -- you -- and '
+            f'precedent.json declares no fallback_timezone, so whatever runs '
+            f'where your identity does not reach (a GitHub Actions job, its '
+            f'failure records and issue stamps) dates in {last}. Say yes to '
+            f'add "fallback_timezone": "{zone}" (your zone, from your '
+            f'identity.json) to precedent.json.')
+
+
+def _rev_text(repo_dir, *args):
+    """-> stdout of `git -C repo_dir <args>`, stripped, or '' on failure."""
+    try:
+        r = subprocess.run(['git', '-C', str(repo_dir), *args],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return r.stdout.strip() if r.returncode == 0 else ''
+
+
+def repin_kept_section(clone, item, confirmed, dest_root=None):
+    """Re-record one kept AGENTS.md section against today's template text,
+    with who confirmed it and when. -> (ok, message).
+
+    WHY A COMMAND (2026-10-07). The only way to say "still kept" was to
+    paste two SHA-256 values into precedent.json by hand, and a session's
+    own safety checks rightly read that as editing an audit record: a
+    consuming repository's update stalled on it. This computes both pins
+    the way refresh does, from the template the engine was vendored from,
+    and records the person's words beside them."""
+    dest_root = dest_root or ROOT
+    confirmed = (confirmed or '').strip()
+    if not confirmed:
+        return False, ('--confirmed needs the person\'s own words: a kept '
+                       'section is their decision')
+    key = item[len(AGENTS_MD) + 1:] if item.startswith(AGENTS_MD + ' ') else item
+    item = f'{AGENTS_MD} {key}'
+    path = dest_root / 'precedent.json'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        entry = data[KEPT_DIVERGENCES_KEY][item]
+    except (OSError, ValueError, KeyError, TypeError):         # noqa: BLE001
+        return False, (f'{item} is not in precedent.json\'s '
+                       f'{KEPT_DIVERGENCES_KEY}: record it there with a '
+                       f'reason first, then re-pin it')
+    if not isinstance(entry, dict) or not str(entry.get('reason') or '').strip():
+        return False, f'{item} has no reason recorded: give it one first'
+    manifest = _load_manifest(dest_root / 'tools')
+    kind = manifest.get('kind', DEFAULT_KIND)
+    commit = (_rev(clone, manifest.get('source_commit') or '')
+              or _rev(clone, f'origin/{FOLLOWED_BRANCH}')
+              or _rev(clone, FOLLOWED_BRANCH))
+    if not commit:
+        return False, f'{clone} has no commit to read the template from'
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix='precedent-repin-'))
+    try:
+        _read_agents_md_sources(clone, commit, kind, tmp)
+        plan = _agents_md_plan(dest_root, kind, tmp, manifest)
+        row = next((r for r in plan if r[0] == key), None)
+        if row is None or row[4] is None:
+            return False, (f'{AGENTS_MD} has no single "{key}" section the '
+                           f'template also has, so there is nothing to pin')
+        _key, src_rel, _n, _action, span = row
+        raw = _template_sections((tmp / src_rel).read_text(encoding='utf-8'))[key][1]
+        section = _instantiate(raw, _agents_md_subs(dest_root))
+        lines = (dest_root / AGENTS_MD).read_text(encoding='utf-8').split('\n')
+        lacks = missing_markdown_blocks(_section_text(lines, *span), section)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        import precedent_time
+        today = precedent_time.today()
+    except Exception:                                           # noqa: BLE001
+        today = None
+    entry.update({'template_sha256': _sha_text(section),
+                  'carried_sha256': _carried_sha(section, lacks),
+                  'confirmed': confirmed})
+    if today:
+        entry['confirmed_on'] = str(today)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n',
+                    encoding='utf-8')
+    return True, (f'PIN UPDATED: {item} re-pinned to the template at '
+                  f'{commit[:12]}, confirmed: "{confirmed}"'
+                  + (f' ({today})' if today else ''))
+
+
+def _cli_repin_kept(args):
+    """`repin-kept CLONE "AGENTS.md SECTION" --confirmed "WORDS"`."""
+    words = None
+    if '--confirmed' in args:
+        i = args.index('--confirmed')
+        words = args[i + 1] if i + 1 < len(args) else ''
+        args = args[:i] + args[i + 2:]
+    if len(args) != 2:
+        sys.exit('usage: precedent_vendor_engine.py repin-kept CLONE '
+                 '"AGENTS.md SECTION" --confirmed "the person\'s words"')
+    ok, msg = repin_kept_section(_clone_or_die(args[0]), args[1], words)
+    print(msg)
+    return 0 if ok else 1
+
+
+def _cli_drop_retired(args):
+    """`drop-retired [REPO] [--dry-run] [--offline]`: drop every declared set
+    that says it is retired, or that GitHub reports archived, when no rule it
+    holds would be lost. --offline skips GitHub; --dry-run writes nothing."""
+    dry = '--dry-run' in args
+    offline = '--offline' in args
+    rest = [a for a in args if a not in ('--dry-run', '--offline')]
+    repo = pathlib.Path(rest[0] if rest else '.').resolve()
+    archived, notes = (set(), []) if offline else archived_declared_sources(repo)
+    dropped, kept = drop_retired_sources(repo, archived, apply=not dry)
+    verb = 'would drop' if dry else 'dropped'
+    for n, p, why in dropped:
+        print(f'{verb} {n} ({p}): {why}; every active rule it held is in force '
+              f'in another declared source')
+    for n, p, why, lost in kept:
+        print(f'KEPT {n} ({p}): {why}, but these active practices are in force '
+              f'nowhere else, so dropping it would lose them: {", ".join(lost)}')
+    for note in notes:
+        print(f'note: {note}')
+    if not (dropped or kept):
+        print('no declared set says it is retired'
+              + ('' if offline else
+                 ', and GitHub reports none archived' if not notes else
+                 f', and GitHub reports none archived of those it could '
+                 f'answer for ({len(notes)} it could not, above)'))
+    return 0
 
 
 _IDENTITY_RE = re.compile(
@@ -4550,6 +5688,13 @@ _GENERATED_BEGIN = '<!-- BEGIN GENERATED'
 _GENERATED_END = '<!-- END GENERATED'
 _MD_HEADING_RE = re.compile(r'^(#{1,3})\s+\S')
 _MD_PLACEHOLDER_RE = re.compile(r'<[A-Za-z][^<>\n]{0,70}>')
+# A placeholder WITH the code span, quotes or emphasis wrapped round it, for
+# matching: a repo that filled `<your own audits>` with a plain sentence, or
+# `<upstream URL>` with a Markdown link, dropped the backticks along with the
+# placeholder, and every such section was reported as diverging -- five of a
+# consumer's seven LEFT FOR YOU items on 2026-10-04 were filled placeholders,
+# each needing a two-hash kept entry that goes stale on the next upstream edit.
+_MD_WRAPPED_PLACEHOLDER_RE = re.compile(r'[`"*_]?<[A-Za-z][^<>\n]{0,70}>[`"*_]?')
 _MD_ITEM_RE = re.compile(r'^\s*(?:[-*+]|\d+\.)\s')
 # A block whose own words, placeholders aside, are fewer than this is an
 # example row for the repo to replace ("| <key deliverable> and its
@@ -4863,7 +6008,7 @@ def _wildcard(text):
     """A regex for `text` in which each remaining template placeholder
     matches whatever a repo filled it in with -- or None when the text
     carries too few words of its own to be lacked (_MIN_LITERAL_WORDS)."""
-    pieces = _MD_PLACEHOLDER_RE.split(text)
+    pieces = _MD_WRAPPED_PLACEHOLDER_RE.split(text)
     if len(re.findall(r'[A-Za-z]{2,}', ' '.join(pieces))) < _MIN_LITERAL_WORDS:
         return None
     return re.compile('.+?'.join(re.escape(p) for p in pieces))
@@ -4962,6 +6107,221 @@ def _repin_kept(dest_root, item, template_sha, carried_sha):
           f"a change to a block it leaves out asks again.")
 
 
+# A link written round the same words, or a code span taken off them, is
+# formatting: the words a reader is given did not change.
+_MD_LINK_RE = re.compile(r'\[([^\]\n]*)\]\([^)\s]*\)')
+
+
+def _plain_words(text):
+    """`text` as the words it shows a reader: links become their text, code
+    spans and bold lose their marks, whitespace collapses."""
+    text = _MD_LINK_RE.sub(r'\1', text)
+    text = text.replace('`', '').replace('**', '')
+    return ' '.join(text.split())
+
+
+def _pinned_section_text(templates_dir, key, pinned_sha, subs):
+    """-> the template's text of section `key` that a kept entry's
+    template_sha256 was recorded against, from every version the template
+    has carried (_read_agents_md_sources' history); None when no version
+    hashes to it."""
+    try:
+        history = json.loads((templates_dir / _AGENTS_MD_HISTORY_NAME)
+                             .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    for raw in history.get(key) or []:
+        text = _instantiate(raw, subs)
+        if _sha_text(text) == pinned_sha:
+            return text
+    return None
+
+
+def _template_change(old, new):
+    """-> the lines upstream changed in a section, unified-diff style
+    without the file headers."""
+    import difflib
+    return [l for l in difflib.unified_diff(old.split('\n'), new.split('\n'),
+                                            lineterm='', n=0)
+            if not l.startswith(('---', '+++'))]
+
+
+def _repin_after_formatting(dest_root, item, template_sha, carried_sha):
+    """Re-record a kept entry against today's template text. Only called
+    when upstream's change to the section was formatting alone."""
+    path = dest_root / 'precedent.json'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        entry = data[KEPT_DIVERGENCES_KEY][item]
+    except (OSError, ValueError, KeyError, TypeError):         # noqa: BLE001
+        return False
+    if not isinstance(entry, dict):
+        return False
+    entry['template_sha256'] = template_sha
+    entry['carried_sha256'] = carried_sha
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n',
+                    encoding='utf-8')
+    return True
+
+
+def _change_already_here(change, local):
+    """True when a template change (_template_change) is already in the
+    consumer's section: every line upstream added reads, as plain words,
+    somewhere in it, and no line upstream took out does (unless the same
+    words are part of what it added)."""
+    added = [l[1:] for l in change if l.startswith('+') and l[1:].strip()]
+    removed = [l[1:] for l in change if l.startswith('-') and l[1:].strip()]
+    if not added and not removed:
+        return False
+    here = _plain_words(local)
+    added_words = ' '.join(_plain_words(a) for a in added)
+    return (all(_plain_words(a) in here for a in added)
+            and not any(_plain_words(r) in here and _plain_words(r) not in added_words
+                        for r in removed))
+
+
+def _hunks(old, new):
+    """-> [(i1, i2)]: the line ranges of `old` that changed on the way to
+    `new` (difflib opcodes other than 'equal'; i1 == i2 is an insertion
+    before line i1), each widened over the blank lines either side of it,
+    so where the matcher happens to place an insertion among blank lines
+    cannot decide whether it sits beside another change. Lines compare
+    exactly, trailing whitespace aside."""
+    import difflib
+    a = [l.rstrip() for l in old.split('\n')]
+    b = [l.rstrip() for l in new.split('\n')]
+    out = []
+    for tag, i1, i2, _j1, _j2 in difflib.SequenceMatcher(
+            None, a, b, autojunk=False).get_opcodes():
+        if tag == 'equal':
+            continue
+        while i1 > 0 and not a[i1 - 1]:
+            i1 -= 1
+        while i2 < len(a) and not a[i2]:
+            i2 += 1
+        out.append((i1, i2))
+    return out
+
+
+def _change_touches_local(old, new, local):
+    """True when upstream's change to a kept section could touch what the
+    consumer kept differently -- a three-way read with the pinned template
+    text `old` as the base: the hunks old -> `new` (upstream's change) and
+    the hunks old -> `local` (the consumer's own section).
+
+    They intersect when two hunks' line ranges of `old` overlap OR TOUCH
+    (closed ranges, a.i1 <= b.i2 and b.i1 <= a.i2, after _hunks widens each
+    over the blank lines around it), so a change to the line or paragraph
+    right beside one the consumer changed asks, as a merge would call it a
+    conflict. Any doubt answers True: no pinned or local text, or a
+    consumer hunk spanning the whole section (nothing lines up). False
+    means every line upstream changed is one the consumer carries exactly
+    as the pinned template had it, and so are its neighbours."""
+    if local is None or old is None:
+        return True
+    theirs, mine = _hunks(old, new), _hunks(old, local)
+    if not theirs:
+        return False
+    n = len(old.split('\n'))
+    if any(i1 == 0 and i2 >= n for i1, i2 in mine):
+        return True
+    return any(a1 <= b2 and b1 <= a2 for a1, a2 in theirs for b1, b2 in mine)
+
+
+# The clone a command was run against, as typed, so a hint can name it.
+_CLONE_ARG = '../BestPractice'
+
+
+def _repin_command(item):
+    return (f'python3 tools/precedent_vendor_engine.py repin-kept {_CLONE_ARG} '
+            f'"{item}" --confirmed "<the person\'s words>"')
+
+
+def _report_stale_kept(dest_root, templates_dir, key, item, what, section,
+                       template_sha, carried_sha, subs, local=None):
+    """A section kept on purpose whose template text changed since it was
+    recorded: -> True when handled here, False to fall back to the full
+    report.
+
+    2026-10-07, a consuming repository's Update Vendors: two kept sections
+    came back as long "lacks" lists -- every block each section has always
+    left out on purpose -- when upstream's only change to them was file
+    names in code spans becoming links. Finding that out took a git diff of
+    the template by hand. The question a stale pin asks is "what did
+    upstream change?", so that is what is shown: the template's own change
+    since the pinned text. When the change is formatting alone, the words
+    the decision was made on are the same, so the pin moves by itself."""
+    entry = kept_template_divergences(dest_root).get(item) or {}
+    old = _pinned_section_text(templates_dir, key, entry.get('template_sha256', ''), subs)
+    if old is None:
+        return False
+    reason = entry.get('reason', '')
+    if _plain_words(old) == _plain_words(section):
+        if _repin_after_formatting(dest_root, item, template_sha, carried_sha):
+            print(f"PIN UPDATED: {item} is kept on purpose (\"{reason}\"), and "
+                  f"upstream's only change to {what} since it was recorded is "
+                  f"formatting -- links and code spans round the same words -- "
+                  f"so the kept entry now records today's text.")
+            return True
+        return False
+    change = _template_change(old, section)
+    # 2026-10-07, a consuming repository: upstream changed one phrase in a
+    # kept section ("AGENTS.md's" to "this file's"), the section already
+    # said "this file's", and the update still stopped for a person. With
+    # the change already here there is nothing to decide.
+    if local is not None and _change_already_here(change, local):
+        if _repin_after_formatting(dest_root, item, template_sha, carried_sha):
+            print(f"PIN UPDATED: {item} is kept on purpose (\"{reason}\"), and "
+                  f"upstream's change to {what} since it was recorded is "
+                  f"already in this repository's section, so the kept entry "
+                  f"now records today's text.")
+            return True
+        return False
+    # 2026-10-08, a consuming repository: a template rewording elsewhere in
+    # a kept section -- lines the consumer carries exactly as upstream wrote
+    # them -- stopped the update for the person's yes to a re-pin, though
+    # nothing the consumer kept differently was touched. Read three ways
+    # (_change_touches_local); only a change that could touch the kept
+    # difference asks. The section itself is never rewritten either way.
+    if not _change_touches_local(old, section, local):
+        if _repin_after_formatting(dest_root, item, template_sha, carried_sha):
+            n = sum(1 for l in change if l[:1] in '+-')
+            print(f"PIN UPDATED: {item} is kept on purpose (\"{reason}\"), and "
+                  f"upstream's change to {what} since it was recorded "
+                  f"({n} line(s)) touches no line this repository's section "
+                  f"changes, so the kept entry now records today's text. The "
+                  f"section is left as it is; that change is not copied in.")
+            return True
+        return False
+    # 2026-10-08, Morgan (strength: decided): "replace our wording or
+    # version with the upstream version when we have it *EXCEPT* in cases
+    # where there is a substantive difference, in which case you should ASK
+    # THE SESSION USER or use your judgment". Upstream's change reaching the
+    # lines this repository kept differently is that case, so the default
+    # said here is upstream's section, not a copy-in on top of ours.
+    print(f"DIVERGED: {AGENTS_MD} \"{key}\" is kept on purpose (\"{reason}\"), "
+          f"and upstream has changed {what} since that was recorded, on or "
+          f"beside the lines this repository words its own way. Upstream's "
+          f"change, from the recorded text to today's:")
+    for line in change[:60]:
+        print(f"    {line if len(line) <= 200 else line[:197] + '...'}")
+    if len(change) > 60:
+        print(f"    ... and {len(change) - 60} more line(s)")
+    print(f"    the default is upstream's wording: replace this section with "
+          f"{what} and remove its {KEPT_DIVERGENCES_KEY} entry. Keep this "
+          f"repository's wording only where it does something different and "
+          f"important -- then copy in the rest of upstream's change, say why, "
+          f"and with the person's yes re-pin it: {_repin_command(item)}")
+    _left(f'{AGENTS_MD} "{key}"', f'kept on purpose, and upstream changed '
+          f'{what} where this repository words it differently (listed above) '
+          f'-- the default is upstream\'s: replace the section with it and '
+          f'remove the {KEPT_DIVERGENCES_KEY} entry. Keep yours only where it '
+          f'does something different and important (ask the person when it is '
+          f'a close call); then copy in the rest of upstream\'s change and, '
+          f'with the person\'s yes, re-pin it: {_repin_command(item)}')
+    return True
+
+
 def _report_agents_md(dest_root, templates_dir, plan, reask_absent=False):
     """Print what refresh (or status) found in AGENTS.md's template
     sections, and put what needs a person on the Left-for-you list. Every
@@ -4981,6 +6341,18 @@ def _report_agents_md(dest_root, templates_dir, plan, reask_absent=False):
     template_text = None
     complete = []
     for key, src_rel, line_no, action, span in plan:
+        # This pass judges the section on today's state, so what the first
+        # pass of a self-replacing refresh said about it no longer stands:
+        # anything still needing the person is put back below, in this
+        # pass's words. Only 'absent' keeps the first pass's finding, since
+        # that is the one this pass cannot find again (_CARRIED_LEFT).
+        # 2026-10-08, a consuming repository's Update Vendors: the second
+        # pass re-pinned a kept section ("PIN UPDATED") while the first
+        # pass's "lacks N blocks" for the same section was still printed
+        # under Left for you; the next run was clean.
+        if action != 'absent':
+            _CARRIED_LEFT[:] = [(i, w) for i, w in _CARRIED_LEFT
+                                if i != f'{AGENTS_MD} "{key}"']
         if action == 'absent' and reask_absent:
             print(f"  NOTE: {AGENTS_MD} \"{key}\" is recorded as left out, but "
                   f"possibly only by the first pass of this refresh, whose "
@@ -5024,8 +6396,14 @@ def _report_agents_md(dest_root, templates_dir, plan, reask_absent=False):
         template_sha = _sha_text(section)
         carried_sha = _carried_sha(section, lacks)
         _repin_kept(dest_root, item, template_sha, carried_sha)
-        if _kept_divergence(dest_root, item, template_sha, carried_sha)[0] == 'kept':
+        verdict = _kept_divergence(dest_root, item, template_sha, carried_sha)[0]
+        if verdict == 'kept':
             _report_kept(dest_root, item, what, template_sha, carried_sha)
+            continue
+        if verdict == 'stale' and _report_stale_kept(
+                dest_root, templates_dir, key, item, what, section,
+                template_sha, carried_sha, subs,
+                local=_section_text(lines, *span)):
             continue
         print(f"DIVERGED: {AGENTS_MD} \"{key}\" (line {span[0] + 1}) has local "
               f"edits, so refresh leaves it alone (it never overwrites a line "
@@ -5102,6 +6480,19 @@ def _apply_agents_md_plan(dest_root, templates_dir, plan, recorded):
     if rewritten:
         path.write_text('\n'.join(lines), encoding='utf-8')
     return list(reversed(rewritten))
+
+
+def agents_md_recorded(dest_root):
+    """-> the AGENTS.md section record ENGINE_MANIFEST.json holds now, as a
+    dict (empty when there is none). Read before a refresh, it says which
+    sections were already left out on purpose and which the refresh is
+    about to report as missing for the first time."""
+    try:
+        manifest = json.loads((dest_root / 'tools' / MANIFEST_NAME)
+                              .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    return dict(manifest.get(AGENTS_MD_SECTIONS_KEY) or {})
 
 
 def record_agents_md_sections(dest_root, kind, source_root):
@@ -5358,7 +6749,8 @@ def _head_commit(repo_dir):
     return _rev(repo_dir, 'HEAD')
 
 
-def _seed_write(dest_tools, engine_dir, stamp, kind, hooks_dir=None):
+def _seed_write(dest_tools, engine_dir, stamp, kind, hooks_dir=None,
+                seeded_from=None):
     """_write_engine_files, plus the cleanup seed never did, plus the hook
     scripts when `hooks_dir` is given -- seed()'s two branches source hooks
     from different places (the working tree vs. an extracted commit), so the
@@ -5403,7 +6795,8 @@ def _seed_write(dest_tools, engine_dir, stamp, kind, hooks_dir=None):
                   f"read, so files dropped from this kind since the last "
                   f"vendoring cannot be identified and are left in place.",
                   file=sys.stderr)
-    written = _write_engine_files(dest_tools, engine_dir, stamp, kind)
+    written = _write_engine_files(dest_tools, engine_dir, stamp, kind,
+                                  seeded_from=seeded_from)
     if previous:
         _remove_dropped_engine_files(dest_tools, previous, kind)
     if hooks_dir is not None:
@@ -5412,7 +6805,47 @@ def _seed_write(dest_tools, engine_dir, stamp, kind, hooks_dir=None):
     return written
 
 
-def seed(dest, kind=DEFAULT_KIND):
+def off_source_branch(repo_dir, commit):
+    """-> what `repo_dir` is on (a branch name, or 'a detached HEAD') when
+    SOURCE_BRANCH, as this checkout knows it, does not contain `commit`;
+    None when it does, or when that cannot be told (no SOURCE_BRANCH ref,
+    or no commit).
+
+    2026-10-02: a practice set was created from a working branch, and its
+    manifest said source_branch "main" over a commit main did not have.
+    Nothing could tell, so every session start "refreshed" it backwards
+    (practice: generated-artifact-provenance)."""
+    tip = _rev(repo_dir, f'origin/{SOURCE_BRANCH}') or _rev(repo_dir, SOURCE_BRANCH)
+    if not tip or not commit or commit == 'unknown':
+        return None
+    if not engine_is_ahead(repo_dir, commit, tip):
+        return None
+    r = subprocess.run(['git', '-C', str(repo_dir), 'symbolic-ref', '--short',
+                        '-q', 'HEAD'], capture_output=True, text=True)
+    return r.stdout.strip() or 'a detached HEAD'
+
+
+def seed_off_main_allowed():
+    """The test harness seeds from the commit under test by the dozen, which
+    is the on-purpose case, so it sets PRECEDENT_SEED_OFF_MAIN=1 once
+    rather than passing --off-main at every fixture (the same pattern as
+    PRECEDENT_ALLOW_ANY_AUTHOR). Nothing outside the harness sets it."""
+    return os.environ.get('PRECEDENT_SEED_OFF_MAIN') == '1'
+
+
+def off_main_refusal(where, commit):
+    """The one sentence seed and the bootstrap refuse with."""
+    return (f"this BestPractice checkout is on {where} at {commit[:12]}, which "
+            f"{SOURCE_BRANCH} does not contain, so the engine it would copy is "
+            f"one {SOURCE_BRANCH} has never had. Every refresh leaves such a "
+            f"repo as it is until that work reaches {SOURCE_BRANCH}, and if it "
+            f"never does, nothing brings it current. Copy from {SOURCE_BRANCH} "
+            f"(`git switch {SOURCE_BRANCH} && git pull`), or pass --off-main to "
+            f"do this on purpose: the manifest then records {where} as "
+            f"seeded_from_branch.")
+
+
+def seed(dest, kind=DEFAULT_KIND, off_main=False):
     """Run from BestPractice's own checkout: dest is a NEW source-set or
     consumer repo's root (tools/precedent_bootstrap_source.py's own --dest,
     for kind='source' only -- a consumer has no bootstrap tool of its own,
@@ -5428,6 +6861,12 @@ def seed(dest, kind=DEFAULT_KIND):
         raise ValueError(f"kind must be one of {sorted(KINDS)}, got {kind!r}")
     dest = pathlib.Path(dest).resolve()
     commit = _head_commit(ROOT) or 'unknown'
+    # Refused before anything is written, never recorded as main: see
+    # off_source_branch(). With off_main, the record names the real branch.
+    seeded_from = off_source_branch(ROOT, commit)
+    if seeded_from and not (off_main or seed_off_main_allowed()):
+        sys.exit(f"precedent_vendor_engine seed REFUSED: "
+                 f"{off_main_refusal(seeded_from, commit)}")
     # From the COMMIT, not the working tree. This used to copy whatever
     # was on disk in ENGINE_DIR while stamping HEAD's hash into
     # ENGINE_MANIFEST.json, so seeding from a checkout with any
@@ -5461,7 +6900,8 @@ def seed(dest, kind=DEFAULT_KIND):
                   f"provenance record.", file=sys.stderr)
         stamp = commit if commit == 'unknown' else f'{commit}+dirty'
         return _seed_write(dest / 'tools', ENGINE_DIR, stamp, kind,
-                           hooks_dir=ROOT / HOOK_SOURCE_DIR)
+                           hooks_dir=ROOT / HOOK_SOURCE_DIR,
+                           seeded_from=seeded_from)
     _c, engine_dir = _source_tools_at(ROOT, kind=kind, ref=commit, fetch=False)
     try:
         dirty = [n for n in wanted
@@ -5474,7 +6914,8 @@ def seed(dest, kind=DEFAULT_KIND):
                   f"written; commit them and re-run to ship them.",
                   file=sys.stderr)
         return _seed_write(dest / 'tools', engine_dir, commit, kind,
-                           hooks_dir=engine_dir / 'hooks')
+                           hooks_dir=engine_dir / 'hooks',
+                           seeded_from=seeded_from)
     finally:
         shutil.rmtree(engine_dir, ignore_errors=True)
 
@@ -5619,8 +7060,8 @@ def status(clone):
     # this used to bind clone_head='origin/precedent-beta-v01' -- truthy, and
     # != recorded -- and then told the reader upstream had moved and to run
     # refresh, when the truth was that this clone has no such ref at all.
-    clone_head = (_rev(clone, f'origin/{SOURCE_BRANCH}')
-                  or _rev(clone, SOURCE_BRANCH))
+    clone_head = (_rev(clone, f'origin/{FOLLOWED_BRANCH}')
+                  or _rev(clone, FOLLOWED_BRANCH))
     recorded = manifest.get('source_commit')
     print(f"kind: {kind}")
     print(f"manifest source_commit: {recorded}")
@@ -5628,16 +7069,16 @@ def status(clone):
         _status_template_instances(clone, clone_head, kind, manifest)
     if not clone_head:
         # Not "fresh" and not "moved" -- unknown. Same discipline as fresh().
-        print(f"COULD NOT VERIFY: {clone} has no {SOURCE_BRANCH} "
-              f"(neither origin/{SOURCE_BRANCH} nor a local branch of that name), so "
+        print(f"COULD NOT VERIFY: {clone} has no {FOLLOWED_BRANCH} "
+              f"(neither origin/{FOLLOWED_BRANCH} nor a local branch of that name), so "
               f"whether this vendored engine is current is UNKNOWN -- this is not "
               f"'confirmed current'. Fetch that branch in the clone, or point at a "
               f"clone of {SOURCE_REPO}.")
         return 1 if (drift or untracked or retired) else 0
-    print(f"clone origin/{SOURCE_BRANCH}: {clone_head}"
+    print(f"clone origin/{FOLLOWED_BRANCH}: {clone_head}"
           + ("  (== recorded)" if clone_head == recorded else "  (!= recorded)"))
     if clone_head != recorded:
-        print(f"NOTICE: BestPractice's {SOURCE_BRANCH} has moved since this engine was "
+        print(f"NOTICE: BestPractice's {FOLLOWED_BRANCH} has moved since this engine was "
               f"last vendored -- run `refresh` to pick it up.")
     return 1 if (drift or untracked or retired) else 0
 
@@ -5678,7 +7119,7 @@ def _status_template_instances(clone, commit, kind, manifest):
 
 
 def _source_tools_at(clone, kind=DEFAULT_KIND, ref=None, fetch=True):
-    """Materialize SOURCE_BRANCH's tools/ out of `clone` into a throwaway
+    """Materialize FOLLOWED_BRANCH's tools/ out of `clone` into a throwaway
     directory, and return (commit, that directory).
 
     READ-ONLY with respect to `clone`, deliberately and load-bearingly so.
@@ -5705,7 +7146,7 @@ def _source_tools_at(clone, kind=DEFAULT_KIND, ref=None, fetch=True):
     kind's list, and _write_engine_files() will look for every one of them
     in the directory returned here."""
     # Exit code deliberately discarded: an offline clone, or one whose origin
-    # has no SOURCE_BRANCH, is a supported case -- the _rev fallback below
+    # has no FOLLOWED_BRANCH, is a supported case -- the _rev fallback below
     # handles it, and a hard failure here would break vendoring from a local
     # clone that is already up to date.
     # The refspec is explicit because a bare `fetch origin <branch>` writes
@@ -5714,17 +7155,17 @@ def _source_tools_at(clone, kind=DEFAULT_KIND, ref=None, fetch=True):
     # origin/<branch> never appeared and the second pass failed "has no
     # main" on a clone that had just fetched it (2026-09-28).
     if fetch:
-        _git(clone, 'fetch', '--quiet', 'origin', tracking_refspec(SOURCE_BRANCH))
+        _git(clone, 'fetch', '--quiet', 'origin', tracking_refspec(FOLLOWED_BRANCH))
     # `ref`, when given, names the exact commit to read (seed() passes this
     # checkout's own HEAD -- it is not vendoring from a branch at all).
     # Otherwise: origin/<branch> first, then a local branch of that name --
     # a CI workspace carries only the ref under test, so a clone taken from
-    # it legitimately has no origin/<SOURCE_BRANCH> at all.
-    commit = ref or (_rev(clone, f'origin/{SOURCE_BRANCH}')
-                     or _rev(clone, SOURCE_BRANCH))
+    # it legitimately has no origin/<FOLLOWED_BRANCH> at all.
+    commit = ref or (_rev(clone, f'origin/{FOLLOWED_BRANCH}')
+                     or _rev(clone, FOLLOWED_BRANCH))
     if not commit:
-        sys.exit(f"precedent_vendor_engine FAIL: {clone} has no {SOURCE_BRANCH} "
-                 f"(neither origin/{SOURCE_BRANCH} nor a local branch of that name) "
+        sys.exit(f"precedent_vendor_engine FAIL: {clone} has no {FOLLOWED_BRANCH} "
+                 f"(neither origin/{FOLLOWED_BRANCH} nor a local branch of that name) "
                  f"-- is it a clone of {SOURCE_REPO}?")
 
     # file mode per entry, so a vendored file keeps the executable bit it has
@@ -5734,7 +7175,7 @@ def _source_tools_at(clone, kind=DEFAULT_KIND, ref=None, fetch=True):
     if not ok:
         # No tempdir yet at this point -- nothing to clean up.
         sys.exit(f"precedent_vendor_engine FAIL: could not list tools/ at "
-                 f"{SOURCE_BRANCH} @ {commit[:12]} in {clone}. Refusing rather than "
+                 f"{FOLLOWED_BRANCH} @ {commit[:12]} in {clone}. Refusing rather than "
                  f"vendoring with every executable bit silently dropped.")
     for line in tree.splitlines():
         meta, _tab, name = line.partition('\t')
@@ -5769,12 +7210,12 @@ def _source_tools_at(clone, kind=DEFAULT_KIND, ref=None, fetch=True):
             # mean a broken ref rather than a removal.
             if name == HERE.name:
                 shutil.rmtree(tmp, ignore_errors=True)
-                sys.exit(f"precedent_vendor_engine FAIL: {SOURCE_BRANCH} @ "
+                sys.exit(f"precedent_vendor_engine FAIL: {FOLLOWED_BRANCH} @ "
                          f"{commit[:12]} has no tools/{name} -- that is the "
                          f"vendoring tool itself, so there is no corrected "
                          f"file list to converge on. This is a broken ref, "
                          f"not a removal.")
-            print(f"precedent_vendor_engine: {SOURCE_BRANCH} @ {commit[:12]} no "
+            print(f"precedent_vendor_engine: {FOLLOWED_BRANCH} @ {commit[:12]} no "
                   f"longer carries tools/{name} -- it was removed or renamed "
                   f"upstream. Skipping it; the second pass runs the new file "
                   f"list and cleans up the local copy.", file=sys.stderr)
@@ -5922,21 +7363,32 @@ def repoint_catalogue_pin(root):
     except (ValueError, OSError):
         return None
     up = data.get('upstream')
-    if not isinstance(up, dict) or up.get('branch') not in RETIRED_CATALOGUE_PINS:
+    target = followed_branch(root)
+    # The pins a repoint may rewrite: the retired ones, and either followable
+    # branch when the repo now declares the other (2026-10-05) -- so naming
+    # `upstream_branch` moves the catalogue with the engine, and removing it
+    # moves both back to SOURCE_BRANCH.
+    rewritable = set(RETIRED_CATALOGUE_PINS) | set(FOLLOWABLE_BRANCHES)
+    if not isinstance(up, dict) or up.get('branch') not in rewritable \
+            or up.get('branch') == target:
         return None
     repo = str(up.get('repo') or '').rstrip('/')
     if repo and re.sub(r'\.git$', '', repo.rsplit('/', 1)[-1]).lower() != 'bestpractice':
         return None
     old = up['branch']
-    up['branch'] = SOURCE_BRANCH
+    up['branch'] = target
     # checkin.py's own write shape, so the diff is the one line.
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n',
                     encoding='utf-8')
+    why = (f"this repo's precedent.json declares {UPSTREAM_BRANCH_KEY} "
+           f"{target!r}" if declared_upstream_branch(root) == target
+           else f"every install follows {SOURCE_BRANCH} unless its "
+                f"precedent.json names {UPSTREAM_BRANCH_KEY} "
+                f"(vendor-update-runbook step 1)")
     print(f"precedent_vendor_engine refresh: repointed the practice catalogue "
           f"(process/manifest.json upstream.branch) from {old!r} to "
-          f"{SOURCE_BRANCH!r} -- every install follows {SOURCE_BRANCH} since "
-          f"2026-09-25 (vendor-update-runbook step 1). Nothing to decide: "
-          f"`checkin.py update` now takes the catalogue from {SOURCE_BRANCH}.")
+          f"{target!r} -- {why}. Nothing to decide: "
+          f"`checkin.py update` now takes the catalogue from {target}.")
     return path
 
 
@@ -6017,14 +7469,243 @@ def _warn_catalogue_skew(dest, engine_commit):
           f"catalogue does not carry yet -- if a check reports a slug as "
           f"'not a real practice', this skew is why. Take the catalogue "
           f"update too: `checkin.py update` (INSTALL.md section 2). Only a "
-          f"repo pinned to a branch other than {SOURCE_BRANCH} needs the "
+          f"repo pinned to a branch other than {FOLLOWED_BRANCH} needs the "
           f"manual mirror instead, and refresh repoints the retired pins "
           f"itself.")
 
 
+# templates/gitignore.template's lines, merged into a consumer's .gitignore
+# by the refresh itself (2026-10-02). INSTALL.md section 0's installer and
+# precedent_update.py's gitignore_step both merge it, but a classic install
+# migrated onto the loader by MIGRATING_EXISTING_INSTALLS.md runs neither: it
+# seeds the engine and refreshes. commit-identity.sh, which that refresh
+# wires, then writes .claude/settings.local.json at the next session start,
+# and the migration's own `git add -A` committed that per-machine file in a
+# real public consumer. The same gap leaves `.precedent/` unignored -- the
+# untracked file that carries a session's PRIVATE practices. Additive only,
+# like precedent_install.merge_gitignore, whose rule this restates because
+# that module is not vendored into a consumer.
+GITIGNORE_TEMPLATE = 'templates/gitignore.template'
+GITIGNORE_KINDS = ('consumer',)
+
+
+def _gitignore_template_text(clone, commit):
+    ok, text = _git_read(clone, 'show', f'{commit}:{GITIGNORE_TEMPLATE}')
+    return text if ok and text.strip() else None
+
+
+def _gitignore_missing(dest_root, tmpl):
+    """-> the template's non-comment lines .gitignore lacks, in order; every
+    one of them when there is no .gitignore at all."""
+    if not tmpl:
+        return []
+    target = pathlib.Path(dest_root) / '.gitignore'
+    have = set(target.read_text(encoding='utf-8').splitlines()) \
+        if target.is_file() else set()
+    return list(dict.fromkeys(l for l in tmpl.splitlines()
+                              if l.strip() and not l.startswith('#')
+                              and l not in have))
+
+
+def _merge_gitignore(dest_root, tmpl):
+    """Write the template whole when there is no .gitignore, else append the
+    lines it lacks under one comment. -> [lines added] ([] when complete)."""
+    missing = _gitignore_missing(dest_root, tmpl)
+    if not missing:
+        return []
+    target = pathlib.Path(dest_root) / '.gitignore'
+    if not target.is_file():
+        target.write_text(tmpl, encoding='utf-8')
+    else:
+        have = target.read_text(encoding='utf-8')
+        target.write_text(have.rstrip('\n') + '\n\n# Added by the Precedent '
+                          'engine refresh, from ' + GITIGNORE_TEMPLATE + '\n'
+                          + '\n'.join(missing) + '\n', encoding='utf-8')
+    print(f"precedent_vendor_engine refresh: .gitignore now carries "
+          f"{len(missing)} line(s) from {GITIGNORE_TEMPLATE} it lacked "
+          f"({', '.join(missing)}) -- added only, nothing there was changed.")
+    return missing
+
+
+# The individual-set bootstrap hook, written and wired by the refresh for a
+# consumer whose person has an individual set (2026-10-02). It is a
+# TEMPLATE, rendered per person rather than copied, so HOOK_WIRING and the
+# verbatim hook vendoring above never reach it -- and the only route left
+# was MIGRATING_EXISTING_INSTALLS.md step 4's manual run of
+# precedent_bootstrap_source.py --write-session-hook, which a real
+# consumer's session was refused exactly as it is refused hand-editing
+# .claude/settings.json. Rendered with NO repository URL: the hook finds the
+# set from the person's own token, base URL or user config at run time, so
+# nothing about the person is baked into the repo -- which may be public.
+INDIVIDUAL_HOOK = 'precedent-individual-bootstrap.sh'
+INDIVIDUAL_HOOK_TEMPLATE = 'individual-source-bootstrap.sh.template'
+INDIVIDUAL_HOOK_NAME = 'precedent-individual'
+INDIVIDUAL_HOOK_KINDS = ('consumer',)
+
+
+def render_individual_hook(template_text):
+    """The individual-set hook rendered from its template: the set's name,
+    and NO repository URL (the hook finds the set from the person's token,
+    base URL or user config at run time). The one rendering, shared by a
+    consumer's refresh and by the individual set's own declared copy."""
+    for key, value in (('SOURCE_NAME', INDIVIDUAL_HOOK_NAME),
+                       ('SOURCE_REPO_URL', ''),
+                       ('SOURCE_REPO_URL_SUBSTITUTED', 'yes')):
+        template_text = template_text.replace('{{' + key + '}}', value)
+    return template_text
+
+
+def _person_has_individual_set():
+    """True when the person running this has an individual set: their
+    user-level config declares one, or their environment carries a signal
+    precedent_source_credentials.individual_signals counts (a token, a base
+    URL, an individual repo, or a clone already on disk). False when that
+    module cannot be imported -- nothing is written on a guess."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_source_credentials as psc
+        _path, code = psc.individual_config_state()
+        return code == 'declared' or bool(psc.individual_signals())
+    except Exception:                              # practice: fail-gracefully
+        return False
+
+
+def _individual_hook_plan(dest_root, kind):
+    """-> (write_file, wire_entry): what the refresh still has to do for the
+    individual-set hook. Both False for any kind but a consumer, a repo with
+    no settings.json, one that declines the hook in declined_adapters, or a
+    person with no individual set."""
+    root = pathlib.Path(dest_root)
+    settings = root / '.claude' / 'settings.json'
+    if kind not in INDIVIDUAL_HOOK_KINDS or not settings.is_file() \
+            or INDIVIDUAL_HOOK in _declined_hook_names(root):
+        return False, False
+    try:
+        data = json.loads(settings.read_text(encoding='utf-8'))
+    except (ValueError, OSError):
+        return False, False
+    wired = any(INDIVIDUAL_HOOK in str((h or {}).get('command') or '')
+                for g in ((data.get('hooks') or {}).get('SessionStart') or [])
+                if isinstance(g, dict) for h in (g.get('hooks') or []))
+    present = (root / HOOK_DEST_DIR / INDIVIDUAL_HOOK).is_file()
+    if wired and present:
+        return False, False
+    if not _person_has_individual_set():
+        return False, False
+    return not present, not wired
+
+
+def _apply_individual_hook(dest_root, kind, clone, commit):
+    """Write the hook from the template at `commit` when it is missing and
+    wire it FIRST in SessionStart when it is not wired: it writes the user
+    config every later SessionStart hook resolves the individual set
+    against. Add-only, like _apply_hook_wiring. -> [paths written]"""
+    write_file, wire_entry = _individual_hook_plan(dest_root, kind)
+    root = pathlib.Path(dest_root)
+    written = []
+    if write_file:
+        ok, text = _git_read(clone, 'show',
+                             f'{commit}:{HOOK_SOURCE_DIR}/{INDIVIDUAL_HOOK_TEMPLATE}')
+        if not ok or not text.strip():
+            return []
+        text = render_individual_hook(text)
+        dest = root / HOOK_DEST_DIR / INDIVIDUAL_HOOK
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding='utf-8')
+        dest.chmod(0o755)
+        written.append(dest)
+    if wire_entry:
+        settings = root / '.claude' / 'settings.json'
+        data = json.loads(settings.read_text(encoding='utf-8'),
+                          object_pairs_hook=collections.OrderedDict)
+        groups = data.setdefault('hooks', collections.OrderedDict()) \
+                     .setdefault('SessionStart', [])
+        home = next((g for g in groups if isinstance(g, dict)
+                     and isinstance(g.get('hooks'), list)), None)
+        if home is None:
+            home = collections.OrderedDict([('hooks', [])])
+            groups.insert(0, home)
+        home['hooks'].insert(0, collections.OrderedDict([
+            ('type', 'command'),
+            ('command', f'$CLAUDE_PROJECT_DIR/{HOOK_DEST_DIR}/{INDIVIDUAL_HOOK}')]))
+        settings.write_text(json.dumps(data, indent=2, ensure_ascii=False)
+                            + '\n', encoding='utf-8')
+        written.append(settings)
+    if written:
+        print(f"precedent_vendor_engine refresh: the individual-set bootstrap "
+              f"hook ({HOOK_DEST_DIR}/{INDIVIDUAL_HOOK}) was "
+              f"{'written and ' if write_file else ''}"
+              f"{'wired first in SessionStart' if wire_entry else 'restored'}, "
+              f"because the person running this has an individual set. It "
+              f"carries no repository URL: it finds the set from that "
+              f"person's token, base URL or user config when a session "
+              f"starts. To opt out, remove the entry and declare "
+              f"{HOOK_DEST_DIR}/{INDIVIDUAL_HOOK} in precedent.json's "
+              f"declined_adapters with the reason.")
+    return written
+
+
+def engine_is_ahead(clone, recorded, tip):
+    """True when the engine a repo records (`recorded`) came from a
+    BestPractice commit that `tip` does not contain: newer work, from a
+    branch that has not reached FOLLOWED_BRANCH, so a refresh to `tip` would
+    roll it back. False when `tip` contains it (an ordinary stale engine).
+
+    2026-10-02: a practice set made from a working branch recorded that
+    branch's commit, and every session start "refreshed" it to main's older
+    engine in the working tree -- deleting files the set had committed --
+    because refresh compared the two commits only for equality. The tip is
+    asked about its history, never only compared. A recorded commit the
+    clone does not have cannot be placed, and is treated as stale, as
+    before."""
+    try:
+        known = subprocess.run(['git', '-C', str(clone), 'cat-file', '-e',
+                                f'{recorded}^{{commit}}'],
+                               capture_output=True).returncode == 0
+        if not known:
+            return False
+        return subprocess.run(['git', '-C', str(clone), 'merge-base',
+                               '--is-ancestor', recorded, tip],
+                              capture_output=True).returncode == 1
+    except OSError:
+        return False
+
+
+def _drift_upstream_already_has(tools_drift, path_drift, dest_tools, clone,
+                                ref, engine_paths):
+    """-> (drift still to refuse on, [names already identical to upstream]).
+
+    A file that differs from its recorded hash but is byte-for-byte
+    upstream's copy holds no edit to lose: the usual way in is a hand-carried
+    upstream fix, committed before the refresh that would have brought it.
+    Refusing on it left a set stale at every session start until someone
+    forced it (precedent-individual, found rehearsing a Produce, 2026-10-03).
+
+    Upstream is read as the clone already has it -- `ref`, else
+    origin/FOLLOWED_BRANCH, else FOLLOWED_BRANCH -- with no fetch, so a refusal
+    still comes before anything is fetched. Engine files in tools/
+    (`tools_drift`) and declared engine paths (`path_drift`) are judged this
+    way; hooks and CI workflows keep their own review. A missing file, or
+    one upstream's copy cannot be read for, still counts as drift."""
+    commit = ref or _rev(clone, f'origin/{FOLLOWED_BRANCH}') or _rev(clone, FOLLOWED_BRANCH)
+    by_local = {local: up for up, local in engine_paths.items()}
+    keep, same = [], []
+    for name, why, here, up in (
+            [(n, w, dest_tools / n, f'tools/{n}') for n, w in tools_drift]
+            + [(n, w, ROOT / n, by_local.get(n)) for n, w in path_drift]):
+        blob = None
+        if commit and up and why != 'missing' and here.is_file():
+            blob = _engine_path_blob(clone, commit, up)
+        if blob is not None and here.read_bytes() == blob:
+            same.append(name)
+        else:
+            keep.append((name, why))
+    return keep, same
+
+
 def refresh(clone, force=False, ref=None):
     """`ref`, when given, names the exact commit or ref inside `clone` to
-    vendor from, instead of resolving SOURCE_BRANCH there.
+    vendor from, instead of resolving FOLLOWED_BRANCH there.
 
     Two callers need it. A verification fixture must vendor from the tree
     it is testing, not from whatever `origin/precedent-beta-v01` happens
@@ -6071,9 +7752,15 @@ def refresh(clone, force=False, ref=None):
                  f"own, or drop the entry. Not waived by --force.")
 
     if not force:
-        drift = (_local_drift(dest_tools, manifest) + _hook_drift(ROOT, manifest)
-                 + _ci_workflow_drift(ROOT, manifest, kind)
-                 + _engine_path_drift(ROOT, manifest))
+        drift, same = _drift_upstream_already_has(
+            _local_drift(dest_tools, manifest), _engine_path_drift(ROOT, manifest),
+            dest_tools, clone, ref, engine_paths)
+        drift += (_hook_drift(ROOT, manifest)
+                  + _ci_workflow_drift(ROOT, manifest, kind))
+        for name in same:
+            print(f"  {name}: differs from the recorded hash, but is already "
+                  f"identical to upstream's copy -- nothing to lose, so it "
+                  f"does not hold the refresh up")
         if drift:
             for name, why in drift:
                 print(f"  {name}: {why}")
@@ -6100,6 +7787,18 @@ def refresh(clone, force=False, ref=None):
 
     new_commit, engine_dir = _source_tools_at(clone, kind, ref=ref,
                                               fetch=ref is None)
+    recorded = str(manifest.get('source_commit') or '')
+    if (ref is None and not force and recorded and recorded != new_commit
+            and engine_is_ahead(clone, recorded, new_commit)):
+        shutil.rmtree(engine_dir, ignore_errors=True)
+        print(f"precedent_vendor_engine refresh: this repo's engine came from "
+              f"BestPractice {recorded[:12]}, which {FOLLOWED_BRANCH} "
+              f"({new_commit[:12]}) does not contain -- newer work, not older. "
+              f"Refreshing would roll it back, so it is left as it is. Once "
+              f"that work reaches {FOLLOWED_BRANCH}, a refresh takes it from "
+              f"there; to vendor a particular commit, pass --ref; to roll it "
+              f"back on purpose, --force.")
+        return
     try:
         # Read now, compared now, BEFORE any write: a first-run refusal
         # after the engine files were already rewritten would leave a
@@ -6122,7 +7821,7 @@ def refresh(clone, force=False, ref=None):
         engine_paths_incomplete = _engine_paths_incomplete(ROOT, manifest)
         # `and not force`: found reproduced while testing this against the consumer
         # kind -- without it, `refresh --force` on a repo with a hand-edited
-        # vendored file silently did NOTHING when BestPractice's SOURCE_BRANCH
+        # vendored file silently did NOTHING when BestPractice's FOLLOWED_BRANCH
         # hadn't moved, because this short-circuit ran before --force ever got a
         # chance to matter. --force exists specifically to repair a hand-edited
         # file; "the upstream commit is unchanged" must not override that.
@@ -6166,6 +7865,7 @@ def refresh(clone, force=False, ref=None):
         set_orphaned = sorted(
             n for n in manifest.get('files', [])
             if n not in wanted_set and (dest_tools / n).is_file())
+        orphans_removed = False
         if set_orphaned and new_commit == manifest.get('source_commit'):
             print(f"NOTICE: the recorded commit already matches, but this "
                   f"repo's vendored engine still carries {len(set_orphaned)} "
@@ -6174,6 +7874,7 @@ def refresh(clone, force=False, ref=None):
             _remove_dropped_engine_files(
                 dest_tools, _previous_manifest(ROOT, manifest), kind)
             _rewrite_manifest_file_list(dest_tools, kind)
+            orphans_removed = True
 
         # Hook analog of set_incomplete, above -- but the "wanted" hook names
         # are read from THIS commit's own listing at HOOK_SOURCE_DIR,
@@ -6231,13 +7932,27 @@ def refresh(clone, force=False, ref=None):
         # leaves -- is repointed by a plain re-run.
         catalogue_repointed = repoint_catalogue_pin(ROOT)
 
+        gitignore_tmpl = (_gitignore_template_text(clone, new_commit)
+                          if kind in GITIGNORE_KINDS else None)
+        gitignore_pending = _gitignore_missing(ROOT, gitignore_tmpl)
+        individual_pending = any(_individual_hook_plan(ROOT, kind))
+
         if new_commit == manifest.get('source_commit') and not force \
                 and not set_incomplete and not hooks_incomplete and not ci_incomplete \
                 and not engine_paths_incomplete and not template_pending \
-                and not wiring_pending and not agents_pending:
+                and not wiring_pending and not agents_pending \
+                and not gitignore_pending and not individual_pending:
+            # "Nothing to do" only when nothing was done: the orphan removal
+            # just above runs in this same pass, and the line said "nothing
+            # to do" right under the one reporting the deletion (very deep
+            # check, 2026-10-05, pass 1).
+            done = ((['removed the engine file(s) it no longer includes (above)']
+                     if orphans_removed else [])
+                    + (['repointed the catalogue pin (above)']
+                       if catalogue_repointed else []))
             print(f"precedent_vendor_engine refresh: engine already current with "
-                  f"{SOURCE_BRANCH} @ {new_commit[:12]} -- "
-                  + ("only the catalogue pin changed (above)." if catalogue_repointed
+                  f"{FOLLOWED_BRANCH} @ {new_commit[:12]} -- "
+                  + (('only ' + ' and '.join(done) + '.') if done
                      else "nothing to do."))
             # Reported here too, and this is the case that matters MOST: a
             # session re-running refresh and being told "nothing to do" is
@@ -6312,6 +8027,11 @@ def refresh(clone, force=False, ref=None):
             written.append(ROOT / '.claude' / 'settings.json')
         written += _write_hook_files(ROOT, engine_dir / 'hooks',
                                      previous=before)
+        # Before the next session start, when a hook just wired may write a
+        # per-machine file this line keeps out of history.
+        if _merge_gitignore(ROOT, gitignore_tmpl):
+            written.append(ROOT / '.gitignore')
+        written += _apply_individual_hook(ROOT, kind, clone, new_commit)
         ci_refreshed, ci_catchup, ci_replaced = _refresh_ci_workflow_files(
             ROOT, kind, engine_dir / 'ci-workflows', manifest)
         written += [ROOT / rel for rel in ci_refreshed + ci_replaced]
@@ -6336,7 +8056,7 @@ def refresh(clone, force=False, ref=None):
     # 37fc3b55 until a moment earlier, 2026-09-28.
     was = os.environ.get(_WAS_COMMIT_ENV) or manifest.get('source_commit') or '?'
     print(f"precedent_vendor_engine refresh OK ({kind}): {len(written)} file(s) refreshed "
-          f"from {SOURCE_BRANCH} @ {new_commit[:12]} (was {was[:12]})")
+          f"from {ref if ref else FOLLOWED_BRANCH} @ {new_commit[:12]} (was {was[:12]})")
     if ci_refreshed:
         print(f"precedent_vendor_engine refresh: refreshed {len(ci_refreshed)} CI "
               f"workflow file(s) to the current template ({', '.join(ci_refreshed)}).")
@@ -6481,7 +8201,7 @@ def fresh():
         if not repo or not recorded:
             return 0
         try:
-            out = subprocess.run(['git', 'ls-remote', repo, SOURCE_BRANCH],
+            out = subprocess.run(['git', 'ls-remote', repo, FOLLOWED_BRANCH],
                                  capture_output=True, text=True, timeout=10)
         except subprocess.TimeoutExpired:
             return 0  # genuinely unreachable -- stays silent, same as checkin.py's fresh()
@@ -6580,6 +8300,10 @@ def main():
         return fresh()
     if args and args[0] == 'record-ci':
         return _cli_record_ci(args[1:])
+    if args and args[0] == 'drop-retired':
+        return _cli_drop_retired(args[1:])
+    if args and args[0] == 'repin-kept':
+        return _cli_repin_kept(args[1:])
     if len(args) < 2 or args[0] not in ('seed', 'status', 'refresh'):
         sys.exit(__doc__)
     if args[0] == 'seed':
@@ -6595,16 +8319,20 @@ def main():
         if kind not in KINDS:
             sys.exit(f"precedent_vendor_engine FAIL: --kind must be one of "
                      f"{', '.join(sorted(KINDS))}, got {kind!r}.")
+        off_main = '--off-main' in rest
+        rest = [a for a in rest if a != '--off-main']
         if rest:
             sys.exit(f"precedent_vendor_engine FAIL: unknown argument(s) to seed: "
                      f"{', '.join(rest)}.")
-        written = seed(args[1], kind=kind)
+        written = seed(args[1], kind=kind, off_main=off_main)
         print(f"SEEDED ({kind}): {len(written)} engine file(s) into "
               f"{pathlib.Path(args[1]).resolve() / 'tools'}")
         for f in written:
             print(f"  wrote {f}")
         return 0
     clone = _clone_or_die(args[1])
+    global _CLONE_ARG
+    _CLONE_ARG = args[1]
     if args[0] == 'status':
         rc = status(clone)
         _credential_reminder(ROOT)

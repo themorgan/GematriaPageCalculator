@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_reply_check.py — the reply gate, made BLOCKING.
+"""The reply gate's BLOCKING half — refuses a stop when the reply missed what a source's reply_check.json requires
+
+precedent_reply_check.py — the reply gate, made BLOCKING.
 
 WHAT THIS IS FOR. Every other channel in this engine is advisory: the
 resident block, the occasion index, the path triggers and
@@ -53,6 +55,42 @@ a match whose own sentence matches it is skipped, so a report about
 ANOTHER session, window or repository ("your Planning window says
 it's blocked on an upstream bug") is not read as this session's state.
 Added 2026-10-01; an older engine ignores the key.
+
+A `require_in_fence_paired_with` pair may carry
+`narration_exempt_if_block_matches`: in a fenced block that matches it,
+a clause that narrates what a session, tool or check did or was told, in
+the past tense and never to "you", is not read as an instruction to the
+receiving session (see _narrated_clauses). Added 2026-10-08; an older
+engine ignores the key and judges every clause, the stricter reading.
+Since 2026-10-10 the pair may also say `narration_exempt: true`: on every
+block, a past-tense report of a done thing ("the update merged into staging")
+is never an instruction, whether or not the block stops at Act; a report of
+what somebody was told still needs the stop. An older engine ignores it, the stricter way.
+
+The same pair may also carry, since later on 2026-10-08:
+
+- `also_if_matches`: a list of further triggers, judged exactly like
+  `if_matches`. It is how a rule lists the other ways a block can say
+  the same thing -- "make it live", `gh pr merge`, a stage word -- as data
+  rather than one unreadable alternation. `if_matches` itself may now be a
+  list too. An older engine ignores `also_if_matches` and enforces only
+  `if_matches`, so a source keeps its core trigger there.
+- `negation_exempt_if_clause_negates`: a negator regex, or
+  {"before": regex, "object": regex}. A clause is forgiven only when a
+  negator governs the landing verb in that clause: within the few words
+  before it ("don't merge into main", "do not open a PR to main"), or as
+  its object right after it ("merge nothing into main"). A negator
+  anywhere else on the line governs something else ("Merge it into main,
+  no questions asked"), and the clause is judged. See _negated_clauses.
+  An older engine ignores the key, so a source that drops its old
+  line-level lookahead is stricter there, never looser.
+- `description_exempt_if_clause_preceded_by` (2026-10-10): a regex that
+  must end the clause's text just before each landing phrase in it -- a
+  preposition and an article, "on a", "after every". A clause where every
+  landing phrase is such an object describes an event or a condition
+  ("the step fires on a pull request into main") and is forgiven; the verb
+  is what makes an order, so "Open a PR into main" is still judged. See
+  _described_clauses. An older engine ignores the key, the stricter way.
 
 `require_no_bare_pattern` checks a different practice family entirely --
 rule-links and branch-links, both of which say a mentioned destination (a
@@ -126,6 +164,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import urllib.parse
 
 _ENGINE_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(_ENGINE_DIR))
@@ -189,7 +228,71 @@ def declared_requirements(repo):
                 continue
             item['_source'] = f"{s['level']}/{s['name']}"
             reqs.append(item)
-    return reqs, notes
+    return _settle(reqs, repo), notes
+
+
+def _settle(reqs, repo):
+    """Two generic keys a requirement may carry (spec/LADDER_OPT_IN_PLAN.md
+    D11, 2026-10-02):
+
+    `id`: a later source -- the resolver's order is weakest first, so a
+    shared or individual set comes after universal -- that declares the same
+    id REPLACES the earlier requirement rather than adding a second one.
+    That is how a set states the same rule in its own words (the ladder
+    set's Boildown first bullet names the step; universal's names only the
+    branch) without the person seeing two.
+
+    `requires`: a list of capabilities (precedent_resolve.LADDER_CAPABILITY
+    is the one named today). The requirement is in force only while every
+    one is -- a person's own ladder rule goes quiet in a session started
+    with PRECEDENT_NO_LADDERS, or once they stop bringing the set."""
+    # The replacement takes the FIRST declaration's place in the list, so a
+    # person reads their requirements in the order they always did.
+    last, first = {}, {}
+    for i, r in enumerate(reqs):
+        rid = r.get('id')
+        if isinstance(rid, str) and rid:
+            last[rid] = r
+            first.setdefault(rid, i)
+    # `inherits` (2026-10-10): a replacing requirement that says
+    # "inherits": true keeps every key of the one it replaces that it does
+    # not set itself, and each require_in_fence_paired_with pair merges with
+    # the earlier pair at the same position. The ladder set's landing rule
+    # restated universal's exemptions word for word, and on 2026-10-10 one
+    # exemption had to be added to both; now the set states only what
+    # differs (its branches, the word it wants quoted). An engine older than
+    # this replaces outright and lacks the inherited exemptions: stricter,
+    # never looser.
+    for rid, r in list(last.items()):
+        earlier = next((x for x in reqs if x.get('id') == rid), None)
+        if r.get('inherits') is True and earlier is not None and earlier is not r:
+            merged = {**earlier, **r}
+            key = 'require_in_fence_paired_with'
+            if isinstance(earlier.get(key), list) and isinstance(r.get(key), list):
+                merged[key] = [
+                    {**(earlier[key][i] if i < len(earlier[key]) else {}), **pair}
+                    for i, pair in enumerate(r[key])]
+            last[rid] = merged
+    kept = []
+    for i, r in enumerate(reqs):
+        rid = r.get('id')
+        if isinstance(rid, str) and rid:
+            if first[rid] == i:
+                kept.append(last[rid])
+            continue
+        kept.append(r)
+    needs = [r for r in kept if r.get('requires')]
+    if needs:
+        try:
+            import precedent_ladder as pl
+            ladder = pl.ladder_in_force(repo)
+        except Exception:                                   # noqa: BLE001
+            ladder = False
+        have = {'ladder'} if ladder else set()
+        kept = [r for r in kept
+                if not r.get('requires')
+                or set(r['requires']) <= have]
+    return kept
 
 
 def last_assistant_text(transcript):
@@ -262,6 +365,186 @@ def assistant_timeline(transcript):
                              if isinstance(b, dict) and b.get('type') == 'text')
         out.append((ctx, text))
     return out
+
+
+# What a background job's start and finish look like in the transcript.
+# A Bash command started with run_in_background answers "Command running in
+# background with ID: X"; when it ends, the harness wakes the session with a
+# user row whose `origin.kind` is "task-notification" and whose text is a
+# <task-notification> block carrying that id and a <status>. A Monitor's
+# events arrive the same way but carry no <status>: an event is progress,
+# never the end of anything.
+_BG_STARTED_RE = re.compile(r'Command running in background with ID:\s*([A-Za-z0-9_-]+)')
+_NOTIFICATION_RE = re.compile(r'<task-notification>(.*?)</task-notification>', re.S)
+_TAG_RE = r'<{0}>(.*?)</{0}>'
+# A finished job counts as failed on a non-zero exit code; a progress event
+# counts as one when its text names a failure. Over-matching here only lets
+# the session speak, which is the safe direction.
+_EXIT_FAILED_RE = re.compile(r'\bexit code [1-9]\d*', re.I)
+_EVENT_FAILED_RE = re.compile(
+    r'\bexit(?: code)?:? [1-9]\d*|\b(?:fail(?:ed|ure|s)?|error|traceback|killed|timed out)\b',
+    re.I)
+
+
+def _row_text(d):
+    """Every piece of text in one transcript row, tool results included."""
+    msg = d.get('message')
+    content = msg.get('content') if isinstance(msg, dict) else None
+    if isinstance(content, str):
+        return content
+    out = []
+    for b in content if isinstance(content, list) else []:
+        if not isinstance(b, dict):
+            continue
+        if isinstance(b.get('text'), str):
+            out.append(b['text'])
+        c = b.get('content')
+        if isinstance(c, str):
+            out.append(c)
+        elif isinstance(c, list):
+            out.extend(x.get('text', '') for x in c
+                       if isinstance(x, dict) and isinstance(x.get('text'), str))
+    return '\n'.join(out)
+
+
+def _is_prompt_row(d):
+    """A user row that starts a turn: not a tool result, not a meta row."""
+    if d.get('type') != 'user' or d.get('isMeta'):
+        return False
+    msg = d.get('message')
+    content = msg.get('content') if isinstance(msg, dict) else None
+    if isinstance(content, list) and content and all(
+            isinstance(b, dict) and b.get('type') == 'tool_result' for b in content):
+        return False
+    return True
+
+
+def last_prompt_text(transcript):
+    """-> the text of the prompt that started this turn (the last user row
+    that is not a tool result or meta row), or '' when the transcript cannot
+    be read. What the person sent, a message relayed from another session
+    included -- which is how a reply knows where its paste block goes."""
+    last = ''
+    try:
+        with open(transcript, encoding='utf-8') as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(d, dict) and _is_prompt_row(d):
+                    last = _row_text(d)
+    except OSError:                              # practice: fail-gracefully
+        return ''
+    return last
+
+
+def turn_wake(transcript):
+    """What started this turn, when a background job did -> dict, else None.
+
+    None for a turn a person started, and for a transcript that cannot be
+    read: only a turn the transcript plainly shows a job woke is judged here.
+    Otherwise:
+
+        {'quiet_owed': bool,   # nothing to say yet: say nothing
+         'running':    [ids],  # background commands started, not yet ended
+         'failed':     bool,   # this wake reports a failure
+         'text':       str}    # the prose of THIS turn's reply
+
+    Morgan, 2026-10-05 (strength: decided), after four Debuts run one after
+    another reported themselves one at a time, each reply with its own
+    Boildown: a reply to a job finishing gets no Boildown unless the job is
+    done, and a batch reports once -- when the whole batch is done or
+    something fails.
+
+    QUIET IS OWED when the wake is progress only (a Monitor event, which has
+    no <status>), or when a job finished while another background command
+    from this session is still running -- unless this wake reports a
+    failure, which is always worth saying at once.
+
+    `text` is read from the assistant rows AFTER the wake, never the last
+    assistant text in the file: a turn that said nothing must not be judged
+    by the previous turn's words.
+
+    Blind spot, said rather than hidden: only a Bash command's own "running
+    in background" line marks a job as started. A job launched some other
+    way is not counted as running, so its batch is judged done early -- the
+    session may then speak, which is the old behavior, never a wrong refusal.
+    """
+    try:
+        rows = [json.loads(l) for l in
+                pathlib.Path(transcript).read_text(encoding='utf-8').splitlines()
+                if l.strip()]
+    except (OSError, json.JSONDecodeError):
+        return None
+    wake_at = None
+    for i, d in enumerate(rows):
+        if _is_prompt_row(d):
+            wake_at = i
+    if wake_at is None:
+        return None
+    wake = rows[wake_at]
+    wake_text = _row_text(wake)
+    origin = wake.get('origin') if isinstance(wake.get('origin'), dict) else {}
+    if not (origin.get('kind') == 'task-notification'
+            or wake_text.lstrip().startswith('<task-notification>')):
+        return None
+
+    def tag(name, block):
+        m = re.search(_TAG_RE.format(name), block, re.S)
+        return m.group(1).strip() if m else None
+
+    # Read only where the harness itself writes: a tool result that OPENS
+    # with the started line, and a notification delivered as a turn's prompt,
+    # as an `attachment` (one that ended mid-turn), or as a `queue-operation`.
+    # Never any other tool output -- a command that prints a transcript would
+    # otherwise start and end jobs that are not this session's.
+    started, ended = [], set()
+    for d in rows[:wake_at + 1]:
+        notices = []
+        if d.get('type') == 'user':
+            content = (d.get('message') or {}).get('content')
+            for b in content if isinstance(content, list) else []:
+                if isinstance(b, dict) and b.get('type') == 'tool_result':
+                    c = b.get('content')
+                    c = c if isinstance(c, str) else '\n'.join(
+                        x.get('text', '') for x in (c or [])
+                        if isinstance(x, dict) and isinstance(x.get('text'), str))
+                    m = _BG_STARTED_RE.match(c.lstrip())
+                    if m and m.group(1) not in started:
+                        started.append(m.group(1))
+            if _is_prompt_row(d):
+                notices.append(_row_text(d))
+        elif d.get('type') == 'attachment':
+            a = d.get('attachment')
+            if isinstance(a, dict) and isinstance(a.get('prompt'), str):
+                notices.append(a['prompt'])
+        elif d.get('type') == 'queue-operation' and isinstance(d.get('content'), str):
+            notices.append(d['content'])
+        for t in notices:
+            for block in _NOTIFICATION_RE.findall(t):
+                if tag('status', block) and tag('task-id', block):
+                    ended.add(tag('task-id', block))
+    running = [i for i in started if i not in ended]
+
+    blocks = _NOTIFICATION_RE.findall(wake_text)
+    failed, progress_only = False, bool(blocks)
+    for block in blocks:
+        status = tag('status', block)
+        if status:
+            progress_only = False
+            if status.lower() != 'completed' or _EXIT_FAILED_RE.search(
+                    tag('summary', block) or ''):
+                failed = True
+        elif _EVENT_FAILED_RE.search(tag('event', block) or ''):
+            failed = True
+
+    text = '\n'.join(
+        b.get('text', '') for d in rows[wake_at + 1:] if d.get('type') == 'assistant'
+        for b in ((d.get('message') or {}).get('content') or [])
+        if isinstance(b, dict) and b.get('type') == 'text')
+    return {'quiet_owed': not failed and (progress_only or bool(running)),
+            'running': running, 'failed': failed, 'text': text}
 
 
 def offer_is_due(timeline, every, phrases):
@@ -416,6 +699,96 @@ def first_item_under_heading(text, pattern):
     return None
 
 
+def section_bullets(text, pattern):
+    """-> the bullets under the first markdown heading matching `pattern`,
+    each as one string (a bullet's continuation lines joined to it), up to
+    the next heading; None when no such heading exists. A non-bullet line
+    before the first bullet counts as an item of its own."""
+    lines, out, cur, inside = text.splitlines(), [], None, False
+    for line in lines:
+        m = re.match(r'^#{1,6}\s+(.*\S)', line)
+        if m:
+            if inside:
+                break
+            inside = bool(re.search(pattern, m.group(1), re.I))
+            continue
+        if not inside or not line.strip():
+            continue
+        if re.match(r'^\s*(?:[-*+]|\d+[.)])\s+', line):
+            if cur is not None:
+                out.append(cur)
+            cur = line.strip()
+        elif cur is not None:
+            cur += ' ' + line.strip()
+        else:
+            out.append(line.strip())
+    if cur is not None:
+        out.append(cur)
+    return out if inside or out else None
+
+
+def _item_words(s):
+    """The words of one item, with link targets and formatting dropped: what
+    it SAYS, for comparing two items that may be worded differently."""
+    s = re.sub(r'\]\([^)]*\)', ']', s)
+    s = re.sub(r'[*_`>#\[\]]', '', s).lower()
+    return set(re.findall(r"[a-z0-9][a-z0-9'./-]*", s))
+
+
+def _item_anchors(s):
+    """The things an item names: link targets and backticked names --
+    branches, files, commands. Two items naming different ones never say
+    the same thing, however alike their other words are."""
+    return (set(re.findall(r'\]\(([^)]*)\)', s))
+            | set(re.findall(r'`([^`]+)`', s)))
+
+
+def item_repeats(item, earlier, same_when_both_say=()):
+    """Does `item` say again what one of `earlier` already said?
+
+    Calibrated 2026-10-05 on a real session's twelve consecutive Boildowns,
+    where the person counted three that repeated: it flags exactly the one
+    whose every line was already said, and none of the others. Three ways an
+    item repeats one before it --
+      * the two share at least half their words (a light rewording);
+      * nearly all of the shorter one's words are in the other (a shorter
+        rewording of the same point), counted only from five words up;
+      * both carry the same fixed verdict sentence (`same_when_both_say`,
+        e.g. the archive line, whose reason changes words, not meaning) --
+    and never when the two name different things (`_item_anchors`): a
+    branch or a link that changed is a change."""
+    wi, ai, li = _item_words(item), _item_anchors(item), _norm(item)
+    for prev in earlier:
+        lp = _norm(prev)
+        if any(_norm(s) in li and _norm(s) in lp for s in same_when_both_say):
+            return True
+        wp, ap = _item_words(prev), _item_anchors(prev)
+        if (ai or ap) and ai != ap:
+            continue
+        if len(wi & wp) / max(1, len(wi | wp)) >= 0.5:
+            return True
+        small = min(len(wi), len(wp))
+        if small >= 5 and len(wi & wp) / small >= 0.8:
+            return True
+    return False
+
+
+def previous_section(timeline, text, pattern):
+    """-> the bullets of the most recent EARLIER reply carrying a section
+    under `pattern`, or None. `timeline` is assistant_timeline()'s output;
+    the current reply is its last entry with prose, and is skipped."""
+    if not timeline:
+        return None
+    entries = [t for _ctx, t in timeline if t and t.strip()]
+    if entries and entries[-1].strip() == text.strip():
+        entries = entries[:-1]
+    for t in reversed(entries):
+        items = section_bullets(t, pattern)
+        if items:
+            return items
+    return None
+
+
 def _fenced_blocks(text):
     """-> the text inside each ``` or ~~~ fenced block of `text`, in order.
     An unclosed fence runs to the end, as Markdown renders it."""
@@ -435,6 +808,235 @@ def _fenced_blocks(text):
     if cur is not None:
         blocks.append('\n'.join(cur))
     return blocks
+
+
+# A clause that narrates: it opens with a session, tool, check or the like
+# as its subject and a past-tense verb ("a tool told it to open a pull
+# request to main", "the last session merged its PR into main"). The
+# subject list holds no person and no "they": "Morgan said to merge into
+# main" is a claim of the person's word, and the rule that uses this exists
+# to make that claim quote the word itself.
+_NARRATION_CLAUSE_RE = re.compile(
+    r"^\W*(?:(?:and|but|so|then|later|earlier|meanwhile|situation)\W+)*"
+    r"(?:(?:a|an|the|that|this|its|their|one|another|other|earlier|previous|"
+    r"last|first|same|sending|vendoring|consuming|update|engine|reply|landing|"
+    r"precedent)\s+){0,3}"
+    r"(?:it|session|tool|agent|script|check|command|hook|gate|job|workflow|"
+    r"bot|run|repository|repo|update|change|changes|commit|commits|branch|"
+    r"fix|fixes|work|merge|(?:PR|pull\s+request)(?:\s*#?\d+)?)\s+"
+    r"(?:(?:had|has|have|was|were|then|also|already|just|been|once)\s+)*"
+    r"(?:told|asked|instructed|directed|prompted|said|landed|merged|pushed|"
+    r"promoted|opened|prepared|made|built|tried|wanted|suggested|"
+    r"recommended|proposed|reported|printed)\b", re.I)
+# A narrated clause whose verb is a DONE THING, not a told one: "the update
+# merged into staging" reports an event, while "a tool told it to open a PR
+# to main" reports an order, which a reader may take up. Only the first is
+# forgiven in a block that does not end at Act (2026-10-10).
+_NARRATED_EVENT_RE = re.compile(
+    r"\b(?:had|has|have|was|were|been)?\s*(?:landed|merged|pushed|promoted|"
+    r"opened|built|made)\b", re.I)
+_NARRATED_ORDER_RE = re.compile(
+    r"\b(?:told|asked|instructed|directed|prompted|said|wanted|suggested|"
+    r"recommended|proposed|tried)\b", re.I)
+_SECOND_PERSON_RE = re.compile(r"\byou(?:r|rs|rself|'\w+)?\b", re.I)
+# Clause boundaries: sentence and list punctuation, a line break, and the
+# conjunctions an instruction tacked onto narration would start with ("the
+# tool opened a PR, so merge it into main" is two clauses, judged apart).
+#
+# A full stop, colon, question or exclamation mark ends a clause only when
+# whitespace or the end follows it (2026-10-08): `precedent_branches.py
+# --promote --to main` and `HEAD:main` are one clause each, not two, so a
+# negator before the command still reaches the verb inside it.
+_CLAUSE_BOUNDARY_RE = re.compile(
+    r"[,;\n]|[.:!?](?=\s|$)|\s(?:and|but|so|then)\s", re.I)
+
+
+def _as_patterns(*vals):
+    """-> every regex in `vals`, each a string, a list of strings, or None."""
+    out = []
+    for v in vals:
+        if isinstance(v, str) and v:
+            out.append(v)
+        elif isinstance(v, (list, tuple)):
+            out.extend(x for x in v if isinstance(x, str) and x)
+    return out
+
+
+def _first_trigger(patterns, s):
+    """-> the earliest match of any of `patterns` in `s`, or None."""
+    best = None
+    for pat in patterns:
+        m = re.search(pat, s, re.I | re.M)
+        if m and (best is None or m.start() < best.start()):
+            best = m
+    return best
+
+
+def _narrated_clauses(block, trigger, events_only=False):
+    """-> `block` with every narrating clause that matches `trigger` (one
+    regex or a list) on its own blanked to spaces, so what is left is what the block TELLS the
+    receiving session.
+
+    WHY (2026-10-08): the reply gate refused a paste block whose situation
+    paragraph said a tool had told an earlier session to open a pull
+    request to main. The block ended at the feature branch ("build it on
+    your feature branch, push it there, and stop"), so it granted nothing;
+    the trigger read a report of the past as an order. Judging clause by
+    clause, and forgiving only a clause that both narrates and holds the
+    whole trigger, keeps every instruction in reach: "Then merge it into
+    main" in the same block is its own clause, narrates nothing, and still
+    fails. Strict where unsure -- an unrecognized narration is refused and
+    rewritten, never an instruction let through.
+
+    `events_only` (2026-10-10): forgive only a clause reporting a done thing
+    ("the update merged into staging"), never one reporting what somebody
+    was told -- the reading for a block that does not end at Act."""
+    out, start = list(block), 0
+    bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY_RE.finditer(block)]
+    bounds.append((len(block), len(block)))
+    for b_start, b_end in bounds:
+        clause = block[start:b_start]
+        if (clause.strip() and _NARRATION_CLAUSE_RE.match(clause)
+                and not _SECOND_PERSON_RE.search(clause)
+                and not (events_only and (_NARRATED_ORDER_RE.search(clause)
+                                          or not _NARRATED_EVENT_RE.search(clause)))
+                and _first_trigger(_as_patterns(trigger), clause)):
+            out[start:b_start] = ' ' * (b_start - start)
+        start = b_end
+    return ''.join(out)
+
+
+# How far a negator may sit from the landing verb and still govern it:
+# up to this many words before it ("do not open a PR to main" is two), or
+# the one word straight after it, as its object ("merge nothing into main").
+_NEGATOR_WORDS_BEFORE = 3
+_NEGATOR_WORDS_AFTER = 1
+
+
+def _negated_clauses(block, triggers, negator):
+    """-> `block` with every clause blanked whose every trigger match is
+    governed by a negator, so what is left is what the block tells the
+    receiving session to do.
+
+    WHY (2026-10-08): the ladder set's landing rule skipped any LINE holding
+    "no", "not", "never" or "without", so "Merge it into main, no questions
+    asked" granted landing with nobody's word in the block. A line is the
+    wrong unit, and so is the mere presence of a negator: in that sentence
+    "no" governs "questions", not "merge". Morgan, the same day: "shouldn't
+    it understand the intent behind commands not just the literal words?"
+    (practice: read-for-intent).
+
+    So the negator has to govern the verb, in the verb's own clause: one of
+    the few words just before it, or its object just after it. A negator
+    after the destination, in another clause, or further away is about
+    something else. Strict where unsure: a clause is blanked only when EVERY
+    trigger match in it is negated, a trigger that runs across a clause
+    boundary is never blanked, and a sentence this cannot parse is refused
+    and rewritten, never let through. Idioms that invert a negator ("don't
+    hesitate to merge into main") belong in the negator regex's own
+    lookahead, as data.
+
+    `negator` is a regex, used in both places, or {"before": regex,
+    "object": regex} to tell them apart."""
+    if isinstance(negator, dict):
+        before_re, object_re = negator.get('before'), negator.get('object')
+    else:
+        before_re = object_re = negator
+    out, start = list(block), 0
+    bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY_RE.finditer(block)]
+    bounds.append((len(block), len(block)))
+    for b_start, b_end in bounds:
+        clause = block[start:b_start]
+        if clause.strip() and _clause_is_negated(clause, triggers,
+                                                 before_re, object_re):
+            out[start:b_start] = ' ' * (b_start - start)
+        start = b_end
+    return ''.join(out)
+
+
+def _quoted_output_blanked(block, before_re):
+    """-> `block` with every quoted span that `before_re` introduces blanked
+    to spaces: a message a tool printed, quoted as it printed it ("it still
+    prints "Merge the pull request into main""), is a quotation of output,
+    not an instruction to the receiving session.
+
+    WHY (2026-10-10): a root-issues prompt reporting that a tool's wait
+    ended by printing a merge instruction was refused as granting landing.
+    `before_re` is the rule's own data and must END the text just before the
+    opening quote -- printing words only. "Said" is deliberately not one: a
+    person's words quoted are the very thing this rule exists to check."""
+    out = list(block)
+    for m in re.finditer(r'["\u201c]([^"\u201d\n]{1,300})["\u201d]', block):
+        if re.search(f'(?:{before_re})\\s*$', block[:m.start()], re.I):
+            out[m.start():m.end()] = ' ' * (m.end() - m.start())
+    return ''.join(out)
+
+
+def _described_clauses(block, triggers, before_re):
+    """-> `block` with every clause blanked in which each trigger match is
+    the object of a preposition -- "fires on a pull request into main",
+    "runs after a push to main" -- so what is left is what the block tells
+    the receiving session to do.
+
+    WHY (2026-10-10): a paste block asking for a workflow fix said the step
+    "should run only on main itself, after a push, never a pull request.
+    Today it also fires on a pull request into main". That names an event
+    a workflow reacts to; it orders nothing, and the landing rule refused
+    it. Past tense was already forgiven (_narrated_clauses); a present-tense
+    description of a condition is the same kind of thing.
+
+    `before_re` is the rule's own data: what must END the clause's text just
+    before each match ("on a ", "after every "). The verb is what makes an
+    order, so "Open a pull request into main" stays one -- "Open a" is no
+    preposition -- and "Merge it after a push to main" too, because its
+    match starts at "Merge". Strict where unsure: EVERY match in the clause
+    must be described, and a match running across a clause boundary is
+    never blanked."""
+    out, start = list(block), 0
+    bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY_RE.finditer(block)]
+    bounds.append((len(block), len(block)))
+    for b_start, b_end in bounds:
+        clause = block[start:b_start]
+        matches = [m for pat in triggers
+                   for m in re.finditer(pat, clause, re.I | re.M)]
+        if clause.strip() and matches and all(
+                re.search(f'(?:{before_re})$', clause[:m.start()], re.I)
+                for m in matches):
+            out[start:b_start] = ' ' * (b_start - start)
+        start = b_end
+    return ''.join(out)
+
+
+def _clause_is_negated(clause, triggers, before_re, object_re):
+    """-> True when `clause` holds a trigger match and a negator governs
+    every one of them (see _negated_clauses)."""
+    words = [(w.start(), w.end()) for w in re.finditer(r"\S+", clause)]
+    befores = [n.span() for n in re.finditer(before_re, clause, re.I)] \
+        if before_re else []
+    objects = [n.start() for n in re.finditer(object_re, clause, re.I)] \
+        if object_re else []
+    seen = False
+    for pat in triggers:
+        for m in re.finditer(pat, clause, re.I | re.M):
+            seen = True
+            # The word the match starts in is the verb; the window runs
+            # from a few words before it to the one word after it.
+            verb = next((i for i, (a, b) in enumerate(words)
+                         if a <= m.start() < b), None)
+            if verb is None:
+                return False
+            lo = words[max(0, verb - _NEGATOR_WORDS_BEFORE)][0]
+            hi_word = min(len(words) - 1, verb + _NEGATOR_WORDS_AFTER)
+            after = words[verb + 1:hi_word + 1]
+            # Overlap, not containment: "Do not open a PR" puts "not" in
+            # the window and "Do not" starts one word before it.
+            if any(a < m.start() and b > lo for a, b in befores):
+                continue
+            if any(a <= n < b and n < m.end() for n in objects
+                   for a, b in after):
+                continue
+            return False
+    return seen
 
 
 def is_trivial_checkin(text):
@@ -460,14 +1062,37 @@ KNOWN_REQUIREMENT_KEYS = frozenset({
     'require_in_fence_paired_with',
     'require_container_safe_if_says',
     'require_landed_if_says',
+    'require_delete_link_when_landed',
+    'require_full_check_after_fast_main',
+    'require_section_not_repeated',
+    'require_quiet_while_background_runs',
+    'require_prompt_block_header',
     'unless_reply_declares_loss',
     # conditions and metadata
+    'id', 'requires',            # see _settle (2026-10-02)
     'require_when_context_grew_tokens',
     'advisory',
     'practice',
     'why',
     'checks_practice_at',
 })
+
+
+WAIT_LINE_MAX = 160
+
+
+def _is_wait_line(text):
+    """-> True for what a quiet wake may say: nothing, or one short line
+    in parentheses naming the wait -- "(Waiting on the Debut.)"."""
+    lines = [l.strip() for l in (text or '').strip().splitlines() if l.strip()]
+    if not lines:
+        return True
+    # In parentheses, so a one-line REPORT ("Individual passed.") is still
+    # a report and still refused: the wait line says what is awaited, never
+    # what has happened.
+    one = lines[0].rstrip('.')
+    return (len(lines) == 1 and len(lines[0]) <= WAIT_LINE_MAX
+            and one.startswith('(') and one.endswith(')'))
 
 
 def _unknown_predicates(req):
@@ -501,11 +1126,12 @@ def _unknown_predicates(req):
                   if not k.startswith('_') and k not in KNOWN_REQUIREMENT_KEYS)
 
 
-def violations(text, reqs, timeline=None):
+def violations(text, reqs, timeline=None, wake=None, prompt=None):
     """-> list of records, one per unmet requirement:
 
         {'kind': 'heading' | 'first_item' | 'sentence' | 'contradiction'
-                 | 'bare_pattern' | 'paired' | 'unknown_predicate',
+                 | 'bare_pattern' | 'paired' | 'repeat' | 'quiet'
+                 | 'unknown_predicate',
          'message': <human-readable>, 'advisory': bool}
 
     `advisory` mirrors the requirement's own `"advisory": true` declaration
@@ -533,6 +1159,35 @@ def violations(text, reqs, timeline=None):
     enforced: a size condition nobody could evaluate must not block a reply
     (practice: fail-gracefully).
     """
+    # require_quiet_while_background_runs: a turn a background job woke,
+    # with the batch still running, owes NO reply at all -- and so none of
+    # the requirements below, which all describe a reply that has something
+    # to say (Morgan, 2026-10-05). turn_wake() decides; this only applies it.
+    if wake and wake.get('quiet_owed'):
+        quiet = [r for r in reqs if r.get('require_quiet_while_background_runs')]
+        if quiet:
+            # ONE SHORT LINE IS QUIET ENOUGH (2026-10-06). An empty turn is
+            # not something the harness accepts: it answers one with "Your
+            # previous response had no visible output. Please continue", so
+            # "say nothing" could not be obeyed as written and the session
+            # had to break one instruction or the other (reported from a
+            # consumer session the same day). A single line with no heading
+            # -- "(Waiting on the Debut.)" -- is what a wake owes now.
+            if _is_wait_line(text):
+                return []
+            r = quiet[0]
+            q = r['require_quiet_while_background_runs']
+            what = (f"background job(s) {', '.join(wake['running'])} are still "
+                    f"running" if wake.get('running') else
+                    "this wake is a progress event, not the end of a job")
+            return [{'kind': 'quiet', 'advisory': bool(r.get('advisory')),
+                     'message': (
+                f"[{r.get('_source', '?')}] a background job woke this turn and "
+                f"{what}, so this reply owed at most one short line, such as "
+                f"\"(Waiting on <what>.)\": no status report, no Boildown. "
+                f"Report once, when the last job ends or one fails."
+                + (f" -- {q['why']}" if isinstance(q, dict) and q.get('why') else '')
+                + (f" (practice: {r['practice']})" if r.get('practice') else ''))}]
     out = []
     headings = [re.sub(r'^#{1,6}\s+', '', l).strip()
                 for l in text.splitlines() if re.match(r'^#{1,6}\s+\S', l)]
@@ -596,6 +1251,27 @@ def violations(text, reqs, timeline=None):
                     + (f" -- {first['why']}" if first.get('why') else '')
                     + (f" (practice: {r['practice']})"
                        if r.get('practice') else ''))})
+        # require_section_not_repeated: a section whose every item says again
+        # what the previous reply's same section said is noise the person
+        # pays to read (Morgan, 2026-10-05: three Boildowns in a row, each
+        # reworded, around one new fact). The short form the requirement
+        # names -- one item -- is what such a section is instead. Needs the
+        # timeline; skipped without one, like the size condition above.
+        rep = r.get('require_section_not_repeated')
+        if rep and rep.get('heading') and timeline is not None:
+            cur = section_bullets(text, rep['heading'])
+            prev = (previous_section(timeline, text, rep['heading'])
+                    if cur and len(cur) > 1 else None)
+            if prev and all(item_repeats(i, prev, rep.get('same_when_both_say') or ())
+                            for i in cur):
+                out.append({'kind': 'repeat', 'advisory': advisory, 'message': (
+                    f"[{r.get('_source', '?')}] every line under the heading "
+                    f"matching /{rep['heading']}/i says again what the previous "
+                    f"reply's did. With nothing new in it, the whole section "
+                    f"is one line"
+                    + (f": {rep['one_line']}" if rep.get('one_line') else '')
+                    + (f" -- {rep['why']}" if rep.get('why') else '')
+                    + (f" (practice: {r['practice']})" if r.get('practice') else ''))})
         one_of = r.get('require_one_of') or []
         if one_of and not any(_norm(o) in _norm(text) for o in one_of):
             out.append({'kind': 'sentence', 'advisory': advisory, 'message': (
@@ -708,7 +1384,8 @@ def violations(text, reqs, timeline=None):
                 continue
             if re.search(trigger, text, re.I | re.M) and not re.search(
                     needed, text, re.I | re.M):
-                out.append({'kind': 'paired', 'advisory': advisory, 'message': (
+                out.append({'kind': 'paired', 'advisory': advisory,
+                            'repair': pair.get('repair'), 'message': (
                     f"[{r.get('_source', '?')}] this reply matches "
                     f"/{trigger}/ but nothing in it matches /{needed}/"
                     + (f" -- {pair.get('why')}" if pair.get('why') else '')
@@ -727,11 +1404,39 @@ def violations(text, reqs, timeline=None):
         # to the wrong branch. fence-block-for-paste passed both: it checks
         # that a block says where it goes, not what it authorizes.
         for pair in (r.get('require_in_fence_paired_with') or []):
-            trigger, needed = pair.get('if_matches'), pair.get('must_also_match')
-            if not (trigger and needed):
+            triggers = _as_patterns(pair.get('if_matches'),
+                                    pair.get('also_if_matches'))
+            needed = pair.get('must_also_match')
+            if not (triggers and needed):
                 continue
+            stop = pair.get('narration_exempt_if_block_matches')
+            negator = pair.get('negation_exempt_if_clause_negates')
+            describer = pair.get('description_exempt_if_clause_preceded_by')
+            quoter = pair.get('quoted_output_exempt_if_preceded_by')
+            # NARRATION IS NEVER AN ORDER (2026-10-10, a consumer's root-
+            # issues reply): "The update merged into staging as PR #47", in
+            # a block's situation paragraph, was refused as granting landing
+            # -- the narration exemption applied only to a block that also
+            # said it stops at Act. A clause that narrates, in the past
+            # tense, with a third-person subject and never "you", REPORTING A
+            # DONE THING tells the receiving session nothing to do, whatever
+            # else the block says, so a source may ask for that on every
+            # block (`narration_exempt`: true). A report of what somebody was
+            # TOLD ("a tool told it to open a PR to main") is still forgiven
+            # only where the block ends at Act: a reader may take it up. An
+            # instruction in the same block is its own clause, still judged.
+            always = pair.get('narration_exempt') is True
             for block in _fenced_blocks(text):
-                m = re.search(trigger, block, re.I | re.M)
+                judged = _quoted_output_blanked(block, quoter) if quoter else block
+                if stop and re.search(stop, judged, re.I | re.M):
+                    judged = _narrated_clauses(judged, triggers)
+                elif always:
+                    judged = _narrated_clauses(judged, triggers, events_only=True)
+                if negator:
+                    judged = _negated_clauses(judged, triggers, negator)
+                if describer:
+                    judged = _described_clauses(judged, triggers, describer)
+                m = _first_trigger(triggers, judged)
                 if m and not re.search(needed, block, re.I | re.M):
                     out.append({'kind': 'in_fence_paired', 'advisory': advisory,
                                 'message': (
@@ -844,7 +1549,207 @@ def violations(text, reqs, timeline=None):
                     f"by name: **Branch disposition:** BRANCH -- drop "
                     f"(why it is safe to drop)."
                     + (f" (practice: {r['practice']})" if r.get('practice') else ''))})
+
+        # require_delete_link_when_landed: a branch that was not on its
+        # landing branch when this turn began and is now has done its job,
+        # and the reply that lands it hands over its one-click delete link
+        # (the-boildown item 6, branch-delete-links). The reply gate printed
+        # NOT YET LANDED for the other half since 2026-09-21; nothing asked
+        # for this half, and a session Booked its branch on 2026-10-06 and
+        # gave no link.
+        # require_prompt_block_header (Morgan, 2026-10-10, strength:
+        # decided: "Every prompt you give me should have BOTH at the top: the
+        # session sending it, and what session it is for ... and enforce
+        # it"). A paste block that is a prompt for another session opens
+        # with two lines: From (the session sending it, with its link) and
+        # For (the session it goes to, with its link, or "a new session
+        # rooted in" a repository). It replaced require_reply_block_names_
+        # sender (2026-10-08), which asked for the destination only in a
+        # reply to a relayed message, anywhere in the block, and recognized
+        # the sender only as `From "..." (link)`, so a message opening
+        # "Sent automatically by the session ..." passed it unread.
+        rule = r.get('require_prompt_block_header')
+        if rule:
+            is_prompt = rule.get('prompt_block_if_matches') or '(?!)'
+            from_re = rule.get('from_line') or '(?!)'
+            for_re = rule.get('for_line') or '(?!)'
+            outside = re.sub(r'(?ms)^\s{0,3}(`{3,}|~{3,}).*?^\s{0,3}\1\s*$',
+                             '', text)
+            sender = None
+            if prompt:
+                sm = re.search(rule.get('sender_in_prompt') or '(?!)', prompt,
+                               re.I | re.M)
+                sender = sm.group(1) if sm else None
+            exempt = rule.get('exempt_if_reply_says')
+            to_new = bool(exempt and re.search(exempt, outside, re.I))
+            tail = (f" (practice: {r['practice']})" if r.get('practice') else '')
+
+            def _refuse(why):
+                out.append({'kind': 'prompt_header', 'advisory': advisory,
+                            'message': f"[{r.get('_source', '?')}] {why}"
+                            + (f" -- {rule.get('why')}" if rule.get('why') else '')
+                            + '.' + tail})
+            for block in _fenced_blocks(text):
+                if not re.search(is_prompt, block, re.I | re.M):
+                    continue
+                lines = [l.strip() for l in block.splitlines() if l.strip()]
+                first = lines[0] if lines else ''
+                second = lines[1] if len(lines) > 1 else ''
+                if not re.search(from_re, first, re.I):
+                    _refuse("a paste block written for another session does "
+                            "not open with the session sending it. Make its "
+                            "first line: \"Sent automatically by the session "
+                            "<this session's title> (<id>) -- <link>. Nobody "
+                            "typed this.\"")
+                    continue
+                if not re.search(for_re, second, re.I):
+                    want = (f"\"For: the session <its name> -- {sender}.\""
+                            if sender and not to_new else
+                            "\"For: the session <its name> -- <its link>.\" or "
+                            "\"For: a new session rooted in <owner/repo>.\"")
+                    _refuse("a paste block written for another session does "
+                            "not say, on its second line, which session it is "
+                            f"for. Make its second line {want}")
+                    continue
+                if sender and not to_new and sender not in second:
+                    _refuse("this turn's message came from another session "
+                            f"({sender}), and the paste block answering it is "
+                            "for some other destination. Its For line names "
+                            "that session, with that link -- or the reply says "
+                            "\"Open a new session\" and the For line says so")
+                    continue
+                named = re.search(r'https://claude\.ai/code/session_\w+', second)
+                if named and named.group(0) not in outside:
+                    _refuse("the paste block is for the session "
+                            f"{named.group(0)}, and the reply does not say so "
+                            "outside the block. Add one plain sentence: "
+                            f"\"Paste this into <its name> -- {named.group(0)}.\"")
+
+        # require_full_check_after_fast_main (Morgan, 2026-10-09: "I want to
+        # make sure there's a full check *somewhere* on the push to main,
+        # afterwards"). A fast move into main whose GitHub test does not run
+        # owes the full local suite on main after its merge, unless one of
+        # his exceptions applied (precedent_branches.full_check_after); the
+        # turn does not end with it never started, or failed and unfixed.
+        if r.get('require_full_check_after_fast_main'):
+            for sha, state, detail in _full_check_owed():
+                if state == 'failed':
+                    msg = (f"main's full check after the fast move "
+                           f"{sha[:12]} FAILED ({detail}). Fix main now, then "
+                           f"run it again: python3 tools/precedent_branches.py "
+                           f"--run-tests main")
+                else:
+                    msg = (f"the fast move {sha[:12]} is on main and its full "
+                           f"check has not been started ({detail}). Start it "
+                           f"before ending the turn, in the background: "
+                           f"python3 tools/precedent_branches.py --run-tests main")
+                out.append({'kind': 'full-check-after', 'advisory': False,
+                            'message': f"[{r.get('_source', '?')}] {msg}"
+                            + (f" (practice: {r['practice']})" if r.get('practice') else '')})
+
+        if r.get('require_delete_link_when_landed'):
+            for repo, branch, base in _landed_this_turn():
+                enc = urllib.parse.quote(branch, safe='')
+                if re.search(r'branches/all\?query=(?:' + re.escape(enc) + '|'
+                             + re.escape(branch) + r')(?![\w%./-])', text, re.I):
+                    continue
+                out.append({'kind': 'delete-link', 'advisory': False, 'message': (
+                    f"[{r.get('_source', '?')}] '{branch}' "
+                    f"({pathlib.Path(repo).name}) landed on '{base}' during "
+                    f"this turn, and the reply gives no delete link for it. "
+                    f"Add one line to The Boildown with its filtered "
+                    f"branches-page link -- https://github.com/<owner>/<repo>"
+                    f"/branches/all?query={enc} -- and the branch it merged "
+                    f"into. Never delete it yourself."
+                    + (f" (practice: {r['practice']})" if r.get('practice') else ''))})
     return out
+
+
+def _full_check_owed(root=None):
+    """precedent_branches.full_check_owed for this checkout, or [] when it
+    cannot be imported: an engine too old to have it owes nothing."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_branches as pb
+        top = root or (subprocess.run(['git', 'rev-parse', '--show-toplevel'],
+                                      capture_output=True, text=True).stdout.strip())
+        return pb.full_check_owed(top) if top and hasattr(pb, 'full_check_owed') else []
+    except Exception:                                       # noqa: BLE001
+        return []
+
+
+def _consume_turn_start(root=None):
+    """A reply that passes has given its delete link for every branch that
+    landed; take those branches off the turn-start record, so each is asked
+    about once. A branch not landed yet stays. Never raises.
+
+    WHY (2026-10-10). The record is written at a turn's start by the
+    UserPromptSubmit hook. A session rooted above its repositories runs no
+    hook, so the one record, written that morning, was read as "this turn's
+    start" all day: every reply after was refused for owing a delete link to
+    a branch merged hours before. With hooks, each turn writes a fresh one
+    anyway; without them, an answered branch is now gone from it."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_gate as _pg
+        root = root or os.environ.get('CLAUDE_PROJECT_DIR') or '.'
+        done = {(r, b) for r, b, _ in _landed_this_turn(root)}
+        if not done:
+            return
+        f = _pg._turn_start_file(root)
+        recs = json.loads(f.read_text(encoding='utf-8')) if f and f.is_file() else []
+        keep = [x for x in recs if isinstance(x, dict)
+                and (x.get('repo'), x.get('branch')) not in done]
+        _pg.record_turn_start_unlanded(root, keep)
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def _landed_this_turn(root=None):
+    """-> [(repo, branch, base)] for each branch the reply gate recorded as
+    not landed at this turn's start (precedent_gate.record_turn_start_unlanded)
+    whose work is on its landing branch now: every commit on it, or, after a
+    squash or rebase merge, every file it changed identical there. [] when
+    nothing was recorded or the gate cannot be imported: an engine too old to
+    record blocks nothing."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_gate as _pg
+        root = root or os.environ.get('CLAUDE_PROJECT_DIR') or '.'
+        f = _pg._turn_start_file(root)
+        recs = json.loads(f.read_text(encoding='utf-8')) if f and f.is_file() else []
+    except Exception:                                         # noqa: BLE001
+        return []
+
+    def git(repo, *args):
+        p = subprocess.run(['git', '-C', str(repo), *args],
+                           capture_output=True, text=True, timeout=20)
+        return p.stdout.strip() if p.returncode == 0 else None
+
+    found = []
+    for rec in recs if isinstance(recs, list) else []:
+        repo, branch, base = (rec.get('repo'), rec.get('branch'), rec.get('base')) \
+            if isinstance(rec, dict) else (None, None, None)
+        if not (repo and branch and base):
+            continue
+        try:
+            tip = git(repo, 'rev-parse', '--verify', '--quiet',
+                      f'refs/heads/{branch}^{{commit}}')
+            if not tip:
+                continue
+            _pg._refresh_remote_branch(repo, base)
+            if git(repo, 'rev-list', '--count', f'origin/{base}..{tip}') == '0':
+                found.append((repo, branch, base))
+                continue
+            mb = git(repo, 'merge-base', f'origin/{base}', tip)
+            files = (git(repo, 'diff', '--name-only', mb, tip) or '').split() if mb else []
+            if files and subprocess.run(
+                    ['git', '-C', str(repo), 'diff', '--quiet', f'origin/{base}',
+                     tip, '--', *files], capture_output=True).returncode == 0:
+                found.append((repo, branch, base))
+        except Exception:                                     # noqa: BLE001
+            continue
+    return found
 
 
 def _stranded_branches(root=None, siblings=True):
@@ -1013,14 +1918,38 @@ def main():
                                 f"/{pair.get('must_also_match')}/")
             if r.get('require_in_fence_paired_with'):
                 for pair in r['require_in_fence_paired_with']:
-                    bits.append(f"inside a fenced block, /{pair.get('if_matches')}/ "
+                    trig = ' or '.join(f"/{t}/" for t in _as_patterns(
+                        pair.get('if_matches'), pair.get('also_if_matches')))
+                    bits.append(f"inside a fenced block, {trig} "
                                 f"requires /{pair.get('must_also_match')}/ in "
-                                f"the same block")
+                                f"the same block"
+                                + (f" (past-tense narration exempt in a block "
+                                   f"matching /{pair['narration_exempt_if_block_matches']}/)"
+                                   if pair.get('narration_exempt_if_block_matches') else '')
+                                + (" (a clause whose landing verb a negator "
+                                   "governs is exempt)"
+                                   if pair.get('negation_exempt_if_clause_negates') else ''))
             if r.get('require_container_safe_if_says'):
                 for ph in r['require_container_safe_if_says']:
                     bits.append(f'"{ph}" requires a container with nothing '
                                 f'uncommitted and nothing off a remote '
                                 f'(tools/precedent_container_safe.py)')
+            _rep = r.get('require_section_not_repeated') or {}
+            if _rep.get('heading'):
+                bits.append(f"section /{_rep['heading']}/i not a repeat of the "
+                            f"previous reply's; else one line"
+                            + (f": {_rep['one_line']}" if _rep.get('one_line') else ''))
+            if r.get('require_quiet_while_background_runs'):
+                bits.append('no reply at all to a background job waking the '
+                            'turn while its batch still runs (or to a progress '
+                            'event), unless it reports a failure')
+            if r.get('require_delete_link_when_landed'):
+                bits.append('a branch that landed during this turn gets its '
+                            'one-click delete link (branches/all?query=)')
+            if r.get('require_full_check_after_fast_main'):
+                bits.append('a fast move into main whose GitHub test does not '
+                            'run has its full local suite on main started, '
+                            'and fixed if it failed, before the turn ends')
             if r.get('require_landed_if_says'):
                 for ph in r['require_landed_if_says']:
                     bits.append(f'"{ph}" requires no work left on a feature '
@@ -1041,8 +1970,13 @@ def main():
         return 0
 
     timeline = None
+    wake = None
+    prompt = None
     if '--text' in argv:
         text = pathlib.Path(argv[argv.index('--text') + 1]).read_text(encoding='utf-8')
+        if '--prompt' in argv:
+            prompt = pathlib.Path(argv[argv.index('--prompt') + 1]).read_text(
+                encoding='utf-8')
     else:
         try:
             payload = json.loads(sys.stdin.read() or '{}')
@@ -1058,6 +1992,13 @@ def main():
             return 0
         timeline = assistant_timeline(transcript)
         text = last_assistant_text(transcript)
+        prompt = last_prompt_text(transcript)
+        # A turn a background job woke is judged by its own words only --
+        # never by the last reply's, which last_assistant_text() falls back
+        # to when this turn said nothing (2026-10-05).
+        wake = turn_wake(transcript)
+        if wake is not None:
+            text = wake['text']
         if not text:
             # No transcript we could parse, or a turn with no prose in it.
             # Never block on the check's own blindness.
@@ -1071,10 +2012,14 @@ def main():
     # A turn that opens with the fixed trivial-check-in template is the
     # documented substitute for a Boildown, not a shorter one -- exempt the
     # same way (practice: the-boildown).
-    if not reqs or not text.strip() or is_trivial_checkin(text):
+    if not reqs or not text.strip():
         return 0
-    bad = [b for b in violations(text, reqs, timeline) if not b.get('advisory')]
+    if is_trivial_checkin(text) and not (wake and wake.get('quiet_owed')):
+        return 0
+    bad = [b for b in violations(text, reqs, timeline, wake, prompt)
+           if not b.get('advisory')]
     if not bad:
+        _consume_turn_start()
         return 0
     # The reply that was just refused has ALREADY been shown to the person --
     # a Stop hook cannot un-show it. So the only correct repair is to emit the
@@ -1093,7 +2038,29 @@ def main():
     # few minutes, you repeated the 'next steps' section two times."* A
     # sentence-only failure now says sentence-only, in the imperative, and
     # names the repeat as the thing not to do.
-    if any(b['kind'] == 'heading' for b in bad):
+    # A pairing may name its own repair (2026-10-05). The default below says
+    # "add the missing line", which is right when the line was forgotten and
+    # wrong when the TRIGGER is what does not belong: practice ideas offered
+    # mid-conversation are repaired by withdrawing them, never by adding an
+    # archive line that is not true.
+    _repairs = [b['repair'] for b in bad if b.get('repair')]
+    if any(b['kind'] == 'quiet' for b in bad):
+        # The repair is one short line, never nothing: the reply is already
+        # on screen, and an empty turn makes the harness ask for "visible
+        # output" (2026-10-06), so "say nothing" left the session two
+        # instructions to choose between.
+        print('The reply gate blocked this turn: a background job woke it and '
+              'its batch is still running, named below, so only one short line '
+              'was owed. The person has ALREADY SEEN the reply above. Output '
+              'ONE line naming the wait -- "(Waiting on <what>.)" -- and end '
+              'the turn; an empty reply is not accepted by the harness. On the '
+              'next wakes, the same one line, until the last job ends or one '
+              'fails -- then one report, with its Boildown.', file=sys.stderr)
+    elif _repairs:
+        print('The reply gate blocked this turn. The person has ALREADY SEEN '
+              'the reply above -- do NOT repeat it. ' + ' '.join(_repairs),
+              file=sys.stderr)
+    elif any(b['kind'] == 'heading' for b in bad):
         print('The reply gate blocked this turn. The person has ALREADY SEEN '
               'the reply above, so do NOT write it again: output ONLY the '
               'missing closing section(s) named below, as a short addition to '
@@ -1105,6 +2072,18 @@ def main():
               'what is missing is its FIRST line, named below. Output that one '
               'bullet and nothing else: no new heading, no second copy of the '
               'section, no summary, no apology.', file=sys.stderr)
+    elif any(b['kind'] == 'repeat' for b in bad):
+        # The repair is the one-line form, never nothing (2026-10-06): an
+        # empty turn makes the harness ask for visible output, and any longer
+        # correction is more of what the person objected to.
+        print('The reply gate blocked this turn: its closing section repeats '
+              'the previous reply\'s, line for line, named below. The person '
+              'has ALREADY SEEN it. Output ONLY the one-line form, under the '
+              'same heading -- "- The work of this session is now on: <where '
+              'it is>, unchanged since the last update." -- and end the turn: '
+              'no correction, no shorter copy, no apology. An empty reply is '
+              'not accepted by the harness, so this line is what is owed.',
+              file=sys.stderr)
     elif any(b['kind'] == 'contradiction' for b in bad):
         print('The reply gate blocked this turn: it asserts two things named '
               'below that cannot both be true. The person has ALREADY SEEN '

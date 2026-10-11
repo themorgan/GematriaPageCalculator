@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_merge_check.py -- run the push check on a pull request before
+"""The push check on the merge GitHub would make, at its base branch's tier -- `merge-check-gate.sh` runs it before a pull request is merged through GitHub, a push no push gate sees, and again on the merge commit after it, reverting a merge that fails because the base moved in between
+
+precedent_merge_check.py -- run the push check on a pull request before
 it is merged through GitHub, since that merge is a push no local hook sees.
 
 WHY THIS EXISTS (spec/BRANCH_TIERS_PLAN.md, "Three holes this has to
@@ -267,8 +269,9 @@ def tier_source_refusal(head_ref, head_repo, owner, repo, tiers):
         return None
     sys.path.insert(0, str(HERE))
     try:
-        import precedent_time
-        copy = f'to-main-{precedent_time.today()}'
+        import precedent_branches
+        copy = precedent_branches.promote_branch_name(
+            HERE.parent, precedent_branches.COPY_SLUG, None) or 'to-main-copy'
     except Exception:                                          # noqa: BLE001
         copy = 'to-main-copy'
     finally:
@@ -339,6 +342,57 @@ def revert_landing(root, base, sha, number, pb=None):
     return True, f'{base} is back at the tree it had before the merge ({commit[:12]})'
 
 
+def same_tree_as_checked(root, sha):
+    """-> True when the merge commit `sha` holds exactly the tree of the
+    pull request's head (its second parent), the tree the gate checked;
+    False when they differ, so the base moved in between; None when it
+    cannot be told (a squash or rebase merge has no second parent)."""
+    landed_tree = git(root, 'rev-parse', '--verify', '--quiet', f'{sha}^{{tree}}')
+    head_tree = git(root, 'rev-parse', '--verify', '--quiet', f'{sha}^2^{{tree}}')
+    if not landed_tree or not head_tree:
+        return None
+    return landed_tree == head_tree
+
+
+def landed_verdict(base, number, sha, tier, rc, out, same):
+    """-> (exit code, the line to print) for a check of what landed that
+    did not fail (rc 0, or 2 for could-not-check), else None: a failure
+    reverts, which landed() does itself.
+
+    WHY (2026-10-10). A session's fast move into main printed "main MOVED
+    ... It has now had its own full check" when main had not moved and the
+    check that ran was the quick one: the "landed as checked" line needed
+    the words 'this exact tree already passed', which only the full tier
+    prints. A session that believes that line may skip the full check it
+    still owes. So whether the base moved is read from the trees, and the
+    line names the check that actually ran."""
+    which = ('quick check (the files it changed)' if tier == 'basic'
+             else f'{tier} check')
+    owed = (' Its full check is GitHub\'s test on the branch, still to come.'
+            if tier == 'basic' else '')
+    if rc == 0 and (same or (same is None
+                             and 'this exact tree already passed' in out)):
+        return 0, (f'precedent_merge_check: pull request #{number} landed on '
+                   f'{base} as checked ({sha[:12]}). The {which} passed on it.'
+                   + owed)
+    if rc == 0 and same is None:
+        return 0, (f'precedent_merge_check: pull request #{number} landed on '
+                   f'{base} as {sha[:12]}, a tree the gate may not have seen '
+                   f'(no second parent to compare). The {which} passed on it.'
+                   + owed)
+    moved = (f'{base} MOVED while pull request #{number} merged, so what '
+             f'landed ({sha[:12]}) was not what the gate checked'
+             if same is False else
+             f'what pull request #{number} landed on {base} ({sha[:12]})')
+    if rc == 0:
+        return 0, f'precedent_merge_check: {moved}. The {which} passed on it.' + owed
+    if rc != 1:
+        tail = '\n'.join(out.rstrip().splitlines()[-TAIL_LINES:])
+        return 2, (f'precedent_merge_check: {moved}, and it could not be '
+                   f'checked here:\n{tail}')
+    return None
+
+
 def landed(argv, pb, search):
     """--landed [SHA]: after a merge through GitHub, check what actually
     landed, and undo it when it fails.
@@ -404,28 +458,33 @@ def landed(argv, pb, search):
             base = bases[0] if bases else None
         if not base or base not in full:
             return 0        # a working branch: its basic check was the gate's
-        rc, out = run_in_worktree(root, sha, 'full', tool_rel)
+        tier, extra = 'full', ()
+        fast = getattr(pb, 'fast_main_copy', None) if pb else None
+        if base == getattr(pb, 'MAIN', 'main') and fast and fast(
+                root, git(root, 'rev-parse', '--verify', '--quiet', f'{sha}^2')):
+            # A fast move into main: the quick checks, as before the merge.
+            # Its full check is GitHub's test, which runs now.
+            tier, extra = 'basic', ('--changed-since', f'{sha}^1')
+        else:
+            # A person who lands straight on staging: that branch's own tier.
+            tiers = getattr(pb, 'tier_for_branch', None) if pb else None
+            if tiers and tiers(root, base)[0] == 'basic':
+                tier, extra = 'basic', ('--changed-since', f'{sha}^1')
+        same = same_tree_as_checked(root, sha)
+        rc, out = run_in_worktree(root, sha, tier, tool_rel, extra)
     finally:
         subprocess.run(['git', '-C', str(root), 'update-ref', '-d', ns],
                        capture_output=True, text=True)
-    if rc == 0 and 'this exact tree already passed' in out:
-        print(f'precedent_merge_check: pull request #{number} landed on {base} '
-              f'as checked ({sha[:12]}).')
-        return 0
-    if rc == 0:
-        print(f'precedent_merge_check: {base} MOVED while pull request '
-              f'#{number} merged, so what landed ({sha[:12]}) was not what the '
-              f'gate checked. It has now had its own full check, and passed.')
-        return 0
+    said = landed_verdict(base, number, sha, tier, rc, out, same)
+    if said is not None:
+        print(said[1])
+        return said[0]
     tail = '\n'.join(out.rstrip().splitlines()[-TAIL_LINES:])
-    if rc != 1:
-        print(f'precedent_merge_check: {base} MOVED while pull request '
-              f'#{number} merged, and what landed ({sha[:12]}) could not be '
-              f'checked here:\n{tail}')
-        return 2
     done, what = revert_landing(root, base, sha, number, pb)
-    print(f'precedent_merge_check: {base} MOVED while pull request #{number} '
-          f'merged, and what landed ({sha[:12]}) FAILED its full check. '
+    moved = (f'{base} MOVED while pull request #{number} merged, and what '
+             f'landed ({sha[:12]})' if same is False else
+             f'what pull request #{number} landed on {base} ({sha[:12]})')
+    print(f'precedent_merge_check: {moved} FAILED its {tier} check. '
           + (f'Reverted: {what}. The pull request\'s branch still has the '
              f'work: merge {base} into it, fix the finding, and merge again.'
              if done else f'{what}. Fix it on {base} now.')
@@ -448,6 +507,17 @@ def main(argv):
 
     if '--landed' in argv:
         return landed(argv, pb, search)
+
+    # The No ladders test session merges nothing (precedent_ladder.py).
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_ladder
+        refusal = precedent_ladder.test_session_refusal()
+    except Exception:                                        # noqa: BLE001
+        refusal = None
+    if refusal:
+        print(f'precedent_merge_check: {refusal}')
+        return 1
 
     if '--head' in argv:
         root_s = git(search[0], 'rev-parse', '--show-toplevel')
@@ -506,9 +576,10 @@ def main(argv):
         bases = choose_bases(declared_base, bases)
         refusal = getattr(pb, 'merge_refusal', None) if pb else None
         if refusal:
-            heads = branches_at(root, git(root, 'rev-parse',
-                                          f'refs/precedent-merge-check/{number}/head'))
-            why_not = refusal(root, bases, heads)
+            head_sha = git(root, 'rev-parse',
+                           f'refs/precedent-merge-check/{number}/head')
+            heads = branches_at(root, head_sha)
+            why_not = refusal(root, bases, heads, head_sha=head_sha)
             if why_not:
                 print(f'precedent_merge_check: REFUSED pull request #{number} '
                       f'of {owner}/{repo} -- {why_not}')
@@ -519,6 +590,12 @@ def main(argv):
             tiers = [pb.tier_for_branch(root, b) for b in bases]
             full = [t for t in tiers if t[0] == 'full']
             tier, why = full[0] if full else tiers[0]
+            fast = getattr(pb, 'fast_main_copy', None)
+            if pb.MAIN in bases and fast and fast(root, head_sha):
+                # A fast move into main took the quick checks on purpose;
+                # GitHub's test after the merge is its full check.
+                tier, why = 'basic', ('a fast move into main: the quick checks '
+                                      'now, GitHub\'s test after the merge')
         else:
             tier, why = 'full', ('the base branch could not be matched to a '
                                  'branch on origin, so it is checked fully')
@@ -529,8 +606,14 @@ def main(argv):
         # A pull request into pre-staging is judged by the practice checks
         # on the files it changes (precedent_push_check.CHANGED_PRACTICE_CHECK).
         extra = ()
-        if tier == 'basic' and pb and pb.PRE_STAGING in bases:
-            extra = ('--changed-since', f'origin/{pb.PRE_STAGING}')
+        since_for = getattr(pb, 'changed_since_for', None) if pb else None
+        since = (since_for(root, bases) if since_for else
+                 f'origin/{pb.PRE_STAGING}' if pb and pb.PRE_STAGING in bases
+                 else None)
+        if tier == 'basic' and pb and pb.MAIN in bases:
+            since = f'origin/{pb.MAIN}'
+        if tier == 'basic' and since:
+            extra = ('--changed-since', since)
         # A fully checked base is held still while its merge is judged
         # (precedent_branches.hold_for_landing): a Promote or another landing
         # moving it now would make this pass stale before it is used.
@@ -566,8 +649,58 @@ def main(argv):
     return 1 if rc == 1 else 2
 
 
+# THE MERGE GATE'S WORDS ARE WRITTEN HERE, NOT IN THE HOOK (2026-10-07), for
+# the reason doc_lint.py's hook_reason gives: a reworded hook is a question
+# for a person in every repository at its next Update Vendors, and a
+# reworded tool is not. .claude/hooks/merge-check-gate.sh pipes the run's
+# output back in with --hook-reason and passes on what comes out.
+# The hook refuses the WHOLE command before any of it starts, so a commit
+# or push chained in front of the merge did not happen either; a bare
+# "REFUSED this merge" was read as covering only the last step
+# (2026-10-03, 2026-10-05, the push gate's twin of this).
+NOTHING_RAN = ('Nothing in the refused command ran -- not the merge, and not any step\n'
+               'before it in the same command (a commit or a push included). Make those\n'
+               'steps in a call of their own, check `git status`, then merge separately.')
+
+
+def hook_reason(outcome, out):
+    """-> the whole text the merge gate refuses or blocks with: '1' a check
+    failed before the merge, '124' the hook's deadline killed the run,
+    'landed-1' what the merge landed failed afterwards. None otherwise."""
+    if outcome == 'landed-1':
+        return f'What this merge landed failed its full check.\n\n{out.rstrip()}'
+    if outcome == '1':
+        why = ('A check failed on what this merge would land. Fix it on the\n'
+               'branch and push, then merge.')
+    elif outcome == '124':
+        why = ('The checks did not finish within 14 minutes, so nothing was\n'
+               'verified. Run the push check on the branch first -- a recorded pass for the\n'
+               'same tree is reused -- then merge.')
+    else:
+        return None
+    tail = '\n'.join(out.rstrip().splitlines()[-120:])
+    return ('The merge check REFUSED this merge.\n\n'
+            f'{NOTHING_RAN}\n\n{why}\n\n{tail}\n\n'
+            'Nothing lets a merge past this, and nothing should: fix what it found on\n'
+            'the branch, push, and merge again. If the check itself is wrong, fix the\n'
+            'check where it lives.')
+
+
+def _hook_reason_main(argv):
+    """`--hook-reason OUTCOME`, the run's output on stdin: print the text,
+    exit 0; exit 2 for an outcome this tool does not word."""
+    i = argv.index('--hook-reason') + 1
+    text = hook_reason(argv[i] if i < len(argv) else '', sys.stdin.read())
+    if text is None:
+        return 2
+    print(text)
+    return 0
+
+
 if __name__ == '__main__':
     if any(a in ('--help', '-h') for a in sys.argv[1:]):
         print((__doc__ or '').strip())
         sys.exit(0)
+    if '--hook-reason' in sys.argv[1:]:
+        sys.exit(_hook_reason_main(sys.argv[1:]))
     sys.exit(main(sys.argv[1:]))

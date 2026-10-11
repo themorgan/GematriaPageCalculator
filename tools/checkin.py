@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""checkin.py — drive the periodic check-in (INSTALL.md §4) mechanically.
+"""Drives the periodic check-in (INSTALL.md §4) mechanically
+
+checkin.py — drive the periodic check-in (INSTALL.md §4) mechanically.
 
 Runs from a dependent repo (script lives at process/upstream/tools/). The
 check-in loop — sync the vendored tree into a clone of the upstream repo,
@@ -108,7 +110,7 @@ Run:  python3 tools/checkin.py fresh
       python3 tools/checkin.py record ../BestPractice --note "PR #4"
       python3 ../BestPractice/tools/checkin.py update ../BestPractice --repo .
 """
-import collections, datetime, filecmp, io, json, os, pathlib, shutil, subprocess, sys, tarfile, tempfile
+import collections, datetime, filecmp, io, json, os, pathlib, re, shutil, subprocess, sys, tarfile, tempfile
 
 # practice: one-formatter-per-quantity -- every moment in time this project
 # writes down comes from ONE module, in the person's zone, carrying its
@@ -366,6 +368,20 @@ def _rev_parse_quiet(clone, ref):
 NOT_VENDORED = frozenset({'evals', 'philosophy', 'spec', 'todo', 'decisions',
                           'deck', 'record'})
 
+# Single files inside a NOT_VENDORED directory that a consumer does need,
+# named one by one so the directory stays home. The withdrawal record is the
+# forwarding address a consumer's sync reads for every rule deleted from
+# universal on purpose (precedent_resolve.withdrawn_record, 2026-10-03).
+VENDORED_DESPITE_DIR = frozenset({'record/WITHDRAWN_FROM_UNIVERSAL.md'})
+
+
+def _excluded_dir(rel):
+    """-> the NOT_VENDORED component that keeps `rel` home, or None."""
+    rel = pathlib.PurePosixPath(pathlib.Path(rel).as_posix())
+    if rel.as_posix() in VENDORED_DESPITE_DIR:
+        return None
+    return next((part for part in rel.parts if part in NOT_VENDORED), None)
+
 # Root-only exclusions -- matched by exact top-level path, NEVER as a path
 # component the way NOT_VENDORED is. `_files()`'s component match is right
 # for a subject-matter directory (the same "gotchas" can only ever mean
@@ -474,6 +490,7 @@ VENDORING_RULES = (
     ('GEMINI.md', False, "this repo's own session instructions"),
     ('MAP.md', False, "this repo's own map"),
     ('WHERE_THINGS_ARE.md', False, "this repo's own index"),
+    ('where_things_are.json', False, "the source of this repo's own index"),
     ('TODO.md', False, "this repo's to-do redirect stub"),
     ('MANIFEST.json', False, "a materialization record: which sources' "
                              "practices were copied into this repo"),
@@ -486,6 +503,12 @@ VENDORING_RULES = (
     ('decisions/', False, "this repo's decision records"),
     ('philosophy/', False, 'the reasoning behind Precedent, for its builders'),
     ('evals/', False, "this repo's evaluations"),
+    # The one record a consumer needs: the forwarding address of every rule
+    # deleted from universal on purpose, which a sync's removal guard reads
+    # (precedent_resolve.withdrawn_record). Without it the first sync after
+    # a withdrawal refused on every withdrawn rule (2026-10-03).
+    ('record/WITHDRAWN_FROM_UNIVERSAL.md', True,
+     "where each rule withdrawn from universal went; a consumer's sync reads it"),
     ('record/', False, "this repo's run records and ledgers"),
     # Traps a session using Precedent can hit, and environment-gotchas (a
     # resident practice) tells every session to grep gotchas/ before calling
@@ -533,7 +556,7 @@ def _in_copy(rel, carries_tools=None):
     apply to it: only NOT_VENDORED does, as before 2026-09-30, and _files()
     narrows it to CODE_DIRS."""
     rel = pathlib.PurePosixPath(pathlib.Path(rel).as_posix())
-    if any(part in NOT_VENDORED for part in rel.parts):
+    if _excluded_dir(rel):
         return False
     if CODE_DIRS is not None:
         if pathlib.Path(rel) in _NOT_VENDORED_ROOT_PATHS:
@@ -546,6 +569,25 @@ def _in_copy(rel, carries_tools=None):
     if carries_tools is None:
         carries_tools = _copy_carries_tools()
     return rel.parts[0] != 'tools' or carries_tools
+
+
+def in_shipped_copy(rel, root=None):
+    """True when repo-relative `rel` -- a file, or a directory holding one --
+    reaches a consumer through the catalogue copy this repo ships, in the
+    shape every consumer has had since 2026-09-30: its own engine in tools/,
+    so the copy's tools/ stays home (_in_copy with carries_tools=False).
+
+    THE ONE ANSWER for a link's target. The link check and the GLOSSARY's
+    links asked vendoring_rule() instead, which still says tools/ is
+    vendored; so ../tools/... links passed here and were broken under every
+    consumer's process/upstream/ (a consumer counted 227, 2026-10-08)."""
+    base = pathlib.Path(root or ROOT)
+    rel = pathlib.PurePosixPath(pathlib.Path(rel).as_posix()).as_posix().rstrip('/')
+    if (base / rel).is_dir():
+        return any(_in_copy(f.relative_to(base).as_posix(), carries_tools=False)
+                   for f in (base / rel).rglob('*')
+                   if f.is_file() and '.git' not in f.parts)
+    return _in_copy(rel, carries_tools=False)
 
 
 def rules_report(since=None):
@@ -689,9 +731,279 @@ def local_changes(clone, recorded):
         tarfile.open(fileobj=io.BytesIO(tar.stdout)).extractall(td)
         base = pathlib.Path(td)
         ours, theirs = _files(UPSTREAM), _files(base)
-        return sorted(ours ^ theirs) + sorted(
-            p for p in ours & theirs
-            if not filecmp.cmp(UPSTREAM / p, base / p, shallow=False))
+        # A file upstream has and this copy lacks is a local deletion only if
+        # this repository removed it; one a vendor sync removed was upstream's
+        # doing (the copy rules left gotchas/ out for a day, 2026-09-30), and
+        # counting it made every later update refuse (found 2026-10-04).
+        gone = {p for p in theirs - ours if deleted_here(UPSTREAM / p)}
+        changed = sorted(p for p in ours & theirs
+                         if not filecmp.cmp(UPSTREAM / p, base / p, shallow=False))
+        added = sorted(ours - theirs)
+        # A file holding text upstream itself once shipped at that path is a
+        # copy no sync refreshed, or an earlier run's mirror the record never
+        # caught up with (synced_from names what it mirrored), not this
+        # repository's work (upstream_text).
+        revs = [r for r in dict.fromkeys(
+            (recorded, (_manifest().get('upstream') or {}).get('synced_from'))) if r]
+        stale = {p for p in added + changed
+                 if upstream_text(clone, UPSTREAM / p, p, *revs)}
+        return sorted((set(added) - stale) | gone) + [p for p in changed
+                                                      if p not in stale]
+
+
+# (clone, revs) -> {(path, blob id)}; one log per process (upstream_blobs).
+_UPSTREAM_BLOBS = {}
+
+
+def upstream_blobs(clone, *revs):
+    """-> {(path, blob id)} for every version of every file that `revs`'
+    history, and every ref `clone` holds, ever carried -- a merge's own
+    versions included (`-m`). {} where the clone cannot answer.
+
+    THE ONE ANSWER to "is this upstream's own text?", for the copy here and
+    for a section 0 catalogue (precedent_update._upstream_history_blobs)."""
+    key = (str(clone), revs)
+    if key not in _UPSTREAM_BLOBS:
+        # A rev the clone lacks would fail the whole log; it adds nothing.
+        revs = [r for r in revs if isinstance(r, str) and subprocess.run(
+            ['git', '-C', str(clone), 'cat-file', '-e', f'{r}^{{commit}}'],
+            capture_output=True).returncode == 0]
+        r = subprocess.run(['git', '-C', str(clone), 'log', '--format=', '--raw',
+                            '-m', '--no-abbrev', '--no-renames', *revs, '--all'],
+                           capture_output=True, text=True)
+        out = set()
+        for line in r.stdout.splitlines() if r.returncode == 0 else []:
+            meta, _, path = line.partition('\t')
+            parts = meta.split()
+            if not line.startswith(':') or len(parts) < 4:
+                continue
+            for oid in parts[2:4]:
+                if oid.strip('0'):
+                    out.add((path, oid))
+        _UPSTREAM_BLOBS[key] = out
+    return _UPSTREAM_BLOBS[key]
+
+
+def upstream_text(clone, path, rel, *revs):
+    """True when file `path` holds, byte for byte, a version upstream itself
+    shipped at copy-relative `rel` -- so it is not this repository's work,
+    and the copy may be brought to the recorded commit over it.
+
+    WHY (2026-10-08, a consuming repository). Its process/manifest.json
+    recorded one commit while 440 of the 604 files under its process/upstream/
+    held other upstream versions -- every one of them text upstream had
+    shipped at that path, none a line of its own. local_changes() called each
+    a local edit, so Update Vendors kept each one ("upstream has not changed
+    this file since it was vendored, so your edit stays") and said DONE; and
+    the copy's dropped tools/ stayed, because the drop below only recognised
+    upstream's text at two commits. The carry check has made the same
+    allowance since 2026-09-30, line by line. A path precedent.json keeps on
+    purpose (kept_template_divergences) stays the repository's call."""
+    if not path.is_file():
+        return False
+    try:
+        import precedent_vendor_engine as _pve
+        if path.relative_to(ROOT).as_posix() in _pve.kept_template_divergences(ROOT):
+            return False
+    except Exception:                                         # noqa: BLE001
+        pass
+    return (pathlib.PurePosixPath(pathlib.Path(rel).as_posix()).as_posix(),
+            blob_id(path.read_bytes())) in upstream_blobs(clone, *revs)
+
+
+def blob_id(data):
+    """-> the git object id of `data` as a blob (git's default sha1 format)."""
+    import hashlib
+    return hashlib.sha1(b'blob %d\0' % len(data) + data).hexdigest()
+
+
+def deleted_here(path):
+    """True when `path`, a file under the vendored tree that is not there, is
+    absent because THIS repository removed it: it was committed here once,
+    and the commit that removed it was not a vendor sync. A sync records a
+    new upstream commit in process/manifest.json in the same commit; a
+    deletion riding one was upstream's, made when the copy rules left the
+    file out. Unreadable history counts as a local deletion, the safe side."""
+    repo = MANIFEST.parent.parent
+    rel = path.relative_to(repo).as_posix()
+    r = subprocess.run(['git', '-C', str(repo), 'log', '--diff-filter=D', '--format=%H',
+                        '-1', '--', rel], capture_output=True, text=True)
+    if r.returncode != 0:
+        return True
+    c = r.stdout.strip()
+    if not c:
+        return False                       # never had it: never shipped here
+    d = subprocess.run(['git', '-C', str(repo), 'diff', f'{c}^', c, '--',
+                        'process/manifest.json'], capture_output=True, text=True,
+                       errors='replace')
+    if d.returncode != 0:
+        return True
+    return not re.search(r'^\+\s*"commit":', d.stdout, re.M)
+
+
+# The copy's fingerprint, kept in the manifest's `upstream` record beside the
+# commit it names: the git tree id of the vendored tree as recorded, after
+# the local-edit rules have run. Older engines ignore the key.
+#
+# WHY (2026-10-08, a consuming repository; Morgan decided it the same day:
+# "#2 fine also, approved"). Its records named one commit while most of its
+# process/upstream/ was other upstream versions, and nothing in the
+# repository could tell: the manifest held the commit and per-file hashes for
+# adopted files only, so seeing drift took a BestPractice clone. A tree id is
+# one hash over every (path, mode, content hash) pair, so a single key is the
+# whole fingerprint, and naming the files that drifted costs nothing more:
+# once the copy is committed, the tree object that id names is in the
+# repository's own history, and `git ls-tree` lists it. A per-file map would
+# have added a line per vendored file to the manifest -- hundreds, rewritten
+# on every update -- to say what git already keeps.
+COPY_TREE_KEY = 'copy_tree'
+
+# Entry statuses that mean "this repository changes this file on purpose"
+# (INSTALL.md section 5). A declined file is not one: its copy stays
+# upstream's text, because that copy is what the decline is judged by
+# (precedent_local_edits._declined_catalogue_paths).
+_OWN_EDIT_STATUSES = ('diverged', 'local-only')
+
+
+def copy_tree(repo, tree_rel):
+    """-> (tree id, {copy-relative path: blob id}) for the vendored tree at
+    repo-relative `tree_rel` as it stands in the working tree, read the way
+    `git add` would commit it (gitignored files left out); (None, {}) when
+    git cannot say. Read through a scratch index seeded from HEAD, so the
+    repository's own index is never touched."""
+    repo = pathlib.Path(repo)
+    tree_rel = str(tree_rel).strip('/')
+    if not tree_rel or not (repo / tree_rel).is_dir():
+        return None, {}
+    with tempfile.TemporaryDirectory() as td:
+        env = dict(os.environ, GIT_INDEX_FILE=str(pathlib.Path(td) / 'index'))
+
+        def g(*a):
+            return subprocess.run(['git', '-C', str(repo), *a], env=env,
+                                  capture_output=True, text=True)
+        g('read-tree', 'HEAD')       # no commit yet: the index starts empty
+        if g('add', '-A', '--', tree_rel).returncode != 0:
+            return None, {}
+        w = g('write-tree', f'--prefix={tree_rel}/')
+        ls = g('ls-files', '-s', '-z', '--', tree_rel)
+    if w.returncode != 0 or ls.returncode != 0:
+        return None, {}
+    blobs = {}
+    for entry in ls.stdout.split('\0'):
+        meta, _, path = entry.partition('\t')
+        parts = meta.split()
+        if len(parts) == 3 and path.startswith(tree_rel + '/'):
+            blobs[path[len(tree_rel) + 1:]] = parts[1]
+    return w.stdout.strip() or None, blobs
+
+
+def _recorded_blobs(repo, tree_id):
+    """-> {copy-relative path: blob id} the tree object `tree_id` holds, or
+    None when this clone does not have it."""
+    r = subprocess.run(['git', '-C', str(repo), 'ls-tree', '-r', '-z', tree_id],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    out = {}
+    for entry in r.stdout.split('\0'):
+        meta, _, path = entry.partition('\t')
+        parts = meta.split()
+        if len(parts) == 3 and parts[1] == 'blob':
+            out[path] = parts[2]
+    return out
+
+
+def stamp_copy_tree(manifest_path, tree_rel=None):
+    """Record the fingerprint of the copy as it stands now in `manifest_path`'s
+    `upstream` record. -> the tree id written, or None (then the key is
+    removed, so a stale fingerprint never outlives the copy it described)."""
+    manifest_path = pathlib.Path(manifest_path)
+    repo = manifest_path.parent.parent
+    try:
+        data = json.loads(manifest_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    up = data.get('upstream') if isinstance(data, dict) else None
+    if not isinstance(up, dict):
+        return None
+    tree_rel = tree_rel or str(up.get('vendored_at') or 'process/upstream')
+    tid, _ = copy_tree(repo, tree_rel)
+    if tid:
+        up[COPY_TREE_KEY] = tid
+    elif up.pop(COPY_TREE_KEY, None) is None:
+        return None
+    manifest_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n',
+                             encoding='utf-8')
+    return tid
+
+
+def copy_drift(repo):
+    """-> [(manifest, tree, state, detail)], one per process/manifest*.json in
+    `repo` that records an upstream commit, comparing the vendored tree with
+    the fingerprint its manifest records. Needs no upstream clone.
+
+      ok          the copy is what was recorded, apart from files the
+                  repository changes on purpose
+      drifted     detail: [(copy-relative path, 'changed'|'added'|'removed')]
+      unnamed     the copy differs and the recorded tree is not in this
+                  clone, so the files cannot be named; detail: the tree id
+      unrecorded  the manifest predates the fingerprint; detail: the commit
+      unreadable  git could not read the copy; detail: why
+
+    Files the repository changes on purpose are exempt by name: a manifest
+    entry at status diverged or local-only whose local_path is inside the
+    tree, and a path precedent.json keeps under kept_template_divergences
+    with a reason."""
+    repo = pathlib.Path(repo)
+    try:
+        import precedent_vendor_engine as _pve
+        # Only with its reason: an entry without one is a mute button, not
+        # a decision (practice: checks-carry-a-declared-decline).
+        kept = {k for k, v in _pve.kept_template_divergences(repo).items()
+                if v.get('reason')}
+    except Exception:                                         # noqa: BLE001
+        kept = set()
+    out = []
+    for mpath in sorted((repo / 'process').glob('manifest*.json')):
+        mrel = mpath.relative_to(repo).as_posix()
+        try:
+            data = json.loads(mpath.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        up = data.get('upstream') if isinstance(data, dict) else None
+        if not isinstance(up, dict) or not up.get('commit'):
+            continue
+        tree = str(up.get('vendored_at') or 'process/upstream').strip('/')
+        if not (repo / tree).is_dir():
+            continue
+        recorded = up.get(COPY_TREE_KEY)
+        if not recorded:
+            out.append((mrel, tree, 'unrecorded', up['commit']))
+            continue
+        tid, now = copy_tree(repo, tree)
+        if tid is None:
+            out.append((mrel, tree, 'unreadable', f'git could not read {tree}/'))
+            continue
+        if tid == recorded:
+            out.append((mrel, tree, 'ok', None))
+            continue
+        then = _recorded_blobs(repo, recorded)
+        if then is None:
+            out.append((mrel, tree, 'unnamed', recorded))
+            continue
+        own = set(kept)
+        for e in data.get('entries') or []:
+            if isinstance(e, dict) and e.get('status') in _OWN_EDIT_STATUSES \
+                    and e.get('local_path'):
+                own.add(str(e['local_path']))
+        drifted = []
+        for p in sorted(set(then) | set(now)):
+            if then.get(p) == now.get(p) or f'{tree}/{p}' in own:
+                continue
+            drifted.append((p, 'added' if p not in then else
+                            'removed' if p not in now else 'changed'))
+        out.append((mrel, tree, 'drifted' if drifted else 'ok', drifted or None))
+    return out
 
 
 def _manifest():
@@ -861,12 +1173,15 @@ def _default_branch(clone):
 
 
 def _followed_branch():
-    """The branch every install follows (precedent_vendor_engine.SOURCE_BRANCH),
-    or 'main' where that module is not beside this one -- an old vendored
-    tree, or a fixture that copies this file alone."""
+    """The branch the consuming repo (ROOT) follows: the `upstream_branch`
+    its precedent.json names, else precedent_vendor_engine.SOURCE_BRANCH
+    (followed_branch, 2026-10-05) -- or 'main' where that module is not
+    beside this one, an old vendored tree or a fixture that copies this file
+    alone."""
     try:
         import precedent_vendor_engine
-        return precedent_vendor_engine.SOURCE_BRANCH
+        follow = getattr(precedent_vendor_engine, 'followed_branch', None)
+        return follow(ROOT) if follow else precedent_vendor_engine.SOURCE_BRANCH
     except Exception:                                          # noqa: BLE001
         return 'main'
 
@@ -1076,7 +1391,7 @@ def _report_excluded_content():
         if not p.is_file() or '.git' in p.parts:
             continue
         rel = p.relative_to(UPSTREAM)
-        excluded = [part for part in rel.parts if part in NOT_VENDORED]
+        excluded = [_excluded_dir(rel)] if _excluded_dir(rel) else []
         if not excluded and rel in _NOT_VENDORED_ROOT_PATHS:
             excluded = [str(rel)]
         if excluded:
@@ -1093,11 +1408,16 @@ def _report_excluded_content():
           f"confirm nothing there is still needed, then  git rm -r {rm}  and commit.")
 
 
-def update(clone, force=False, allow_pinned=False):
+def update(clone, force=False, allow_pinned=False, ref=None):
     """INSTALL.md §2 step 5: mirror the clone's tree at the branch this
     install tracks into the vendored tree, refusing to clobber unexported
     local work. Reads the clone; never checks it out, pulls in it, or moves
-    its HEAD."""
+    its HEAD.
+
+    `ref` mirrors that commit instead of the tracked branch's tip -- the
+    catalogue half of precedent_update.py --from-ref, which took its engine
+    from the ref and its catalogue from the branch until 2026-10-03 (found
+    by a consumer rehearsal of a release still on staging)."""
     _pinned_branch_hold(clone, allow=allow_pinned)
     branch = _tracked_branch(clone)
     # Fetch updates remote-tracking refs only -- it does not touch the
@@ -1111,6 +1431,12 @@ def update(clone, force=False, allow_pinned=False):
               f"already has for {branch}, which may be behind.")
     src_ref = _rev_parse_quiet(clone, f'origin/{branch}') or \
         _rev_parse_quiet(clone, branch)
+    if ref:
+        src_ref = _rev_parse_quiet(clone, ref)
+        if not src_ref:
+            sys.exit(f"checkin FAIL: --from-ref {ref!r} does not name a commit "
+                     f"in {clone}.")
+        branch = ref
     if not src_ref:
         sys.exit(f"checkin FAIL: {clone} has no {branch} or origin/{branch} to "
                  f"mirror from. This install records upstream.branch = "
@@ -1130,7 +1456,7 @@ def update(clone, force=False, allow_pinned=False):
             sys.exit("checkin FAIL: vendored tree differs from the recorded upstream commit — "
                      "that is unexported work the mirror would clobber. Update Vendors "
                      "(tools/precedent_update.py, run from the BestPractice clone) resolves "
-                     "each committed change itself -- keeps it, merges it, or takes "
+                     "each committed change itself -- keeps it, or takes "
                      "upstream's version and says so -- and "
                      "tools/precedent_local_edits.py send carries one upstream. Or pass "
                      "--force to overwrite -- but only after reviewing each file above.")
@@ -1246,9 +1572,14 @@ def _drop_what_the_copy_no_longer_carries(clone, src):
                 base = pathlib.Path(td)
         for p in stale:
             rel = p.relative_to(UPSTREAM)
+            # Or any text upstream ever shipped there: a copy put back to an
+            # older commit than the manifest records (a reset, an earlier
+            # run's put-back) held tools/ at neither commit, and every rerun
+            # kept all of it (2026-10-08, a consuming repository).
             same = any(t is not None and (t / rel).is_file()
                        and filecmp.cmp(p, t / rel, shallow=False)
-                       for t in (src, base))
+                       for t in (src, base)) or upstream_text(
+                           clone, p, rel, *([recorded] if recorded else []))
             if same:
                 p.unlink()
                 dropped.append(rel)
@@ -1548,7 +1879,7 @@ def _carry_check(clone, accept_loss, landed_root=None, tip='HEAD', resolving=())
     if not base:
         return
     # A file Update Vendors is resolving is not a loss either way: its local
-    # lines are kept, merged, or replaced by upstream's with the commit that
+    # lines are kept, or replaced by upstream's with the commit that
     # holds them named (tools/precedent_local_edits.py, 2026-09-29). Only
     # those files are skipped, and the count is said.
     resolving = set(resolving)
@@ -1599,10 +1930,20 @@ def _carry_check(clone, accept_loss, landed_root=None, tip='HEAD', resolving=())
     names = _dep_git('ls-tree', '-r', '--name-only', f'origin/{dep_branch}', prefix).split()
     landed_all = None
     lost = []
-    upstream_deleted = upstream_older = 0
+    upstream_deleted = upstream_older = upstream_whole = 0
     for name in names:
         rel = name[len(prefix) + 1:]
         if rel in resolving:
+            continue
+        # (4) A committed file that IS a version upstream shipped at that
+        # path, on any ref the clone holds, carries no line of this repo's
+        # (upstream_blobs). (3) reads only `tip`'s history, so a copy taken
+        # from another branch -- staging, before a repo followed main --
+        # held every line "lost": eleven files in a consuming repository
+        # whose whole copy was upstream text (2026-10-08).
+        oid = _dep_git('rev-parse', f'origin/{dep_branch}:{name}').strip()
+        if (rel, oid) in upstream_blobs(clone, tip, *bases):
+            upstream_whole += 1
             continue
         committed = _dep_git('show', f'origin/{dep_branch}:{name}')
         # rc is now consulted, and it can only mean one thing: every base
@@ -1642,6 +1983,13 @@ def _carry_check(clone, accept_loss, landed_root=None, tip='HEAD', resolving=())
               f"landed tree lacks were deleted by upstream itself (git log between "
               f"{', '.join(b[:12] for b in bases)} and the clone's HEAD) -- upstream's "
               f"own deletions, not a loss; not counted.")
+    if upstream_whole:
+        # Said, never skipped silently (2026-10-08): the whole-file test above
+        # now catches what the two line counts below used to explain.
+        print(f"carry check: {upstream_whole} committed file(s) are an earlier "
+              f"upstream version of that same file, as upstream itself shipped it "
+              f"-- upstream's own text, including its own deletions since, not "
+              f"local work; not counted.")
     if upstream_older:
         print(f"carry check: {upstream_older} line(s) the committed tree has and the "
               f"landed tree lacks are in an earlier upstream version of the same file "
@@ -1664,7 +2012,7 @@ def _carry_check(clone, accept_loss, landed_root=None, tip='HEAD', resolving=())
              "deliberate; nothing recorded.")
 
 
-def record(clone, note, accept_loss=False, resolving=()):
+def record(clone, note, accept_loss=False, resolving=(), from_ref=None):
     # Neither a checkout nor a pull, for the same two reasons update() no
     # longer does either: the clone is a SOURCE the caller passed, not this
     # tool's to move (it silently relocated a session's checkout off
@@ -1685,6 +2033,14 @@ def record(clone, note, accept_loss=False, resolving=()):
     # _landed_commit). Recording HEAD stamped whatever branch the clone
     # happened to be on as the upstream commit.
     ref, head = _landed_commit(clone)
+    if from_ref:
+        # The commit update() mirrored when it was given --from-ref: the
+        # record compares against that, or it refuses on every rule the
+        # ref changed relative to the tracked branch (2026-10-03).
+        ref, head = from_ref, _rev_parse_quiet(clone, from_ref)
+        if not head:
+            sys.exit(f"checkin FAIL: --from-ref {from_ref!r} does not name a "
+                     f"commit in {clone}.")
     with tempfile.TemporaryDirectory() as landed_dir:
         landed = _tree_at(clone, head, landed_dir)
         _carry_check(clone, accept_loss, landed, head, resolving)
@@ -1717,6 +2073,9 @@ def record(clone, note, accept_loss=False, resolving=()):
         f"recorded {precedent_time.today()}; verified tree-identical).")
     MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n',
                         encoding='utf-8')
+    # The copy's fingerprint, for the clone-free check (COPY_TREE_KEY). Update
+    # Vendors records it again once the local-edit rules have run.
+    stamp_copy_tree(MANIFEST, UPSTREAM.relative_to(ROOT).as_posix())
     print(f"checkin record OK: upstream.commit {old} -> {head}")
     print(f"next: commit {MANIFEST.relative_to(ROOT)} in this repo.")
     return 0
@@ -1858,15 +2217,19 @@ def _main():
     if args[0] == 'status':
         return status(clone)
     if args[0] == 'update':
+        ref = (args[args.index('--from-ref') + 1]
+               if '--from-ref' in args[:-1] else None)
         return update(clone, force='--force' in args,
-                     allow_pinned='--allow-pinned' in args)
+                     allow_pinned='--allow-pinned' in args, ref=ref)
     if args[0] == 'push':
         why = args[args.index('--why') + 1] if '--why' in args[:-1] else ''
         return push(clone, why=why, force='--force' in args)
     note = args[args.index('--note') + 1] if '--note' in args else ''
     resolving = [args[i + 1] for i, a in enumerate(args[:-1]) if a == '--resolving']
     return record(clone, note, accept_loss='--accept-loss' in sys.argv,
-                  resolving=resolving)
+                  resolving=resolving,
+                  from_ref=(args[args.index('--from-ref') + 1]
+                            if '--from-ref' in args[:-1] else None))
 
 
 if __name__ == '__main__':

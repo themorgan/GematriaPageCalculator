@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""doc_lint.py — markdown hygiene checks (practice: doc-references-are-links).
+"""Markdown hygiene checks — strikethrough, links, acronyms
+
+doc_lint.py — markdown hygiene checks (practice: doc-references-are-links).
 
 Markdown hygiene checks, each born from a real bug (an outward-facing document
 that rendered with unintended strikethrough; file references written as bare
@@ -89,7 +91,7 @@ Run:  python3 tools/doc_lint.py             # changed-vs-default-branch, gate
 (In a repo that vendors this the classic way, the path is
 process/upstream/tools/doc_lint.py.)
 """
-import re, sys, subprocess, pathlib
+import json, re, sys, subprocess, pathlib, unicodedata
 import frontmatter_yaml
 import generated_blocks
 
@@ -175,9 +177,31 @@ def is_file_reference(span):
 FROZEN_PREFIXES = ()
 
 def drop_frozen(files):
+    files = drop_records(files)
     if not FROZEN_PREFIXES:
         return files
     return [f for f in files if not pathlib.PurePath(f).name.startswith(FROZEN_PREFIXES)]
+
+
+def drop_records(files):
+    """Leave out the files this repository declares as records
+    (precedent.json `record_paths`, read by precedent_resolve, its one
+    reader): a call transcript or a dated audit keeps what was said or
+    filed, and is not linted into something else (2026-10-10, a consumer's
+    transcripts, refused on the speakers' own words). A file named
+    explicitly on the command line is still linted, unless it came from the
+    commit gate (--scope-changed). An engine with no
+    resolver declares nothing: fewer exemptions, never more."""
+    try:
+        import precedent_resolve as _pr
+        records = list(_pr.declared_record_paths(ROOT))
+    except Exception:                                          # noqa: BLE001
+        return files
+    if not records:
+        return files
+    return [f for f in files
+            if not any(f == r or (r.endswith('/') and f.startswith(r))
+                       for r in records)]
 
 # ---- acronym check (check 3) ----
 ACRONYM_RE = re.compile(r'\b([A-Z]{2}[A-Z0-9]{0,4})\b')   # 2-6 chars, ≥2 leading letters
@@ -194,6 +218,29 @@ ACRONYM_SKIP_FILES = {'GLOSSARY.md'}
 # so "link the ones you touched" is advice nobody can take there. Only the
 # unlinked-reference warning is skipped; every other check still runs.
 UNLINKED_SKIP_FILES = {'todo/TODO.md', 'todo/CLOSED.md', 'gotchas/INDEX.md'}
+
+
+def received_practice_files(root=None):
+    """-> {'practices/<slug>.md'} for each practice this repository received
+    from another source: listed in its MANIFEST.json (a consuming repo's
+    record of what precedent_sync_views.py materialized) at any level but
+    repo-local. An edit there is overwritten by the next sync, so a bare
+    file name in one is its source's to link, not this repo's; the
+    unlinked-reference warning skips them. WHY (2026-10-10, a consumer's
+    update): two individual-set practices' Story sections gave eight
+    "is not a link" lines in every repo that received them, at every
+    update, naming files of another repository that no link here could
+    reach. Every other check still runs on them."""
+    try:
+        man = json.loads(((root or ROOT) / 'MANIFEST.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return set()
+    out = set()
+    for row in man.get('practices') or [] if isinstance(man, dict) else []:
+        if isinstance(row, dict) and row.get('slug') and \
+                row.get('level') not in (None, 'repo-local'):
+            out.add(f"practices/{row['slug']}.md")
+    return out
 # common words / units / universally-known tech that are never worth glossing:
 ACRONYM_STOP = {
     'THE','AND','FOR','NOT','BUT','ALL','ONE','TWO','OUR','YOU','WHO','WHY','HOW','NEW',
@@ -332,11 +379,24 @@ _INLINE_MD = [(re.compile(r'`([^`]*)`'), r'\1'),
 _anchor_cache = {}
 
 
+def slug_keeps(ch):
+    """Whether GitHub keeps `ch` in a heading anchor: its rule is Ruby's
+    [^\\p{Word}\\- ] removed, and \\p{Word} is letters, marks, decimal digits
+    and connector punctuation. Python's \\w leaves the marks out, so a pointed
+    Hebrew heading ("נָבוֹן") lost its vowel points here while GitHub's id
+    kept them, and a working link read as broken (2026-10-05, a consumer's
+    manuscript table of contents)."""
+    if ch in '- ':
+        return True
+    cat = unicodedata.category(ch)
+    return cat[0] in 'LM' or cat in ('Nd', 'Pc')
+
+
 def heading_slug(text):
     """GitHub's anchor for one heading's raw markdown text."""
     for rx, rep in _INLINE_MD:
         text = rx.sub(rep, text)
-    return re.sub(r'[^\w\- ]', '', text.strip().lower()).replace(' ', '-')
+    return ''.join(c for c in text.strip().lower() if slug_keeps(c)).replace(' ', '-')
 
 
 def document_anchors(path):
@@ -398,10 +458,30 @@ def check_broken_links(path):
     # first one goes stale (practice: upstream-fix, registry-source-of-truth).
     # Only the LINK check is skipped here -- every other doc_lint finding in
     # a mirror still prints, split out of the gate by _split_vendored().
-    if _is_vendored(rel):
-        return []
+    #
+    # NO LONGER SKIPPED, ONLY KEPT OUT OF THE GATE (Morgan, 2026-10-08:
+    # checks stop skipping vendored files silently). That silence is how 320
+    # broken links shipped in every consumer's copy with nobody seeing one:
+    # BestPractice's own check judged by a stale rule, and every consumer's
+    # check looked away. A mirror's broken link is found now, and
+    # _split_vendored() prints it under the "upstream's to fix" note
+    # instead of failing this repo's gate.
     # Paths exempt, fragments still checked -- see ANCHOR_CHECKED_EXEMPT_DIRS.
-    anchors_only = rel.startswith(ANCHOR_CHECKED_EXEMPT_DIRS)
+    #
+    # A TEMPLATE IS A TEMPLATE WHEREVER IT IS VENDORED. The directory is
+    # read relative to the SOURCE the file belongs to, not to this repo:
+    # a consumer's process/upstream/templates/document-project/AGENTS.md is
+    # upstream's templates/document-project/AGENTS.md, and its
+    # `[gotchas/](gotchas/)` names the instance's gotchas/, exactly as it
+    # does in BestPractice's own tree, where this same rule already passes
+    # it. Read against the consumer's root instead, it was "no such file"
+    # on every Update Vendors run (2026-10-08), as a finding upstream could
+    # not fix either, because upstream's link is right. The instance does
+    # not exist in either tree, so a missing path here is skipped for that
+    # reason and nothing else; a fragment on a target that does resolve is
+    # still checked, as it is upstream. Only this exemption follows the
+    # source root -- every other link in a mirror is still reported.
+    anchors_only = _source_relative(rel).startswith(ANCHOR_CHECKED_EXEMPT_DIRS)
     p = ROOT / path
     out, incode = [], False
     for i, line in enumerate(p.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
@@ -939,6 +1019,194 @@ def check_frontmatter(path):
     return frontmatter_yaml.frontmatter_yaml_error(text)
 
 
+def check_index_clause(path):
+    """-> why a practice file's index_clause is refused, or None.
+
+    build_views.py refuses an on-demand practice's index_clause over its
+    INDEX_CLAUSE_MAX when the clause was written or changed in this repo,
+    but only when somebody runs it, and in a practice set that is the
+    Debut's full check. A clause written too long was committed, pushed and
+    landed on pre-staging, then refused at the Debut, more than once
+    (2026-10-02, name-the-branch at 92 characters). This asks the
+    builder's own question, through its own function, at the commit the
+    clause is written in -- the doc-lint gate runs this light pass on every
+    commit, and the quick push check runs it again. A clause nobody touched
+    is left alone, exactly as the builder leaves it (practice:
+    gates-fail-fast)."""
+    parts = pathlib.PurePath(path).parts
+    if 'practices' not in parts or not str(path).endswith('.md'):
+        return None
+    try:
+        import build_views as _bv
+        import split_practices as _sp
+        fm, sections = _sp._read_practice_file(ROOT / path)
+        over = _bv.over_long_index_clauses([(fm, sections, ROOT / path)], ROOT)
+    except Exception:                                        # noqa: BLE001
+        return None
+    if not over:
+        return None
+    return (f"index_clause is {over[0][1]} characters, over the "
+            f"{_bv.INDEX_CLAUSE_MAX}-character limit -- shorten it here; the "
+            f"views build refuses it, and in a practice set that is the Debut")
+
+
+# An open item that is really a fix in another repository (practice:
+# todo-is-a-handoff, 2026-10-06). In one consumer four items sat for one to
+# two weeks reading "blocked on push access to X" or "needs a change in the
+# engine", each an hour's fix the session that filed it could have opened as
+# a pull request upstream. Such an item may stay open only to wait on that
+# pull request, so it has to link one.
+UPSTREAM_LINK_RE = re.compile(r'github\.com/[\w.-]+/[\w.-]+/(?:pull|issues)/\d+')
+# ...or a Prompt Please saved in the item for the person to take upstream
+# when it suits them (Morgan, 2026-10-08: "sometimes it's urgent ... they can
+# fix it BUT they also must do a prompt please so the user can easily bring
+# it upstream at his convenience later"): a heading naming it, then a fence.
+UPSTREAM_PROMPT_RE = re.compile(
+    r'^#{2,4}[ \t]+Prompt Please\b[^\n]*\n(?:(?!^#{1,4}[ \t]).*\n)*?^(?:```|~~~)',
+    re.M | re.I)
+
+
+def upstream_handoff(text):
+    """True when an open item hands its upstream fix over: it links the pull
+    request or issue, or it carries a Prompt Please section with the
+    paste-ready block in a fence."""
+    return bool(UPSTREAM_LINK_RE.search(text) or UPSTREAM_PROMPT_RE.search(text))
+UPSTREAM_FIX_TOOL = 'python3 tools/upstream_fix.py'
+# The provenance sentence tools/todo_migrate.py writes into every item it
+# migrated. It names a vendored tool and says nothing about a fix: measured
+# 2026-10-06 in a consumer, it alone made 180 of its open items read as
+# upstream fixes.
+_MIGRATION_STAMP_RE = re.compile(
+    r'migrated from TODO\.md by tools/todo_migrate\.py\.?', re.I)
+
+
+_LINK_TARGET_RE = re.compile(r'\]\([^)\s]*(?:\s+"[^"]*")?\)')
+# A fenced block, then an inline code span: the two places a command is
+# written down to be run.
+_CODE_FENCE_RE = re.compile(r'^([ \t]*)(`{3,}|~{3,})[^\n]*\n.*?^\1\2[ \t]*$',
+                            re.M | re.S)
+_CODE_SPAN_RE = re.compile(r'(`+)(?!`)(.+?)(?<!`)\1(?!`)', re.S)
+# The program argument of an interpreter: `python3 tools/x.py`, `bash
+# tools/bootstrap.sh`, `/usr/bin/env python3 -I ../Engine/tools/y.py`.
+# Only that one argument -- a path passed later on the same line is a file
+# the command reads or changes, and still counts as named.
+_RUN_PROGRAM_RE = re.compile(
+    r'(?<![\w.-])((?:[\w./-]*/)?(?:python(?:3(?:\.\d+)?)?|bash|sh|php|node))'
+    r'((?:[ \t]+-[\w-]+)*)[ \t]+(?![-"\'`])[^\s`\'"]+')
+
+
+def _drop_run_programs(text):
+    """`text` with every interpreter's program argument removed from its
+    code spans and fenced blocks, so running a vendored tool is not read as
+    naming it. The program is replaced by a placeholder, never dropped, so
+    the second pass over a fence's text finds the same argument again
+    rather than taking the next flag's value for a program."""
+    def strip(chunk):
+        return _RUN_PROGRAM_RE.sub(lambda m: m.group(1) + m.group(2) + ' PROGRAM',
+                                   chunk)
+    text = _CODE_FENCE_RE.sub(lambda m: strip(m.group(0)), text)
+    return _CODE_SPAN_RE.sub(lambda m: strip(m.group(0)), text)
+
+
+def check_upstream_item(path, root=None):
+    """-> why an open item about an upstream fix is refused, or None.
+
+    Fires on a `todo/todo-*.md` whose frontmatter `status` is open (missing
+    counts as open, as build_todo_index.py reads it), with no github.com
+    pull-request or issue link, when (a) its text names a path this repo
+    vendors, or (b) its stated reason -- the `blocked_on` or `waiting_on`
+    field -- names a repository it takes a source from. What is vendored,
+    and from where, is precedent_engine_freshness's vendored_entries() and
+    source_mentions(), never a list of its own.
+
+    A path counts in the body only where the text names it, never as a
+    link's address alone: a link to a vendored file is reading.
+
+    Deliberately no keywords: "vendor" and "access" matched real outside
+    blockers in a consumer (a vendor's quote, access to a website). And
+    repository names count only in the stated reason, because in the body
+    they are mostly links to upstream reading (two of the three body hits in
+    the same consumer were a pointer to an upstream file).
+
+    Running a vendored tool is using it, the same way a link's address is
+    reading it: a path that is the program argument of an interpreter
+    (python, python3, bash, sh, php, node) inside a code span or a fenced
+    block does not count (2026-10-08: a consumer's item that said to run
+    `python3 tools/open_failures.py --file ...` was refused, and had to link
+    the tool instead of writing the command). The same path in prose, in a
+    link's text, or as a later argument of the command still counts.
+
+    Two more readings that are not the subject (2026-10-10, a consumer's
+    Update Vendors): a fenced block is quoted material -- a check's verbatim
+    output names its own script -- so nothing inside a fence counts; and an
+    item whose stated reason names its blocker, and that blocker is no
+    repository a source comes from (waiting_on: the person), says what it
+    waits on, so a vendored path in its body does not make it an upstream
+    fix. The consumer's item asked whether the person grandfathers three
+    commits, quoted the check's output, and was refused for it."""
+    root = pathlib.Path(root or ROOT)
+    p = pathlib.PurePosixPath(str(path))
+    if p.parent.name != 'todo' or not (p.name.startswith('todo-') and p.suffix == '.md'):
+        return None
+    text = (root / path).read_text(encoding='utf-8', errors='ignore')
+    fm = re.match(r'---\n(.*?)\n---', text, re.S)
+    head = fm.group(1) if fm else ''
+    status = re.search(r'^status:[ \t]*["\']?([\w-]+)', head, re.M)
+    if (status.group(1) if status else 'open') != 'open' or upstream_handoff(text):
+        return None
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_engine_freshness as _pef
+        entries = _pef.vendored_entries(root)
+        names = _pef.source_mentions(root)
+    except Exception:                                        # noqa: BLE001
+        return None
+    # A link's address is reading, not the thing being fixed: an item that
+    # links the vendored install runbook to say "follow this" is not
+    # waiting on a change to it (a consumer's check-in item, 2026-10-07,
+    # refused for a one-line note until it linked an unrelated pull
+    # request). Only the address goes; the link's own text still counts,
+    # so "[tools/doc_lint.py](...) misreads a fence" is still caught.
+    reason = ' '.join(v.strip().strip('"\'') for v in re.findall(
+        r'^(?:blocked_on|waiting_on):(.*)$', head, re.M))
+    reason = re.sub(r'\b(?:null|none|~)\b', '', reason, flags=re.I).strip()
+    if reason and not any(re.search(r'(?<![\w.-])' + re.escape(n) + r'(?![\w-])',
+                                    reason, re.I) for n in names):
+        return None
+    body = _CODE_FENCE_RE.sub('', _drop_run_programs(
+        _LINK_TARGET_RE.sub('](', _MIGRATION_STAMP_RE.sub('', text))))
+    lead = r'(?:(?<=\.\./)|(?<![\w./-]))'
+    named = None
+    for e in entries:
+        local = e['local']
+        tail = r'/[^\s)`\'"\]>]*' if local.endswith('/') else r'(?![\w-])'
+        m = re.search(lead + re.escape(local.rstrip('/')) + tail, body)
+        if m:
+            named = m.group(0).rstrip('.,;:')
+            break
+    if named is None:
+        named = next((n for n in names if re.search(
+            r'(?<![\w.-])' + re.escape(n) + r'(?![\w-])', reason, re.I)), None)
+        if named is None:
+            return None
+    target = named if _pef.origin_of(root, named) else 'PATH'
+    return (f"open, about a fix in another repository ({named}), and links no "
+            f"pull request or issue -- fix it upstream now: request access if "
+            f"needed, open the PR, link it here (`{UPSTREAM_FIX_TOOL} {target}` "
+            f"sets it up); or, when it cannot wait, keep the local fix and save "
+            f"the upstream one here as a `## Prompt Please` section with the "
+            f"paste-ready block in a fence")
+
+
+_RECEIVED = []
+
+
+def _received():
+    if not _RECEIVED:
+        _RECEIVED.append(received_practice_files())
+    return _RECEIVED[0]
+
+
 def check_file(path, fix=False, known=None):
     strikes, unlinked, unglossed, targeted = [], [], [], []
     changed_lines = {}
@@ -953,6 +1221,7 @@ def check_file(path, fix=False, known=None):
         unglossed = scan_unglossed(
             (ROOT / path).read_text(encoding='utf-8', errors='ignore'),
             known, path)
+    received = str(path).replace('\\', '/') in _received()
     for i, line in iter_prose_lines(path):
         if HAVE_GFM and renders_del(line) and '~~' not in line:
             if fix:
@@ -962,7 +1231,7 @@ def check_file(path, fix=False, known=None):
         # unlinked refs: a `file.md` code span not immediately followed by ](
         for m in REF_RE.finditer(line):
             after = line[m.end():m.end()+2]
-            if (after != '](' and is_file_reference(m.group(1))
+            if (after != '](' and is_file_reference(m.group(1)) and not received
                     and str(path).replace('\\', '/') not in UNLINKED_SKIP_FILES):
                 unlinked.append((i, m.group(1)))
         # target= anchors: GitHub strips the attribute from rendered HTML (check 4);
@@ -1069,9 +1338,28 @@ def is_record_doc(path):
     return RECORD_MARKER in head
 
 
+def is_declared_internal(path):
+    """True when the repo has declared its reader-facing documents
+    (precedent.json `output_paths`) and `path` is not one of them.
+
+    The residue patterns are written for a deliverable. Run over a working
+    document they misfire on the rules themselves: a voice rulebook's "don't
+    reconstruct a quote from memory" reads as a recalled figure. A consumer
+    whose generated rulebook prompt failed the landing check on exactly that
+    line, though it had declared only README.md and GETTING_STARTED.md as
+    published, is where this came from (2026-10-10). A repo that declares
+    nothing keeps the old behaviour, where every non-record doc is judged.
+    (practice: deliverables-look-like-output)"""
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import title_case
+    if not title_case.output_paths_declared(ROOT):
+        return False
+    return not title_case.is_outward(path, ROOT)
+
+
 def check_residue(path):
     """[(lineno, message)] process-residue hits in a deliverable doc."""
-    if is_record_doc(path):
+    if is_record_doc(path) or is_declared_internal(path):
         return []
     out = []
     # Was r"\]\([^)]*_(record|diligence)\.md\)" -- only two of the six
@@ -1094,6 +1382,75 @@ def check_residue(path):
         for pat, why in RESIDUE_PATTERNS:
             if pat.search(line):
                 out.append((i, why))
+    return out
+
+
+
+# ---- unrendered tables (check 7; practice `tabular-shared-renderer`) ----
+# A document whose tables have several columns ships as a sortable HTML
+# render, but the render gate only knows documents already registered for
+# one, so a new document never registered slipped past every check (origin
+# 2026-10-02: a product specification with eight multi-column tables landed
+# as markdown only; the reader caught it). The host names its registry:
+# RENDER_REGISTRY is a callable returning the repo-relative markdown paths
+# registered for a render, or None to skip the check. A new document fails
+# the gate; an existing one only warns, so the legacy corpus never blocks.
+# A document whose tables are not worth sorting says so with the opt-out
+# marker anywhere in its text.
+RENDER_REGISTRY = None
+RENDER_MIN_COLUMNS = 3
+RENDER_OPT_OUT = "<!--no-render-->"
+_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
+
+
+def widest_table(path):
+    """Column count of the widest pipe table in a markdown file (0 if none)."""
+    try:
+        lines = (ROOT / path).read_text(errors="ignore").splitlines()
+    except OSError:
+        return 0
+    widest, fence = 0, False
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        if fence or i == 0 or not _TABLE_SEP_RE.match(line) or "|" not in line:
+            continue
+        head = lines[i - 1].strip()
+        if "|" not in head:
+            continue
+        cells = [c for c in head.strip("|").split("|")]
+        widest = max(widest, len(cells))
+    return widest
+
+
+def added_md():
+    """Markdown files this change adds: new since the merge base, or untracked."""
+    base = merge_base()
+    committed = _git(['diff', '--name-only', '--diff-filter=A', base, '--', '*.md'], cwd=ROOT).split()
+    untracked = _git(['ls-files', '--others', '--exclude-standard', '--', '*.md'], cwd=ROOT).split()
+    return set(committed) | set(untracked)
+
+
+def check_unrendered(files):
+    """[(path, columns)] documents with a multi-column table and no render."""
+    if RENDER_REGISTRY is None:
+        return []
+    registered = {str(p).replace("\\", "/") for p in RENDER_REGISTRY()}
+    out = []
+    for f in files:
+        rel = str(f).replace("\\", "/")
+        if rel in registered or is_record_doc(rel) or _is_vendored(rel):
+            continue
+        cols = widest_table(rel)
+        if cols < RENDER_MIN_COLUMNS:
+            continue
+        try:
+            if RENDER_OPT_OUT in (ROOT / rel).read_text(errors="ignore"):
+                continue
+        except OSError:
+            continue
+        out.append((rel, cols))
     return out
 
 
@@ -1228,6 +1585,17 @@ def _is_vendored(rel):
     return str(rel).startswith(VENDORED_PREFIXES)
 
 
+def _source_relative(rel):
+    """`rel` as its own source's tree names it: a vendored file loses the
+    mirror prefix it sits under (a mirror's prefix is its source's root,
+    per mirrored_prefixes()); this repo's own file is returned as it is."""
+    rel = str(rel)
+    for prefix in sorted(VENDORED_PREFIXES, key=len, reverse=True):
+        if rel.startswith(prefix):
+            return rel[len(prefix):]
+    return rel
+
+
 def _split_vendored(lines):
     """-> (ours, theirs). A finding line starts '  <path>:<line>: ...'."""
     ours, theirs = [], []
@@ -1308,6 +1676,10 @@ def main():
             print("(explicit paths are resolved against the repo root — a missing "
                   "file scanned as 'OK' is a silent no-op)")
             return 2
+        if '--scope-changed' in flags:
+            # The commit gate (doc-lint-gate.sh) names the staged files; a
+            # declared record among them is left as filed, as above.
+            files = drop_records(files)
     else:
         files, gate = drop_frozen(changed_md()), True
 
@@ -1342,13 +1714,20 @@ def main():
     total_strikes = total_unlinked = total_unglossed = total_targeted = total_fixed = 0
     strike_lines, unlinked_lines, unglossed_lines, target_lines = [], [], [], []
     unsourced_lines, residue_lines, broken_link_lines = [], [], []
-    skip_lines, frontmatter_lines = [], []
+    skip_lines, frontmatter_lines, index_lines = [], [], []
+    upstream_lines = []
     for f in files:
         if not (ROOT / f).exists():
             continue
         fm_err = check_frontmatter(f)
         if fm_err:
             frontmatter_lines.append(f"  {f}: {fm_err}")
+        ix_err = check_index_clause(f)
+        if ix_err:
+            index_lines.append(f"  {f}: {ix_err}")
+        up_err = check_upstream_item(f)
+        if up_err:
+            upstream_lines.append(f"  {f}: {up_err}")
         for i, why in check_residue(f):
             residue_lines.append(f"  {f}:{i}: {why}")
         for i, target, why in check_broken_links(f):
@@ -1421,9 +1800,22 @@ def main():
         if len(frontmatter_lines) > 40:
             print(f"  … and {len(frontmatter_lines) - 40} more")
 
+    if index_lines:
+        print(f"\nINDEX LINE OVER THE LIMIT — {len(index_lines)} file(s) "
+              f"(FAIL; the views build refuses a newly written one):")
+        print('\n'.join(index_lines[:40]))
+
+    if upstream_lines:
+        print(f"\nOPEN ITEM WAITING ON AN UPSTREAM FIX — {len(upstream_lines)} "
+              f"file(s) ({'FAIL' if gate else 'backlog report'}; another "
+              "repository is not a blocked_on reason, and neither is access "
+              "you can request):")
+        print('\n'.join(upstream_lines[:40]))
+
     if (not strike_lines and not unlinked_lines and not unglossed_lines
             and not target_lines and not unsourced_lines and not broken_link_lines
-            and not skip_lines and not frontmatter_lines):
+            and not skip_lines and not frontmatter_lines and not index_lines
+            and not upstream_lines):
         print(f"doc_lint OK: {len(files)} file(s) checked — no accidental strikethrough, "
               f"no broken relative links, no unlinked references, no unglossed "
               f"acronyms, no target= anchors, no skipped heading levels, no "
@@ -1465,6 +1857,22 @@ def main():
         print('\n'.join(residue_lines[:40]))
         if len(residue_lines) > 40:
             print(f"  … and {len(residue_lines) - 40} more")
+
+    # check 7: a multi-column table with no sortable render. A document this
+    # change adds fails the gate; one it only edits is reported.
+    unrendered = check_unrendered(files)
+    _added = added_md() if (gate and unrendered) else set()
+    unrendered_new = [(d, c) for d, c in unrendered if d in _added]
+    if unrendered:
+        print(f"\nTABLES WITH NO SORTABLE RENDER — {len(unrendered)} document(s) "
+              f"hold a table of {RENDER_MIN_COLUMNS}+ columns and are not "
+              f"registered for a render ({'FAIL for a new document' if gate else 'backlog report'}; "
+              f"register the document with the renderer, or mark it "
+              f"{RENDER_OPT_OUT} if its tables are not worth sorting):")
+        for d, c in unrendered[:40]:
+            print(f"  {d}: widest table {c} columns" + ("  [new]" if (d, c) in unrendered_new else ""))
+        if len(unrendered) > 40:
+            print(f"  … and {len(unrendered) - 40} more")
 
     # gate: strikethrough always fails in scope; unsourced quantities fail only
     # in documents that explicitly opted in, so the legacy corpus never blocks;
@@ -1556,7 +1964,9 @@ def main():
                   f"are inside the vendored upstream tree "
                   f"({', '.join(VENDORED_PREFIXES)}). They are upstream's to "
                   f"fix and this repo may not edit them, so they do not fail "
-                  f"this gate -- report them upstream if they look real:")
+                  f"this gate. Hand each one upstream: `{UPSTREAM_FIX_TOOL} "
+                  f"PATH` opens the fix where it lives, or save a Prompt "
+                  f"Please for it in todo/ (practice: upstream-fix):")
             print('\n'.join(theirs[:10]))
             if len(theirs) > 10:
                 print(f"  … and {len(theirs) - 10} more")
@@ -1577,6 +1987,8 @@ def main():
         classes = (('accidental strikethrough', strike_lines),
                    ('broken relative link', broken_link_lines),
                    ('invalid frontmatter', frontmatter_lines),
+                   ('index line over the limit', index_lines),
+                   ('open item waiting on an upstream fix', upstream_lines),
                    ('skipped heading level', skip_lines),
                    ('process residue', residue_lines),
                    ('unsourced quantity', unsourced_lines),
@@ -1618,15 +2030,105 @@ def main():
               "references may be\n  right to -- judge each one.")
         return 1
 
-    if gate and (fatal or findability or frontmatter_lines):
+    fatal.extend(f"  {d}: widest table {c} columns, no sortable render (new document)"
+                 for d, c in unrendered_new)
+    if gate and (fatal or findability or frontmatter_lines or index_lines
+                 or upstream_lines):
         _where = ("on lines this change touched" if scope is not None
                   else "in the file(s) named")
         print(f"\ndoc_lint FAIL: {len(fatal)} gating finding(s) {_where}" + (f", {len(findability)} unfindable analysis(es)" if findability else "")
               + (f", {len(frontmatter_lines)} file(s) with invalid frontmatter" if frontmatter_lines else "")
+              + (f", {len(index_lines)} index line(s) over the limit" if index_lines else "")
+              + (f", {len(upstream_lines)} open item(s) waiting on an upstream fix" if upstream_lines else "")
               + ":")
         print('\n'.join(fatal[:40]))
         return 1
     return 0
+
+# A CONSUMER'S LINT RUNS WITH ITS OWN SETTINGS (2026-10-04). A consumer
+# configures this engine from a host shim (its record-class names, index
+# files, render registry...), but the push check runs this file directly,
+# so none of that reached the gate that matters most: a folder the consumer
+# had exempted failed its push. As tools/model_audit.py does, a consumer
+# names its shim in tools/doc_lint_host.json ({"shim": "path/to/shim.py"})
+# and running this file runs the shim. The shim loads this engine under its
+# own module name, so this hand-off never runs twice.
+HOST_FILE = 'tools/doc_lint_host.json'
+
+
+def _host_shim():
+    f = ROOT / HOST_FILE
+    if not f.is_file() or not (ROOT / 'tools' / 'ENGINE_MANIFEST.json').is_file():
+        return None
+    try:
+        shim = json.loads(f.read_text(encoding='utf-8')).get('shim')
+    except ValueError as e:
+        sys.exit(f'doc_lint FAIL: {HOST_FILE} is not valid JSON ({e})')
+    if not shim:
+        return None
+    p = ROOT / shim
+    if not p.is_file():
+        sys.exit(f'doc_lint FAIL: {HOST_FILE} names shim {shim}, which does not exist')
+    return p
+
+
+# THE COMMIT GATE'S REFUSAL IS WRITTEN HERE, NOT IN THE HOOK (2026-10-07).
+# .claude/hooks/doc-lint-gate.sh used to carry this text itself. A hook is a
+# file Claude Code's auto mode holds for a person's yes, so every rewording
+# of it -- one sentence on 2026-10-06 -- became a question in every
+# repository at its next Update Vendors, asked of someone who could not
+# judge a wording change. The hook now pipes this tool's findings back in
+# with --hook-reason and passes on what comes out, so the wording rides the
+# engine and only a change to what the hook does still asks.
+# The hook refuses the WHOLE Bash command before any of it starts: in
+# `git add ... && git commit ... && git push` nothing ran, and a session
+# that read a refusal as covering only its last step told its person work
+# was committed when it was not (2026-10-03, 2026-10-05).
+NOTHING_RAN = ('Nothing in the refused command ran -- not the commit, and not any step\n'
+               'before or after it in the same command (an add or a push included). Fix\n'
+               'what is named below, make the add and the commit in a call of their own,\n'
+               'check `git status`, then push separately.')
+
+
+def hook_reason(outcome, out):
+    """-> the whole text the commit gate refuses with, `out` being what the
+    lint printed; None for an outcome this tool does not word."""
+    if outcome != 'refused':
+        return None
+    return (
+        'doc_lint.py FAILED on the Markdown staged for this commit, so the\n'
+        'commit was refused.\n\n'
+        f'{NOTHING_RAN}\n\n'
+        'The Markdown lint no longer runs in GitHub Actions\n'
+        '(2026-09-21) -- this hook is what replaced it, which makes it the only\n'
+        'thing standing between a formatting error and the shared branch.\n\n'
+        f'{out.rstrip()}\n\n'
+        'Fix what it names, re-stage, and commit again. Nothing lets a commit past\n'
+        'this; do not work around it by unstaging the Markdown. If the lint itself\n'
+        'is wrong, fix doc_lint.py.')
+
+
+def _hook_reason_main(argv):
+    """`--hook-reason OUTCOME`: the gate's refusal text for OUTCOME, the
+    run's output read from stdin. Exit 2 when the outcome is not one this
+    tool words, so the hook falls back to its own short line."""
+    outcome = argv[argv.index('--hook-reason') + 1] if argv.index('--hook-reason') + 1 < len(argv) else ''
+    text = hook_reason(outcome, sys.stdin.read())
+    if text is None:
+        return 2
+    print(text)
+    return 0
+
+
+if __name__ == '__main__' and '--hook-reason' in sys.argv[1:]:
+    sys.exit(_hook_reason_main(sys.argv[1:]))
+
+if __name__ == '__main__' and _host_shim() is not None:
+    import runpy
+    _shim = _host_shim()
+    sys.argv[0] = str(_shim)
+    runpy.run_path(str(_shim), run_name='__main__')
+    sys.exit(0)
 
 if __name__ == '__main__':
     # `--help` is what anyone types first. Before 2026-09-06 the tools here
