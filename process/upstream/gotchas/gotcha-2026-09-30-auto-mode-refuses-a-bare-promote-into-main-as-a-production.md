@@ -8,17 +8,17 @@ retires_when:    null
 ---
 ## Symptom
 
-A bare **"Promote"** correctly resolves to staging into `main`, and then
-`python3 tools/precedent_branches.py --promote --to main` comes back
+A request that moves work into `main` without naming main -- "merge it",
+"push it", or a working-method command that ends there -- comes back
 `Denied by auto mode classifier` with the reason `[Production Deploy]`.
 Nothing in the repository refused it. The same move goes through when the
-person says **"Produce"**.
+person's message names `main`.
 
 ## Story
 
 **2026-09-30, a real consumer.** Pre-staging had nothing staging lacked, so
 the session read "Promote" as staging into `main`, as
-[promote](../practices/promote.md) says it should. Claude Code's auto mode
+`promote` says it should. Claude Code's auto mode
 then refused the command. Its built-in `soft_deny` rules include production
 deploys, and a soft block clears on the person's intent only when their
 message "directly and specifically describes the exact action"
@@ -45,7 +45,7 @@ only managed settings reach every one.
 stopped the move, not the repository's rules, and ask for "Produce" (or
 "Promote 5"). Never route around it: no other command, no GitHub API
 merge, no settings edit of the session's own.
-[promote](../practices/promote.md) and [produce](../practices/produce.md)
+`promote` and `produce`
 say this.
 
 **The one durable fix is the person's**: an `autoMode.allow` entry in
@@ -71,3 +71,12 @@ every built-in exception. For example:
 The wording is prose the classifier reads, not a pattern. Afterwards,
 `claude auto-mode config` shows whether it took. A session never adds
 this itself.
+
+**Prevention: nothing mechanical, deliberately**, because the refusal is
+Claude Code's own safety check, outside this repository. The only durable
+fix is an allow rule in the person's managed or home settings: no file
+Precedent vendors can carry one, and a session must never write one for
+itself. A check here would have nothing to read. What the repository can
+do it already does: `promote` and `produce` tell the session what to say
+and which word gets through. (Written 2026-10-06, after the 2026-10-05
+very deep check found no answer recorded.)

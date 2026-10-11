@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_review_page.py -- the very deep check's session-only review page.
+"""The very deep check's session-only page: branches to delete, with a link each, and every active practice by source
+
+precedent_review_page.py -- the very deep check's session-only review page.
 
 Writes one self-contained HTML page with two lists, for the person who asked
 for the check:
@@ -29,9 +31,9 @@ WHY A SESSION PAGE AND NEVER A COMMITTED FILE (Morgan, 2026-09-28, strength:
 decided). The practice list used to be written into spec/VERY_DEEP_CHECK.md
 on every run. That file is public, so the individual and shared sets were
 held back from it, and the person never got the list he asked for. The page
-carries every source in full precisely because it is shown in the session
-only (an Artifact in Claude Code on the web) and never committed, pushed or
-linked from a repository. It is written under .precedent/, which every
+carries every source in full precisely because it is published as a private
+Artifact -- always an Artifact, never the HTML file handed over (Morgan,
+2026-10-06) -- and never committed, pushed or linked from a repository. It is written under .precedent/, which every
 Precedent repo ignores.
 
     python3 tools/precedent_review_page.py [--repo PATH] [--out PATH]
@@ -483,9 +485,9 @@ def main(argv=None):
     ver = json.loads(pathlib.Path(a.verdicts).read_text(encoding='utf-8')) \
         if a.verdicts else []
     path = write(a.repo, a.out, rec, a.fetch, a.day, ver)
-    print(f'precedent_review_page: wrote {path} -- show it in the session '
-          f'only (an Artifact in Claude Code on the web); never commit, push '
-          f'or link it.')
+    print(f'precedent_review_page: wrote {path} -- publish it as an Artifact '
+          f'(the Artifact tool), never as an HTML file attached or sent; never '
+          f'commit, push or link it (practice: very-deep-check).')
     return 0
 
 

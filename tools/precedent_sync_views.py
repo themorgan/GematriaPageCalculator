@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_sync_views.py — one command for a CONSUMING repo to refresh its
+"""One command for a consuming repo: precedent_materialize.py + build_views.py --agents-only, glued together
+
+precedent_sync_views.py — one command for a CONSUMING repo to refresh its
 own generated AGENTS.md loader block from every source it resolves
 (universal + team + individual + repo-local), instead of remembering to run
 tools/precedent_materialize.py and then tools/build_views.py --agents-only
@@ -20,9 +22,10 @@ new mechanism:
      disk, so this never risks parsing something materialize() just wrote
      differently than materialize() itself understood it.
 
-What this tool does NOT do: generate MAP.md or GLOSSARY.md (those assume
-this repo's own structure — see build_views.py's --agents-only, which this
-tool always uses the equivalent of), or vendor the engine scripts
+MAP.md and GLOSSARY.md: rebuilt with build_views.py --views-only wherever
+the repository generates them -- a generated label, or its MAP.source.md /
+GLOSSARY.source.md (spec/GENERATED_FILES_PLAN.md step 5). What this tool
+does NOT do: vendor the engine scripts
 themselves (precedent_resolve.py, precedent_materialize.py, build_views.py,
 precedent_show.py, precedent_paths.py, precedent_gate.py, split_practices.py
 all need to already be sitting together in the consuming repo's own tools/
@@ -31,6 +34,15 @@ tools/, same as precedent_materialize.py's own docstring already says).
 
 Run:
   python3 tools/precedent_sync_views.py --repo DIR [--user-config PATH] [--check]
+      [--for-branch BRANCH] [--allow-rollback] [--rung-only]
+
+  --check reads each shared set at the commit MANIFEST.json records syncing
+  it at (precedent_source_pins.py), never at whatever its clone has checked
+  out. --for-branch names where a push is going: pre-staging, staging or
+  main may carry a set only at a commit that set has landed on the same
+  rung; --rung-only does only that, and is what the push check runs, on
+  every push and outside its recorded passes. A write refuses to roll a set back to a commit before the one this
+  repository carries; --allow-rollback when that is meant.
 
   --repo is REQUIRED and names the consuming repo's root; from that root it
   is `--repo .`. It used to default to this script's own directory's parent,
@@ -54,6 +66,7 @@ tools/checks/ filename collision, an over-budget resident set, a bad harness
 adapter declaration), or on --check finding drift.
 """
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -63,6 +76,15 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import precedent_resolve as pr  # noqa: E402
 import precedent_materialize as pm  # noqa: E402
 import build_views as bv  # noqa: E402
+import precedent_source_pins as psp  # noqa: E402
+
+
+class NotVerifiable(Exception):
+    """--check cannot judge the views here: they were generated with
+    practices from a person's individual set, and none resolves in this
+    environment (build_views.individual_not_verifiable, the one decision
+    every reader of the loader block shares). Exit 0, and said in those
+    words -- neither drift nor a pass."""
 
 
 
@@ -120,6 +142,16 @@ def _lost_practices(repo, res, sources, withheld):
         return empty
     withheld = set(withheld or ())
     declared = {s.get('name') for s in sources}
+    # Rules deleted from universal on purpose leave no stub to read; the
+    # universal source's own record is their forwarding address
+    # (pr.withdrawn_record). Found by a consumer rehearsal, 2026-10-03: the
+    # guard knew only stubs, so the first sync after the ladder moved out of
+    # universal refused on all fourteen of its rules.
+    record_withdrawn = {}
+    for s in sources:
+        if pr.declared_level(s) == 'universal' and s.get('path'):
+            for slug in pr.withdrawn_record(s['path']):
+                record_withdrawn[(slug, s.get('name'))] = True
 
     out = {'blocking': [], 'source_dropped': [], 'moved_without_record': [],
            'withdrawn_upstream': [], 'overridden': []}
@@ -160,7 +192,8 @@ def _lost_practices(repo, res, sources, withheld):
         # 2026-09-28: go-merge, renamed go-update two days earlier, stopped
         # two consumers' updates here until each re-ran by hand with
         # --allow-removals.
-        if src in declared and (slug, src) in withdrawn_at:
+        if src in declared and ((slug, src) in withdrawn_at
+                                or (slug, src) in record_withdrawn):
             out['withdrawn_upstream'].append((slug, src))
             continue
         # OVERRIDDEN BY A DECLARED SOURCE: a practice elsewhere names this
@@ -190,8 +223,166 @@ def _lost_practices(repo, res, sources, withheld):
     return out
 
 
+def findings_block(problems):
+    """--check's differences under a VIOLATION header, ended by a blank line:
+    the shape precedent_push_check.violation_lines reads, so a push to a
+    working branch is refused only for a difference it brings -- not for a
+    source that moved under it (2026-10-06: a one-line content push in a
+    consumer was refused for exactly that)."""
+    return '\n'.join(['VIOLATION  views differ from a fresh sync',
+                      *(f'  {line}' for line in problems), ''])
+
+
+def _pve():
+    import precedent_vendor_engine
+    return precedent_vendor_engine
+
+
+def fields_this_engine_does_not_know(practices):
+    """-> one plain note per practice that uses a frontmatter field this
+    engine's frontmatter_yaml.FIELD_ORDER does not list and its own source
+    does not declare as its own (own_frontmatter_fields).
+
+    WHY (Morgan, 2026-10-07, strength: decided: "even if it wouldn't have
+    solved this, it would have helped in general"). A practice set moves on
+    its own schedule, and can start using an engine feature -- `hooks:` on
+    2026-10-06 -- before a consuming repository's vendored engine has it.
+    The old engine ignored the field it did not know, the sync went quiet,
+    and what the field asked for surfaced later as a check's finding nobody
+    in that repository could act on. Said here, at the sync, it names the
+    one step that does: Update Vendors first."""
+    try:
+        import frontmatter_yaml as fy
+    except Exception:                              # practice: fail-gracefully
+        return []
+    notes, own_by_root = [], {}
+    for slug, p in sorted(practices.items()):
+        f = pathlib.Path(str(p.get('file') or ''))
+        if not f.is_file():
+            continue
+        root = f.parent.parent
+        if root not in own_by_root:
+            own_by_root[root] = fy.own_fields(root)
+        try:
+            unknown = fy.unlisted_fields(f.read_text(encoding='utf-8'),
+                                         own_by_root[root])
+        except (OSError, UnicodeDecodeError):
+            continue
+        if unknown:
+            fields = ', '.join(f'`{k}:`' for k in unknown)
+            notes.append(f"{slug} ({p.get('source') or 'a declared source'}) "
+                         f"uses {fields}, which this repository's engine does "
+                         f"not know, so whatever it asks for is not done here "
+                         f"yet and its check may report something nothing "
+                         f"here can fix. The set needs a newer engine: run "
+                         f"Update Vendors first.")
+    return notes
+
+
+def _declared_practice_hooks(repo, practices):
+    """-> ([(event, matcher, command)], [notes]) for every `hooks:` entry a
+    practice in force declares, less those this repository declined (the
+    file it runs under declined_ships, or its name under declined_adapters)
+    and those whose script is not on disk to run. A declaration that does
+    not parse is a note naming it, never a guess."""
+    try:
+        cfg = json.loads((pathlib.Path(repo) / 'precedent.json')
+                         .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        cfg = {}
+    declined = set((cfg.get(pm.DECLINED_SHIPS_KEY) or {}))
+    declined |= {pathlib.PurePosixPath(str(e.get('path'))).name
+                 for e in (cfg.get('declined_adapters') or [])
+                 if isinstance(e, dict) and e.get('path')}
+    entries, notes = [], []
+    for slug, p in sorted(practices.items()):
+        try:
+            hooks = bv.practice_hooks(p['fm'])
+        except ValueError as e:
+            notes.append(f"{slug}: its hooks: declaration was not wired -- {e}")
+            continue
+        for h in hooks:
+            if h['run'] in declined or pathlib.PurePosixPath(h['run']).name in declined:
+                continue
+            if not (pathlib.Path(repo) / h['run']).is_file():
+                continue
+            entries.append((h['event'], h['matcher'], bv.hook_command(h)))
+    return entries, notes
+
+
 def sync(repo, user_config=None, check=False, allow_missing=False,
-         allow_removals=False):
+         allow_removals=False, skip_unresolved=False, for_branch=None,
+         allow_rollback=False):
+    """-> what _sync returns. Reads each live source (a set's clone beside
+    this repository) the way precedent_source_pins.py says: --check at the
+    commit this repository's MANIFEST.json records syncing it at, so the
+    answer depends on neither the clone's checkout nor how far the set has
+    moved since; a write from the clone as it stands, refused when that
+    would roll back a commit this repository already carries.
+
+    `for_branch` names where a push is going: a pre-staging, staging or
+    main push may carry a set only at a commit the set has landed on that
+    same rung itself, and --check refuses otherwise (2026-10-05)."""
+    loaded = pr.load_config(repo, user_config)
+    sources = [s for s in loaded if not s.get('brought')]
+    pinned = psp.pins(repo, sources)
+    if not check:
+        refused = [] if allow_rollback else psp.rollback_refusals(
+            repo, sources, pinned)
+        if refused:
+            raise pm.MaterializeError(
+                'refusing to sync: ' + ' '.join(refused))
+        for s in psp.live(sources, repo):
+            if psp.is_dirty(s['path']):
+                print(f"precedent_sync_views: {s['name']} has uncommitted "
+                      f"changes in files a sync reads, at {s['path']}; they "
+                      f"were NOT taken -- the views are built from its commit "
+                      f"{psp.head_commit(s['path'])[:10]}. Commit them there "
+                      f"to take them.", file=sys.stderr)
+        with psp.at_pins(loaded, psp.checkouts(repo, sources)) as (at, notes):
+            for line in notes:
+                print(f"precedent_sync_views: {line}", file=sys.stderr)
+            return _sync(repo, at, user_config, check=False,
+                         allow_missing=allow_missing,
+                         allow_removals=allow_removals,
+                         skip_unresolved=skip_unresolved)
+    branch = for_branch or _current_branch(repo)
+    rung = [RungRefusal(r) for r in
+            psp.rung_refusals(repo, sources, for_branch, pinned)] \
+        if for_branch else []
+    for line in psp.newer_notes(repo, sources, branch, pinned):
+        print(f"precedent_sync_views: note -- {line}", file=sys.stderr)
+    with psp.at_pins(loaded, pinned) as (at, notes):
+        for line in notes:
+            print(f"precedent_sync_views: {line}", file=sys.stderr)
+        for name, p in sorted(pinned.items()):
+            if p['how'] != 'recorded':
+                print(f"precedent_sync_views: {name} read at {p['commit'][:10]}"
+                      f" ({p['how']}; this repository's MANIFEST.json records "
+                      f"no commit for it yet -- the next sync does)",
+                      file=sys.stderr)
+        out = _sync(repo, at, user_config, check=True,
+                    allow_missing=allow_missing,
+                    allow_removals=allow_removals,
+                    skip_unresolved=skip_unresolved)
+    return (*out[:6], list(out[6]) + rung)
+
+
+class RungRefusal(str):
+    """A --check finding that is not drift: the views are what their
+    inputs produce, and one input is a set commit the set itself has not
+    landed on this push's rung. Its remedy is promoting the set, and the
+    sync the drift message recommends would destroy the work instead."""
+
+
+def _current_branch(repo):
+    r = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--abbrev-ref',
+                        'HEAD'], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _sync(repo, loaded, user_config=None, check=False, allow_missing=False,
+          allow_removals=False, skip_unresolved=False):
     """-> (written, checks_written, adapters_written, rstats,
     agents_md_path, changed: bool, tree_drift: [str]).  tree_drift is always
     empty unless check=True.
@@ -199,7 +390,16 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     the two tools this wraps would -- this function is thin on purpose,
     the two tools underneath carry all the real logic and all the real
     test coverage."""
-    sources = pr.load_config(repo, user_config)
+    # A set a person brings is theirs, never the repository's: it reaches
+    # their sessions through .precedent/SESSION_PRACTICES.md and never a
+    # tracked file (spec/LADDER_OPT_IN_PLAN.md D6), the same line
+    # build_views.sources_for_tracked_block draws. Until 2026-10-02 this
+    # second writer of the loader block drew no line, so a sync run by a
+    # person who brings a set would have written it into the repository.
+    sources = [s for s in loaded if not s.get('brought')]
+    # ...but what a brought set provides, and the rules it holds, still
+    # count when deciding what is in force (pr.resolve's `context`).
+    brought = [s for s in loaded if s.get('brought')]
     if not sources:
         raise pr.ResolveError(
             f"no practice sources are declared for {repo}. A consuming repo "
@@ -207,7 +407,11 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
             f"precedent.json; a person declares their own individual set in "
             f"their user-level config ({pr.DEFAULT_USER_CONFIG}, or "
             f"{pr.USER_CONFIG_ENV}).")
-    res = pr.resolve(sources)
+    if check:
+        why = bv.individual_not_verifiable(pathlib.Path(repo), loaded)
+        if why:
+            raise NotVerifiable(why)
+    res = pr.resolve(sources, context=brought)
     for m in res['missing']:
         print(f"precedent_sync_views: the {m['level']} source {m['name']!r} "
               f"is not available ({m['reason']}).",
@@ -239,6 +443,13 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     # source, synced and committed, then re-synced with the sibling clone
     # simply absent -- practices/widget-rule.md deleted, AGENTS.md and
     # MANIFEST.json rewritten, exit 0.
+    # A check asked to skip what it cannot see (the push check's basic tier)
+    # stops here: views compared against a source set missing a member read
+    # as stale when they are not (2026-10-03).
+    if res['missing'] and check and skip_unresolved:
+        raise pr.ResolveError(
+            ', '.join(f"{m['level']}/{m['name']}" for m in res['missing'])
+            + ' did not resolve')
     if res['missing'] and not check and not allow_missing:
         names = ', '.join(f"{m['level']}/{m['name']}" for m in res['missing'])
         raise pm.MaterializeError(
@@ -305,7 +516,7 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     omitted = []
     if public:
         omitted = sorted({p['level'] for p in res['practices'].values()
-                          if p['level'] in bv.PRIVATE_LEVELS})
+                          if pr.declared_level(p) in bv.PRIVATE_LEVELS})
         if omitted:
             # RE-RESOLVE without the private sources rather than filtering
             # them out of the finished result. A private practice can WIN a
@@ -318,10 +529,10 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
             # universal source defines.
             withheld_slugs = sorted(
                 slug for slug, pr_ in res['practices'].items()
-                if pr_['level'] in bv.PRIVATE_LEVELS)
+                if pr.declared_level(pr_) in bv.PRIVATE_LEVELS)
             sources = [s for s in sources
-                       if s['level'] not in bv.PRIVATE_LEVELS]
-            res = pr.resolve(sources)
+                       if pr.declared_level(s) not in bv.PRIVATE_LEVELS]
+            res = pr.resolve(sources, context=brought)
             # A slug that a publishable source ALSO defines is not withheld --
             # the re-resolve above brings it back, from text this repo may
             # carry. Only what is genuinely absent here gets recorded.
@@ -415,6 +626,41 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     if not check:
         _lost = _lost_practices(repo, res, sources,
                                 locals().get('withheld_slugs'))
+        # A RULE THAT IS STILL THERE, waiting on a set that is not (2026-10-04,
+        # a consumer's update): a practice whose `requires:` names something
+        # no source on disk provides is left out by the resolver, and read
+        # here as lost. The generic refusal below then offered
+        # `--allow-removals` -- which would have deleted two of a person's
+        # own rules because the set that switches them on had not been
+        # cloned yet. Said separately, with the set and the remedy, and never
+        # with --allow-removals: nothing is gone.
+        waiting = _waiting_on_a_capability(sources, _lost['blocking'])
+        if waiting:
+            _lost['blocking'] = [b for b in _lost['blocking'] if b not in waiting]
+            missing = _brought_not_on_disk(sources)
+            if pr.no_ladders():
+                why = (f"this session runs with {pr.NO_LADDERS_ENV}=1, which "
+                       f"turns those capabilities off on purpose -- run the "
+                       f"sync from a session without it")
+            elif missing:
+                why = ('; '.join(f"`{b['name']}`, brought by your individual "
+                                 f"set, is not on disk at {b['path']}"
+                                 for b in missing)
+                       + " -- fetch it with `python3 tools/precedent_source_"
+                         "bootstrap.py --teams-from .` (or attach it beside "
+                         "the individual set) and run this again")
+            else:
+                why = ("no source this session resolved provides it -- attach "
+                       "the set that does, and run this again")
+            raise pm.MaterializeError(
+                "refusing to WRITE: these practice(s) are still in force at "
+                "their source, but each `requires:` something no source on "
+                "disk provides, so this sync would drop them -- "
+                + '; '.join(f"{s} (from {src}, requires "
+                            f"{', '.join(sorted(n))})"
+                            for (s, src), n in sorted(waiting.items()))
+                + f". {why}. Do NOT pass --allow-removals: the rules are not "
+                "gone, and it would delete them.")
         if _lost['blocking'] and not (allow_removals or allow_missing):
             raise pm.MaterializeError(
                 "refusing to WRITE: this sync would remove "
@@ -477,6 +723,13 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
             gone_to = {(r.get('slug'), r.get('source')):
                        pr.withdrawn_from_universal(r.get('sections'))
                        for r in (res.get('retired') or []) if isinstance(r, dict)}
+            # A rule deleted outright has no stub: its record line says where.
+            for s_ in sources:
+                if pr.declared_level(s_) == 'universal' and s_.get('path'):
+                    hist_ = pr.withdrawn_history(s_['path'])
+                    for slug_, gone_ in pr.withdrawn_record(s_['path']).items():
+                        gone_to.setdefault((slug_, s_.get('name')),
+                                           (*gone_, slug_ in hist_))
 
             def _where(s, src):
                 # Where the rule went, as THIS resolution found it -- the
@@ -495,9 +748,12 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
                 if live is not None:
                     return f", now in force as {live}"
                 gone = gone_to.get((s, src))
+                if gone and gone[2:3] == (True,):
+                    return (f", a retired name withdrawn from universal on "
+                            f"{gone[0]}; kept as history in `{gone[1]}`")
                 if gone:
                     return (f", withdrawn from universal on {gone[0]}; in force "
-                            f"in `{gone[1]}` -- declare that set to keep it")
+                            f"in `{gone[1]}` for the people who bring or declare it")
                 return (f", forwarding to {target}, which is IN FORCE NOWHERE "
                         f"here -- see above")
 
@@ -540,7 +796,12 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     written, checks_written, adapters_written, rstats = pm.materialize(
         sources, res, pathlib.Path(repo), dry_run=check,
         withheld=locals().get('withheld_slugs'))
-    tree_drift = (pm.drift(sources, res, pathlib.Path(repo),
+    # Said first, so the differences after it are read for what they may be:
+    # only a missing source's practices.
+    unseen = ([f"{', '.join(m['level'] + '/' + m['name'] for m in res['missing'])} "
+               f"did not resolve here, so what follows may be only its practices "
+               f"missing, not stale views"] if check and res['missing'] else [])
+    tree_drift = unseen + (pm.drift(sources, res, pathlib.Path(repo),
                           withheld=locals().get('withheld_slugs'))
                   if check else [])
 
@@ -586,6 +847,33 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
     # asked of the plan, never of the disk, because materialize() empties
     # practices/ and tools/checks/ before refilling them and a --check run
     # writes nothing at all.
+    # A hook a practice in force declares (`hooks:`), listed in
+    # process/practice_hooks.json since 2026-10-07 (precedent_hooks.py says
+    # why) -- or, under --check, reported as a difference
+    # from a fresh sync. Before 2026-10-06 a practice could ship the script
+    # and a check requiring the hook, and nothing wired it: a consumer
+    # failed that check right after a clean sync.
+    hook_entries, hook_notes = _declared_practice_hooks(repo, _live)
+    for note in hook_notes:
+        print(f"precedent_sync_views: {note}", file=sys.stderr)
+    for note in fields_this_engine_does_not_know(_live):
+        print(f"precedent_sync_views: {note}", file=sys.stderr)
+    for note in held_for_a_newer_engine(sources):
+        print(f"precedent_sync_views: {note}", file=sys.stderr)
+    if check:
+        tree_drift += [f"{_pve().PRACTICE_HOOKS_FILE} does not run `{c}` at {e}"
+                       f"{' (' + m + ')' if m else ''}, a hook a practice in "
+                       f"force declares -- a fresh sync adds it"
+                       for e, m, c in _pve().missing_practice_hooks(repo, hook_entries)]
+    else:
+        for c in _pve().add_practice_hooks(repo, hook_entries):
+            print(f"precedent_sync_views: wired `{c}` into "
+                  f"{_pve().PRACTICE_HOOKS_FILE}, a hook a practice in force "
+                  f"declares, run by .claude/hooks/precedent-hooks.sh -- "
+                  f"nothing under .claude/ changed. To opt out, decline the "
+                  f"file it runs under declined_ships in precedent.json.",
+                  file=sys.stderr)
+
     planned = {f"practices/{w['slug']}.md" for w in written}
     planned.update(c['path'] for c in checks_written)
     triples = [(p['fm'], p['sections'],
@@ -624,15 +912,401 @@ def sync(repo, user_config=None, check=False, allow_missing=False,
             (new_text != original), tree_drift)
 
 
+# A RULE ARRIVES WITH ITS DEBT SHOWN (2026-10-07). Every set moves on its
+# own schedule, and a check that came in with a sync used to be met first by
+# whichever push came next: in a private consuming repository, a one-file
+# note was refused four times over files the note never touched. Booked no
+# longer judges what a push does not change (--changed-files-only), so the
+# first full check that meets the debt is the Debut. This says it at the
+# moment the rule arrives instead: each practice the sync brought in or
+# whose Rule changed, and that a check enforces, is checked once across the
+# repository, and what does not hold yet is listed. It never refuses.
+ARRIVAL_CHECK_LIMIT = 8      # checks run per sync; the rest are named, not run
+
+
+def _checked_rules(repo):
+    """-> {slug: (checked_by, Rule text)} for each practice in the repo's
+    practices/ that a check enforces."""
+    out = {}
+    for f in (pathlib.Path(repo) / 'practices').glob('*.md'):
+        try:
+            text = f.read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            continue
+        m = re.search(r'^checked_by:\s*["\']?([^"\'\s#]+)', text, re.M)
+        if not m or m.group(1) in ('null', '~'):
+            continue
+        rule = re.search(r'^## Rule\n(.*?)(?=^## |\Z)', text, re.S | re.M)
+        out[f.stem] = (m.group(1), rule.group(1).strip() if rule else '')
+    return out
+
+
+def standing_findings_of_arrivals(repo, before, run=None):
+    """-> [line] naming, for each enforced practice this sync added or whose
+    Rule or check changed, the files in the repository that do not meet it
+    yet. `run(slug)` -> the check's output (tests pass their own)."""
+    repo = pathlib.Path(repo)
+    after = _checked_rules(repo)
+    arrived = sorted(s for s, v in after.items() if before.get(s) != v)
+    checker = repo / 'tools' / 'precedent_check.py'
+    if not arrived or (run is None and not checker.is_file()):
+        return []
+    if run is None:
+        def run(slug):
+            r = subprocess.run([sys.executable, str(checker), '--only', slug,
+                                '--full-sweep'], cwd=str(repo),
+                               capture_output=True, text=True, timeout=300)
+            return r.stdout
+    lines = []
+    for slug in arrived[:ARRIVAL_CHECK_LIMIT]:
+        try:
+            out = run(slug)
+        except Exception:                                    # noqa: BLE001
+            continue
+        block = out.split(f'VIOLATION  {slug}', 1)
+        if len(block) < 2:
+            continue
+        findings = [l.strip() for l in block[1].split('  the rule:', 1)[0].splitlines()
+                    if l.startswith('    ') and l.strip()]
+        if not findings:
+            continue
+        shown = '; '.join(f[:120] for f in findings[:3])
+        more = f' (+{len(findings) - 3} more)' if len(findings) > 3 else ''
+        lines.append(f'{slug}, which this sync brought in or changed, does not '
+                     f'hold yet on {len(findings)} place(s): {shown}{more}. '
+                     f'Nothing is refused for it now: a working-branch or '
+                     f'pre-staging push is judged only on what it changes, and '
+                     f'the full check (into staging, or main) will refuse '
+                     f'these -- fix them before then '
+                     f'(python3 tools/precedent_check.py --only {slug})')
+    if len(arrived) > ARRIVAL_CHECK_LIMIT:
+        lines.append(f'{len(arrived) - ARRIVAL_CHECK_LIMIT} more enforced '
+                     f'practice(s) arrived or changed and were not checked here: '
+                     f'{", ".join(arrived[ARRIVAL_CHECK_LIMIT:])}. '
+                     f'python3 tools/precedent_check.py --full-sweep judges them')
+    return lines
+
+
+def _generated_views(repo):
+    """-> the repo's MAP.md / GLOSSARY.md that build_views generated (its
+    `generated_by` header), never a hand-made one and never a missing one:
+    a sync keeps a generated map current, and writes no map a repo lacks."""
+    sources = {'MAP.md': getattr(bv, 'MAP_SOURCE', None),
+               'GLOSSARY.md': getattr(bv, 'GLOSSARY_SOURCE', None)}
+    # A view with its source file is generated even before its first build
+    # (a fresh install writes MAP.source.md, and this sync makes MAP.md).
+    return [p for p in (pathlib.Path(repo) / n for n in bv.FULLY_GENERATED_VIEWS)
+            if (p.is_file() and bv.is_generated_view(p)) or (
+                sources.get(p.name) and bv.has_own_source(repo, sources[p.name]))]
+
+
+def _refresh_generated_views(repo, check=False):
+    """Rebuild (or, with check, compare) the generated MAP.md and
+    GLOSSARY.md with build_views.py from this engine, so a sync that removes
+    practices does not leave the map linking to them. -> [problem lines].
+
+    A consumer's report, 2026-10-02: a sync dropped ten practices, rewrote
+    AGENTS.md and left eight dead links in MAP.md while its own --check said
+    OK; only the light check caught it, and a session following the
+    documented step exactly would have shipped them."""
+    views = _generated_views(repo)
+    if not views:
+        return []
+    # --views-only: the loader block in AGENTS.md is this sync's own to
+    # write; a full build_views run would rewrite it from practices/ alone.
+    cmd = [sys.executable, str(ROOT / 'tools' / 'build_views.py'),
+           '--repo', str(repo), '--views-only'] + (['--check'] if check else [])
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode == 0:
+        return []
+    # The cause is build_views' own FAIL line, on stdout. Its stderr carries
+    # notices -- a set the person brings, deferred -- that print after it and
+    # are not the cause; the last line of both together named the notice
+    # (found 2026-10-03 on a consumer's hand-edited MAP.md).
+    lines = [l for l in (r.stdout + '\n' + r.stderr).splitlines() if l.strip()]
+    why = next((l for l in lines if 'FAIL' in l), lines[-1] if lines else
+               f'exit {r.returncode}, no output')
+    drifted = [p.name for p in views if why.rstrip().endswith(p.name)
+               or f' {p.name},' in why or f': {p.name}' in why]
+    names = ', '.join(drifted or [p.name for p in views])
+    return [f"{names}: {'stale against' if check else 'could not be rebuilt by'} "
+            f"build_views.py -- {why.strip()}"]
+
+
+_PRACTICE_LINK_RE = re.compile(r'(?<![\w/-])((?:\.\./)*practices/)([a-z0-9][a-z0-9-]*)\.md\b')
+
+
+def held_for_a_newer_engine(sources):
+    """-> one line per practice a declared source holds in force that names
+    an `engine:` capability in `requires:` this engine lacks: held back,
+    check and all, until Update Vendors brings the engine that has it
+    (precedent_resolve.ENGINE_CAPABILITIES). Says what an older engine
+    holds back silently."""
+    have = set(getattr(pr, 'ENGINE_CAPABILITIES', ()))
+    out = []
+    for s in sources:
+        if not s.get('path'):
+            continue
+        try:
+            loaded, _why = pr.load_source(s)
+        except Exception:                                    # noqa: BLE001
+            continue
+        for slug, p in sorted((loaded or {}).items()):
+            if bv._json_str(p['fm'].get('status', 'active')) != pr.IN_FORCE_STATUS:
+                continue
+            missing = sorted(c for c in pr._requires(p['fm'])
+                             if c.startswith('engine:') and c not in have)
+            if missing:
+                out.append(f"{slug} ({s.get('name')}) needs a newer engine "
+                           f"({', '.join(missing)}), so it is held back -- "
+                           f"its check too -- until Update Vendors brings one")
+    return out
+
+
+def _waiting_on_a_capability(sources, blocking):
+    """-> {(slug, source): needed capabilities} for each blocked removal
+    whose practice is still active at its source and names a `requires:`
+    capability no resolved source provides."""
+    out = {}
+    by_name = {s.get('name'): s for s in sources}
+    provided = set(getattr(pr, 'ENGINE_CAPABILITIES', ()))
+    for s in sources:
+        if s.get('path'):
+            provided |= pr.source_provides(s['path'])
+    for slug, src in blocking:
+        s = by_name.get(src)
+        if not s:
+            continue
+        loaded, _why = pr.load_source(s)
+        p = (loaded or {}).get(slug)
+        if not p or bv._json_str(p['fm'].get('status', 'active')) != pr.IN_FORCE_STATUS:
+            continue
+        needs = pr._requires(p['fm'])
+        if needs and not needs <= provided:
+            out[(slug, src)] = needs - provided
+    return out
+
+
+def _brought_not_on_disk(sources):
+    """-> the brought-set entries the individual source declares that are
+    not on disk."""
+    ind = next((s for s in sources if pr.declared_level(s) == 'individual'), None)
+    if not ind or not ind.get('path'):
+        return []
+    return [b for b in pr.brought_sources(ind['path'], warn=False)
+            if not pathlib.Path(b['path']).exists()]
+
+
+def _where_removed_went(repo, user_config, removed):
+    """-> {slug: (successor slug or None, why)} for practices a sync removed:
+    a deduplicated stub's `in_force_at`, else universal's withdrawal record."""
+    out = {slug: (None, 'no longer in force here') for slug in removed}
+    try:
+        sources = pr.load_config(repo, user_config)
+    except Exception:                                        # noqa: BLE001
+        return out
+    for s in sources:
+        if pr.declared_level(s) == 'universal' and s.get('path'):
+            history = pr.withdrawn_history(s['path'])
+            for slug, (date, name) in pr.withdrawn_record(s['path']).items():
+                if slug in out and slug in history:
+                    out[slug] = (None, f'a retired name, withdrawn from universal '
+                                       f'on {date}; kept as history in `{name}`')
+                elif slug in out:
+                    out[slug] = (None, f'withdrawn from universal on {date}; in '
+                                       f'force in `{name}` for the people who '
+                                       f'bring or declare it')
+        loaded, _why = pr.load_source(s)
+        for slug, p in (loaded or {}).items():
+            if slug not in out:
+                continue
+            fwd = str(p['fm'].get('in_force_at') or '').strip('"\' ')
+            if fwd and fwd not in ('null', 'none', 'engine', slug):
+                out[slug] = (fwd, f'now in force as `{fwd}`')
+    return out
+
+
+def _own_files(repo):
+    """-> the tracked files that are this repository's own to fix: not a
+    materialized practice or check, not a mirror of another repository's
+    catalogue, not a generated view, not a vendored engine file."""
+    repo = pathlib.Path(repo)
+    r = subprocess.run(['git', '-C', str(repo), 'ls-files'],
+                       capture_output=True, text=True)
+    # A mirror of another repository's catalogue (precedent/universal/,
+    # process/upstream/) is upstream's, like a vendored engine file: never
+    # this repository's to fix. mirrored_prefixes is the one place that is
+    # answered; a hand-kept list here missed precedent/universal/ once this
+    # scan reached earlier removals (2026-10-04).
+    try:
+        mirrors = tuple(pr.mirrored_prefixes(repo))
+    except Exception:                                        # noqa: BLE001
+        mirrors = ()
+    skip = ('practices/', 'process/', 'tools/checks/') + mirrors
+    # AGENTS.md is scanned too, outside its generated loader block: the
+    # hand-written text around the block is the repository's own, and the
+    # full check refuses a link there to a removed practice just as it does
+    # anywhere else (two consumers, 2026-10-03: an update said there was
+    # nothing to fix, and the push after it was refused).
+    # A vendored engine file is upstream's: a refresh rewrites it, so a link
+    # in one is never this repository's to fix, and is fixed upstream.
+    try:
+        engine = {f'tools/{f}' for f in json.loads(
+            (repo / 'tools' / 'ENGINE_MANIFEST.json').read_text(encoding='utf-8'))
+            .get('files') or []}
+    except (OSError, ValueError, AttributeError):
+        engine = set()
+    return [f for f in r.stdout.splitlines()
+            if not f.startswith(skip) and f not in bv.FULLY_GENERATED_VIEWS
+            and f not in engine]
+
+
+def _tracked_materialized(repo):
+    """-> the tracked files under practices/ and tools/checks/: what a sync
+    may take away."""
+    r = subprocess.run(['git', '-C', str(repo), 'ls-files', '--', 'practices',
+                        'tools/checks'], capture_output=True, text=True)
+    return set(r.stdout.splitlines()) if r.returncode == 0 else set()
+
+
+def _mentions_of_removed_files(repo, gone):
+    """-> ["<file>:<line> still names <path>, which this sync removed"] for
+    every file of this repository's own (_own_files) that names a file this
+    sync took out of practices/ or tools/checks/ -- by its path, or a check
+    script or test by its name alone.
+
+    Found 2026-10-06 in a consumer: a sync removed four check scripts, their
+    tests and practices/light-check.md, and three rounds of checks each
+    found more files still naming them -- the consumer's own light check
+    and a gotcha at the merge into pre-staging, two open items only at the
+    Debut's full check. Each round cost a commit and a re-run. A practice
+    link -- `practices/<slug>.md` anywhere in a line, linked or not -- is
+    _links_to_removed's, so this names only what that cannot: a check
+    script or test, by path or by name, all at once, in the run that
+    removed it (rename-updates-links)."""
+    repo = pathlib.Path(repo)
+    gone = sorted(g for g in set(gone) if g.startswith('tools/checks/'))
+    if not gone:
+        return []
+    pats = []
+    for path in gone:
+        name = pathlib.PurePosixPath(path)
+        # A script or test is named by itself as often as by its path, with
+        # or without its suffix: "check_light_check.py", "check_light_check".
+        alts = [re.escape(path),
+                r'(?<![\w/.-])' + re.escape(name.stem)
+                + r'(?:' + re.escape(name.suffix) + r')?(?![\w-])']
+        pats.append((path, re.compile('|'.join(alts))))
+    out = []
+    for rel in _own_files(repo):
+        if rel in gone:
+            continue
+        try:
+            text = (repo / rel).read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not any(p.search(text) for _, p in pats):
+            continue
+        for n, line in enumerate(text.split('\n'), 1):
+            for path, pat in pats:
+                if pat.search(line):
+                    out.append(f'{rel}:{n} still names {path}, which this sync '
+                               f'removed -- repoint or remove it')
+    return out
+
+
+def _links_to_removed(repo, user_config, removed, check=False, present=None):
+    """Every tracked file outside the generated tree that links to a practice
+    this sync removed, or to one an earlier update removed (`present`, the
+    practices this sync leaves): repointed where the rule's successor is in
+    practices/ now, reported where it is not. -> [report lines].
+
+    An EARLIER removal counts too (2026-10-04). A consumer rehearsal found a
+    hook still linking a practice a shared-set rename had removed weeks
+    before: this report knew only this sync's removals, said nothing, and
+    the push after the update was refused for exactly that link. The report
+    now names every link the full check refuses.
+
+    rename-updates-links asks a rename to repoint every link in the same
+    change; a sync that removes a practice is the same event for the repo
+    that receives it, and until 2026-10-03 it repointed and reported nothing
+    -- open items naming removed practices failed the next Promote."""
+    if not removed and present is None:
+        return []
+    repo = pathlib.Path(repo)
+    gone = set(removed)
+    # Every tracked file, not only Markdown: a hook or a blocklist that names
+    # a removed practice is refused by rename-updates-links too (a
+    # consumer, 2026-10-03). Only Markdown is ever rewritten; anything else
+    # is reported and left as it is.
+    files = _own_files(repo)
+    if present is not None:
+        linked = set()
+        for rel in files:
+            try:
+                linked.update(m.group(2) for m in _PRACTICE_LINK_RE.finditer(
+                    (repo / rel).read_text(encoding='utf-8')))
+            except (OSError, UnicodeDecodeError):
+                continue
+        gone |= linked - set(present)
+    if not gone:
+        return []
+    went = _where_removed_went(repo, user_config, gone)
+    lines = []
+    for rel in files:
+        path = repo / rel
+        try:
+            text = path.read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            continue
+        markdown = rel.endswith('.md')
+        changed = False
+        out_lines = []
+        in_block = False
+        for n, line in enumerate(text.split('\n'), 1):
+            if rel == 'AGENTS.md':
+                if bv.BEGIN_MARKER in line:
+                    in_block = True
+                if in_block:
+                    if bv.END_MARKER in line:
+                        in_block = False
+                    out_lines.append(line)
+                    continue
+            def fix(m):
+                nonlocal changed
+                slug = m.group(2)
+                if slug not in gone:
+                    return m.group(0)
+                succ, why = went.get(slug, (None, ''))
+                if markdown and succ and (repo / 'practices' / f'{succ}.md').is_file():
+                    changed = True
+                    lines.append(f"{rel}:{n}: repointed `{slug}` to `{succ}` ({why})")
+                    return f'{m.group(1)}{succ}.md'
+                lines.append(f"{rel}:{n}: links `{slug}`, which "
+                             + ("this sync removed" if slug in removed else
+                                "is not in practices/ -- an earlier update "
+                                "removed it")
+                             + f" -- {why}. Repoint or remove it")
+                return m.group(0)
+            out_lines.append(_PRACTICE_LINK_RE.sub(fix, line))
+        if changed and not check:
+            path.write_text('\n'.join(out_lines), encoding='utf-8')
+    return lines
+
+
 def main():
     args = sys.argv[1:]
     allow_removals = '--allow-removals' in args
     check = '--check' in args
     allow_missing = '--allow-missing-sources' in args
+    skip_unresolved = '--skip-unresolved' in args
+    allow_rollback = '--allow-rollback' in args
+    rung_only = '--rung-only' in args
     args = [a for a in args if a not in ('--check', '--allow-missing-sources',
-                                         '--allow-removals')]
-    repo, user_config = None, None
-    known = {'--repo', '--user-config'}
+                                         '--allow-removals', '--skip-unresolved',
+                                         '--allow-rollback', '--rung-only')]
+    repo, user_config, for_branch = None, None, None
+    known = {'--repo', '--user-config', '--for-branch'}
     i = 0
     while i < len(args):
         tok = args[i]
@@ -643,6 +1317,8 @@ def main():
             sys.exit(f"precedent_sync_views FAIL: {tok} needs a value.")
         if tok == '--repo':
             repo = args[i + 1]
+        elif tok == '--for-branch':
+            for_branch = args[i + 1]
         else:
             user_config = args[i + 1]
         i += 2
@@ -655,26 +1331,96 @@ def main():
                  "is vendored at the consuming repo's tools/, and produced a "
                  "confident, wrong, hard failure everywhere else.")
 
+    if rung_only:
+        # The push check's own step (precedent_push_check._rung_refusal):
+        # whether each shared set has landed, on this push's rung, the
+        # commit this repository carries it at. No render, no views.
+        if not for_branch:
+            sys.exit("precedent_sync_views FAIL: --rung-only needs --for-branch.")
+        try:
+            sources = [s for s in pr.load_config(repo, user_config)
+                       if not s.get('brought')]
+        except pr.ResolveError as e:
+            print(f"precedent_sync_views --rung-only SKIPPED: {e}")
+            return 0
+        refused = psp.rung_refusals(repo, sources, for_branch)
+        if refused:
+            for line in refused:
+                print(f"  {line}", file=sys.stderr)
+            sys.exit(f"precedent_sync_views --rung-only FAIL: this push would "
+                     f"put {for_branch} ahead of {len(refused)} practice set(s) "
+                     f"it takes from. Nothing was written. Do NOT sync to get "
+                     f"past this.")
+        print(f"precedent_sync_views --rung-only OK: every shared set this "
+              f"repository carries is on its own {for_branch} or above")
+        return 0
+
+    before = {f.stem for f in (pathlib.Path(repo) / 'practices').glob('*.md')}
+    rules_before = {} if check else _checked_rules(repo)
+    tracked_before = set() if check else _tracked_materialized(repo)
     try:
         (written, checks_written, adapters_written, rstats, agents_md,
          changed, tree_drift) = sync(
             repo, user_config, check=check, allow_missing=allow_missing,
-            allow_removals=allow_removals)
+            allow_removals=allow_removals, skip_unresolved=skip_unresolved,
+            for_branch=for_branch, allow_rollback=allow_rollback)
+    except NotVerifiable as e:
+        print(f"precedent_sync_views --check NOT VERIFIABLE: {e}, so whether "
+              f"the generated views are current was not checked. Re-run where "
+              f"that person's individual set resolves.")
+        return 0
     except (pr.ResolveError, pm.MaterializeError) as e:
+        if check and skip_unresolved:
+            # The push check's basic tier asks this where a source may not be
+            # cloned at all (a fresh container, CI): not being able to look
+            # is said, never read as the views being stale.
+            print(f"precedent_sync_views --check SKIPPED: the practice sources "
+                  f"could not be resolved here, so whether the generated views "
+                  f"are current was not checked ({e})")
+            return 0
         sys.exit(f"precedent_sync_views FAIL: {e}")
+    # What this sync takes out of practices/ (or would, under --check), then
+    # the generated views and every link to it -- the same event a rename
+    # is, for the repository receiving it.
+    after = ({w['slug'] for w in written} if check else
+             {f.stem for f in (pathlib.Path(repo) / 'practices').glob('*.md')})
+    removed = before - after
+    view_problems = _refresh_generated_views(repo, check=check)
+    for line in _links_to_removed(repo, user_config, removed, check=check,
+                                  present=after):
+        print(f"precedent_sync_views: {line}", file=sys.stderr)
+    for line in _mentions_of_removed_files(
+            repo, [f for f in tracked_before
+                   if not (pathlib.Path(repo) / f).exists()]):
+        print(f"precedent_sync_views: {line}", file=sys.stderr)
 
     if check:
-        problems = list(tree_drift)
+        rung = [l for l in tree_drift if isinstance(l, RungRefusal)]
+        problems = [l for l in tree_drift
+                    if not isinstance(l, RungRefusal)] + view_problems
+        for line in rung:
+            print(f"  {line}", file=sys.stderr)
+        if rung and not problems and not changed:
+            sys.exit(f"precedent_sync_views --check FAIL: this push would put "
+                     f"{for_branch} ahead of {len(rung)} practice set(s) it "
+                     f"takes from. The generated views are what their sources "
+                     f"produce; the sources are not on that rung yet. Nothing "
+                     f"was written. Do NOT sync to get past this.")
         if changed:
             problems.insert(0, f"{agents_md} is stale or hand-edited, "
                                 f"drifted from a fresh sync")
         if problems:
-            for line in problems:
-                print(f"  {line}", file=sys.stderr)
+            print(findings_block(problems), file=sys.stderr)
             sys.exit(f"precedent_sync_views --check FAIL: "
-                     f"{len(problems)} difference(s) from a fresh sync. "
-                     f"Nothing was written -- re-run without --check to "
-                     f"take the sync, then review the diff.")
+                     f"{len(problems)} difference(s) from a fresh sync: a "
+                     f"practice source this repository declares changed since "
+                     f"its last sync (only one read as it stands -- a shared "
+                     f"set is read at the commit MANIFEST.json records, so its "
+                     f"moving on is never the cause), a change to precedent.json "
+                     f"or to a practice inside this repository not yet synced, "
+                     f"or a generated file edited by hand. Nothing was written. "
+                     f"Fix: python3 tools/precedent_sync_views.py --repo . , "
+                     f"review the diff, commit (it refuses to roll a set back).")
         print(f"precedent_sync_views --check OK: {agents_md} and the "
               f"materialized tree are byte-identical to a fresh sync "
               f"({len(written)} practice(s), {len(checks_written)} check "
@@ -683,6 +1429,10 @@ def main():
               f"~{rstats['tokens']} of {rstats['budget']} token budget)")
         return 0
 
+    for line in view_problems:
+        print(f"precedent_sync_views: {line}", file=sys.stderr)
+    for line in standing_findings_of_arrivals(repo, rules_before):
+        print(f"precedent_sync_views: {line}", file=sys.stderr)
     print(f"precedent_sync_views OK: materialized {len(written)} practice(s), "
           f"{len(checks_written)} check script(s)/test(s) and "
           f"{len(adapters_written)} harness adapter(s), wrote "

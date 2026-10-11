@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""doc_sync -- keep script-generated blocks inside documents in sync (practice: computed-numbers-in-scripts).
+"""Keeps script-generated blocks inside documents in sync with what the script emits
+
+doc_sync -- keep script-generated blocks inside documents in sync (practice: computed-numbers-in-scripts).
 
 The failure mode this kills: a script that computes numbers (a model, a cost
 rollup) changes, and a document quoting those numbers silently keeps the old
@@ -52,7 +54,9 @@ import importlib.util
 import io
 import re
 import subprocess
+import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -562,7 +566,78 @@ def fact_holds(f, code, have):
 
 
 def make_fact(doc, name, script, code, want, reads):
-    return _led().make(doc, name, script, code, want, reads)
+    secs = EMIT_SECS.get((script, name))
+    extra = {"secs": round(secs, 1)} if secs is not None else {}
+    return _led().make(doc, name, script, code, want, reads, **extra)
+
+
+# How long each block's emit took this run, kept in its fact as `secs` so the
+# next run can say what it is about to cost before it starts (practice:
+# slow-steps-report-and-cache). A batch's time is shared among its blocks.
+EMIT_SECS = {}
+
+
+def _timed(fn, args):
+    t = time.time()
+    res = fn(*args)
+    took = time.time() - t
+    if fn is emit_batch:
+        names = list(res)
+        for n in names:
+            EMIT_SECS[(args[0], n)] = took / max(len(names), 1)
+    else:
+        EMIT_SECS[args] = took
+    return res
+
+
+def _solve_history():
+    """{memo file name prefix: seconds} from the shared result cache's lease
+    board history ("solve finished: NAME in N s"), read from the local
+    remote-tracking ref only -- never a fetch, so pricing a run costs nothing."""
+    import re as _re
+    try:
+        r = subprocess.run(["git", "-C", str(ROOT), "log", "--format=%s", "origin/coord"],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    out = {}
+    for line in r.stdout.splitlines():
+        m = _re.search(r"solve finished: (\S+) in (\d+) s", line)
+        if m:
+            out.setdefault(m.group(1), float(m.group(2)))
+    return out
+
+
+def plan_line(pairs, ledger, jobs):
+    """What this run is about to emit and, from the times its facts recorded,
+    roughly what it will cost -- printed before the first emit, so a session
+    can stop and propose a long run instead of starting it (Alex,
+    2026-10-08, decided: a quick estimate of how long a task should take,
+    and reconsidering it before investing the time)."""
+    known, unknown, slow = 0.0, 0, []
+    history = _solve_history()
+    for doc, name, script in pairs:
+        secs = [f.get("secs") for f in ledger.get((doc, name), []) if f.get("secs") is not None]
+        if not secs:
+            hist = [t for memo, t in history.items() if memo.startswith(name + "_")]
+            secs = hist[:1]
+        if secs:
+            known += secs[-1]
+            slow.append((secs[-1], script))
+        else:
+            unknown += 1
+    scripts = len({s for _, _, s in pairs})
+    slow = sorted({sc: t for t, sc in slow}.items(), key=lambda kv: -kv[1])[:3]
+    est = known / max(jobs, 1)
+    if slow:
+        est = max(est, slow[0][1])
+    line = (f"[doc_sync] plan: {len(pairs)} block(s) to emit from {scripts} script(s)"
+            + (f"; the {len(pairs) - unknown} with a recorded time took {known / 60:.1f} min of "
+               f"compute, about {est / 60:.1f} min on {jobs} at once" if len(pairs) > unknown else "")
+            + (f"; {unknown} with no recorded time" if unknown else "")
+            + (f"; slowest: " + ", ".join(f"{Path(sc).name} {t / 60:.1f} min" for sc, t in slow)
+               if slow else ""))
+    return line
 
 
 def block_re(name):
@@ -582,7 +657,20 @@ import threading as _threading
 _PROCS_LOCK = _threading.Lock()
 
 
+# EACH EMIT'S SHARE OF THE MACHINE (2026-10-08). The gate runs several
+# emits at once, and a model that runs its own worker pool sized to the
+# machine then competes with every other emit's pool: on a 4-core consumer,
+# three cast models of 4 workers each plus a fourth solve made 13 runnable
+# processes, and solves recorded at 2-8 minutes ran past an hour. Every emit
+# is told its share in EMIT_WORKERS (cores divided by the emits in flight,
+# at least 1); a model sizes its pool from it, never from the core count.
+EMIT_WORKERS_ENV = "EMIT_WORKERS"
+_IN_FLIGHT = [1]
+
+
 def _run(argv, env=None):
+    env = dict(env if env is not None else os.environ)
+    env[EMIT_WORKERS_ENV] = str(max(1, (os.cpu_count() or 1) // max(_IN_FLIGHT[0], 1)))
     if _ABORTED:
         # a failure already stopped the gate: a queued emit never starts
         return subprocess.CompletedProcess(argv, -9, "", "skipped: the gate stopped at an earlier failure")
@@ -745,14 +833,15 @@ def emit_all(pairs, jobs=None):
             return {(args[0], n): t for n, t in res.items()}
         return {args: res}
     jobs = jobs or int(os.environ.get("DOC_SYNC_JOBS", "0") or 0) or os.cpu_count() or 1
+    _IN_FLIGHT[0] = max(1, min(jobs, len(tasks)))
     out = {}
     if jobs <= 1 or len(tasks) <= 1:
         for fn, args in tasks:
-            out.update(collect(fn, args, fn(*args)))
+            out.update(collect(fn, args, _timed(fn, args)))
         return out
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     try:
-        futs = {ex.submit(fn, *args): (fn, args) for fn, args in tasks}
+        futs = {ex.submit(_timed, fn, args): (fn, args) for fn, args in tasks}
         for f in concurrent.futures.as_completed(futs):
             fn, args = futs[f]
             try:
@@ -862,7 +951,11 @@ def main():
               f"last check ({time.time() - t0:.1f} s); emitting {len(pairs) - len(held)}"
               + (" (--full)" if FULL else ""), file=sys.stderr)
     recorded = False
-    wants = emit_all([(d, n, s) for d, n, s in pairs if (ROOT / d).is_file() and (d, n) not in held])
+    to_emit = [(d, n, s) for d, n, s in pairs if (ROOT / d).is_file() and (d, n) not in held]
+    if to_emit:
+        jobs = int(os.environ.get("DOC_SYNC_JOBS", "0") or 0) or os.cpu_count() or 1
+        print(plan_line(to_emit, ledger if LEDGER else {}, jobs), file=sys.stderr, flush=True)
+    wants = emit_all(to_emit)
     for doc, name, script in pairs:
         if (doc, name) in held:
             print(f"[doc_sync] OK    {doc} [{name}] (ledger)")

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_identity.py — who this repository's commits belong to.
+"""Resolves WHO this repo's commits belong to, from a declaration only -- an override, the repo's own identity.json, or the individual source's; raises rather than guessing
+
+precedent_identity.py — who this repository's commits belong to.
 
 WHY THIS IS ITS OWN MODULE, and not part of precedent_resolve.py where it
 was born (2026-09-10, moved the same day it landed).
@@ -119,6 +121,9 @@ def declared_identity(repo, user_config=None):
         return {'name': ident.get('name') or '',
                 'email': ident['email'],
                 'timezone': ident.get('timezone') or '',
+                # The person's GitHub username, which is what a CODEOWNERS
+                # file names (precedent_audience.py, 2026-10-05).
+                'github': ident.get('github') or '',
                 'source': where}
 
     repo_root = pathlib.Path(repo).resolve()
@@ -146,6 +151,11 @@ def declared_identity(repo, user_config=None):
     if env_email:
         return {'name': os.environ.get('PRECEDENT_COMMIT_NAME') or '',
                 'email': env_email,
+                # Like the zone: the override names the person, and their
+                # username is their own declaration (2026-10-05).
+                'github': (os.environ.get('PRECEDENT_GITHUB_USER')
+                           or (own or {}).get('github')
+                           or (indiv or {}).get('github') or ''),
                 'timezone': (os.environ.get('PRECEDENT_COMMIT_TZ')
                              or (own or {}).get('timezone')
                              or (indiv or {}).get('timezone') or ''),
@@ -236,9 +246,9 @@ def commit_env(repo, env=None):
     return out
 
 
-# practice: relayed-authorization -- the receiving session reads the
-# person's own declaration rather than trusting the message that carries
-# the authorization.
+# The relayed-authorization rule (the ladder set carries it): the receiving
+# session reads the person's own declaration rather than trusting the
+# message that carries the authorization.
 RELAY_ACCEPTED = 'accepted'
 
 
@@ -418,7 +428,7 @@ def _main(argv):
     except NoDeclaredIdentity as exc:
         print(f'UNDECLARED -- {exc}')
         print('  a relayed authorization is NOT actionable here '
-              '(practice: relayed-authorization)')
+              '(the person\'s own identity.json does not accept relays)')
         return 2
     if relay['accepted']:
         print(f'ACCEPTED -- {relay["who"] or "the declared person"} accepts an '

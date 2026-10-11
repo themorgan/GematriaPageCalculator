@@ -14,6 +14,7 @@ defines:     ["very deep check"]
 command:     {"Very deep check": "Run a full review of the whole project — slow, occasional, and worth it before showing the work to someone new."}
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       null
@@ -25,7 +26,7 @@ When a person explicitly asks for a "very deep check", run
 passes in Detail, in that order. The tool enumerates the scope — this
 checkout's own top-level documents, plus the `practices/*.md` tree of every
 source in force, resolved exactly the way
-[tools/precedent_resolve.py](../tools/precedent_resolve.py) resolves them for
+[tools/precedent_resolve.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_resolve.py) resolves them for
 ordinary loading — and points at the passes (`--checklist` prints them in
 full); reading and judging that scope is
 the session's work, and is nearly the whole cost of this check. Never wired
@@ -57,8 +58,7 @@ run on each repo's current copy, never on a side branch. One read reaches
 further on purpose and reports without fixing: the CI fleet audit reads the
 workflow files on branches pushed in the last seven days, because GitHub
 runs a pushed branch's own workflows (Morgan, 2026-09-29, strength:
-decided). The tier checks never read other
-branches at all ([checks-follow-the-tier](checks-follow-the-tier.md)).
+decided).
 
 **A repo that needs a handoff stays in scope, deliberately.** Dropping it
 would lose every finding in the seam between it and a repo still in scope,
@@ -102,7 +102,7 @@ one pull request is two whole minutes for however little work. Added
 [spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md](https://github.com/alex137/BestPractice/blob/staging/spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md)
 item 7.
 
-**It ends with a review page for the person, shown in the session only.**
+**It ends with a review page for the person, published as an Artifact.**
 Every run writes one page with three lists: **every branch the person can
 delete**, in this checkout and every source, each with a link that opens
 GitHub's branch list filtered to it; **every active practice, by
@@ -122,14 +122,19 @@ does not list, for the session to list or to say why each is not generated.
 [tools/precedent_review_page.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_review_page.py)
 writes it under `.precedent/`, which git ignores, and the run's PRACTICE
 CATALOGUE section calls it. Add the unlanded branches you judged safe to
-delete, each with its reason, through `--recommend`. **Publish the page in
-the session only** (an Artifact, where the harness has one) **and never
-commit it, push it, or link it from a repository**: it carries the private
-sets' practice text in full, which is the point of it. Nothing about the
+delete, each with its reason, through `--recommend`. **Publish the page as
+an Artifact, every run** -- the harness's Artifact tool, which keeps it
+private to the person -- **never as an HTML file** attached to the reply or
+sent with a file tool, **and never commit it, push it, or link it from a
+repository**: it carries the private sets' practice text in full, which is
+the point of it. Read the whole page before publishing it, as with any file
+the session did not write. A harness with no Artifact tool says so in the
+reply and names the file's path; that is the only time the file itself is
+handed over. Nothing about the
 practice catalogue is written into [spec/VERY_DEEP_CHECK.md](https://github.com/alex137/BestPractice/blob/staging/spec/VERY_DEEP_CHECK.md)
 any more; the run's write-up links the page in the reply, not in a file.
 
-Morgan, 2026-09-28 (strength: decided, "Go update"): *"do NOT put the list
+Morgan, 2026-09-28 (strength: decided): *"do NOT put the list
 of practices in the very deep check, and you can remove it now; BUT make an
 artifact (NOT linked to from the github page), that [1] lists all those
 branches I can delete, including a link I can click on for each and then
@@ -138,21 +143,21 @@ individual, then the shared ones I have access to."* It replaced the
 committed catalogue (added 2026-09-23), which a public repo had to hold the
 private sets back from, so he never got the list he asked for.
 
-**Read `main`, write through the landing branch.** The check judges the
+**Read `main`, write through the normal process.** The check judges the
 version people are actually running, which is `main`: in every repo in
 force, the run reads a working branch cut from `origin/main` (cut one if
 the harness checked out something else). It changes nothing there
 directly. Every fix is committed on that working branch and lands the
-ordinary way, Booked (`Go update`) onto the person's landing branch and a Promote
-from there, never pushed to `main`. **Reading `main` alone would re-find
-what is already fixed and waiting to be promoted**, so the tool's
+ordinary way, with the person's go-ahead, on the branch the person's work
+lands on. **Where that branch is not `main`, reading `main` alone would
+re-find what is already fixed and not live yet**, so the tool's
 `LIVE VERSUS LANDING` section names, per repo, the files the landing
 branch carries that are not live yet; before fixing a finding in one of
 them, check whether the landing branch already did. Morgan, 2026-09-28
 (strength: decided): *"it's better to do a deep check on the live version
 (main), but we don't want to edit it, to edit it we should use the normal
-process."* Until then a run read whatever the harness checked out --
-`main` in one repo and `pre-staging` in four others, the same afternoon.
+process."* Until then a run read whatever the harness checked out, which
+was not the same branch in every repo the same afternoon.
 
 **Before anything is read, every repo in force must be provably current
 against its origin, and must still be a repository work can land in** — this checkout and every attached source.
@@ -182,6 +187,18 @@ ever land in. Ask with a credential or not at all: unauthenticated, a
 private repository and a deleted one both answer *Not Found*, so the run
 must say it learned nothing rather than report a repo as gone.
 
+**A declared set that is RETIRED is reported in its own section, RETIRED
+SETS**, for this checkout and every source in force: one that says so in
+its `precedent-source.json`, or that the liveness call above found
+archived. A set whose active rules are all in force elsewhere is a finding
+with its one remedy, `python3 tools/precedent_vendor_engine.py drop-retired
+.`, run in that repo on its working branch; one still holding a rule found
+nowhere else is a finding that names the rule, and stays declared. *Not
+Found* never counts as retired. Morgan, 2026-10-06 (strength: decided):
+*"have update vendors and very deep check see if any repos are declared to
+be included that no longer exist and remove them"*, choosing to drop on a
+set's own retirement or GitHub's archived flag, and never on *Not Found*.
+
 **Current is not the same as CARRIED either, and that is the half nothing
 else here could see.** The freshness gate proves a clone matches **its own
 origin**. A repo can be perfectly current with itself and be running an
@@ -199,8 +216,7 @@ where upstream is now, and how many engine files were added, changed or
 refresh is the one that breaks something. **It reports and refreshes
 nothing**: taking an update is `Update Vendors`, run in that repo, and it is
 ordinary work authorized the ordinary way. **Scope is the repos this run
-already opens**; the fleet version of the same question is
-[chief-of-staff](chief-of-staff.md)'s. Added 2026-09-21 (Morgan, strength:
+already opens.** Added 2026-09-21 (Morgan, strength:
 decided) from
 [spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md](https://github.com/alex137/BestPractice/blob/staging/spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md)
 item 3.
@@ -279,17 +295,16 @@ were written after one expensive incident they exist to prevent. Quiet is
 also not the same as unmeasurable — a section that could not produce a count
 is reported separately and is never graded as clean.
 
-**A tier branch is never offered for deletion, by any list this check
-prints or writes** — `pre-staging`, `staging`, `main`, staging's old name
-`precedent-beta-v01`, and Promote's lock branch, in every repo in force,
-merged or not. Every Promote fast-forwards the lower tiers, so an ancestor
-test calls them "merged" right after one; until 2026-09-28 the sweep
+**A long-lived branch work lands on is never offered for deletion, by any
+list this check prints or writes** — `main`, the declared base branch, any
+branch a person's work lands on, and the lock branch a tool keeps, in every
+repo in force, merged or not. A branch that is routinely fast-forwarded to
+match another looks "merged" to an ancestor test; until 2026-09-28 the sweep
 protected only the declared base and the default branch, and would have
-handed both `pre-staging` and `precedent-beta-v01` over with a one-click
-delete link. Morgan, 2026-09-28 (strength: decided): *"it needs to never
-never offer to delete pre-staging nor staging."* The guard sits in the one
-function that mints every delete link, and a filtered page that would also
-show a tier row says so on the row.
+handed such a branch over with a one-click delete link (Morgan, 2026-09-28,
+strength: decided). The guard sits in the one function that mints every
+delete link, and a filtered page that would also show a protected row says
+so on the row.
 
 **When the branch this repo works on is not its base branch, the run reads
 the base branch too — and reports it, never applies it.** Work pinned to a
@@ -372,7 +387,10 @@ cannot tell a drift this run introduced from one that was there before. So:
    [tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py)'s
    `PLANTED CASE COVERAGE` section says on every run whether this invocation
    did it or still owes it; `--with-harness` runs it from inside the tool
-   and records the result in the ledger like any other section. Added
+   and records the result in the ledger like any other section. Typed by
+   hand it needs `--because 'very deep check'`: since 2026-10-07 a full run
+   refuses without the person's go-ahead, and asking for this check by name
+   is that go-ahead. Added
    2026-09-21 (Morgan, strength: decided) from
    [spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md](https://github.com/alex137/BestPractice/blob/staging/spec/VERY_DEEP_CHECK_DEEPENING_PROPOSAL.md)
    item 11.
@@ -718,7 +736,7 @@ confidently.
    the other. Vendoring is the deliberate exception: the engine is copied
    into consuming repos on purpose, so the question there is whether every
    copy came from
-   [tools/precedent_vendor_engine.py](../tools/precedent_vendor_engine.py)
+   [tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py)
    with a recorded commit, never whether a copy exists. *(Found: this
    practice's own checklist, living both in the Detail section below and as
    a `CHECKLIST` string literal inside
@@ -884,7 +902,7 @@ confidently.
     or never registered there at all — then read each practice's `checked_by`
     against that result. A `checked_by` naming a check that never runs in the
     repo holding it is a coverage claim nobody tested, which is the state
-    [tools/precedent_check.py](../tools/precedent_check.py)'s own header says
+    [tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py)'s own header says
     the module exists to end.
 
     **What comes out is a coverage report, not a deletion list**, and the
@@ -1336,7 +1354,7 @@ first so this pass spends its attention on what they cannot see.
   and a skeleton file does not read as a document making claims.)*
 - **Broken and misdirected references** — the mechanical half is the
   **MARKDOWN — STRICT SWEEP** section, which runs
-  [tools/doc_lint.py](../tools/doc_lint.py) `--strict --all` over every
+  [tools/doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py) `--strict --all` over every
   tracked document and hands you per-class and per-file counts. **Strict is
   the point, and this is its only caller.** The light check reads what a
   change touched and the deep check gates on that; neither ever opens a file
@@ -1397,8 +1415,8 @@ first so this pass spends its attention on what they cannot see.
   and `check_park_it.py` fails if the "Drop it" paragraph goes missing — so
   check where a keyword IS defined before calling it undefined. (An early
   "don't put it in the glossary", Morgan 2026-09-08, was later read
-  narrowly; park-it's Story records why, and "Drop it" and "Go update" are
-  in the glossary now.)
+  narrowly; park-it's Story records why, and "Drop it" is in the glossary
+  now.)
 - **What every session loads, and what it costs.** The rule is
   [session-load-budget](session-load-budget.md) — every always-loaded surface
   carries a declared ceiling in
@@ -1472,13 +1490,13 @@ first so this pass spends its attention on what they cannot see.
 - **Whether each practice's TIER is still right.** The question above asks
   what the loaded text costs; this one asks which practices should be in it
   at all, and nothing else in Precedent ever asks it. `tier: resident` is
-  governed only by [tools/build_views.py](../tools/build_views.py)'s hard
+  governed only by [tools/build_views.py](https://github.com/alex137/BestPractice/blob/staging/tools/build_views.py)'s hard
   2,000-token cap, which fails the build outright — so the trade is forced
   once, at the moment somebody adds a resident practice, and the set is never
   revisited afterwards. Read it in both directions. **Demote** a resident
   practice whose occasions turn out to be narrow enough that the path or
-  occasion channel would reach them. **Promote** an on-demand practice that
-  keeps being missed, which is the failure the tiering exists to prevent: an
+  occasion channel would reach them. **Make resident** an on-demand practice
+  that keeps being missed, which is the failure the tiering exists to prevent: an
   on-demand practice only reaches a session that thought to ask for it.
   **Judge the occasions, not the token count** — a demotion made to free
   budget is the SESSION LOAD trap one level up.
@@ -1747,7 +1765,7 @@ Last because none of it strands an adopter, and none of it is cheap.
   read every mechanism in force — a tool, a workflow, a vendored tree, a
   config — against whether anything still calls it, and where it plainly
   does not, run
-  [tools/precedent_decommission.py](../tools/precedent_decommission.py) on
+  [tools/precedent_decommission.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_decommission.py) on
   the path and act on a clean report exactly as
   [decommission-deletes-files](decommission-deletes-files.md) already
   requires for a deliberate decommissioning. **Where the audit is not
@@ -1827,10 +1845,8 @@ Last because none of it strands an adopter, and none of it is cheap.
   (`git merge-base --is-ancestor`), true whether or not GitHub's own
   "merged" flag is set, which it is not for a repo that lands pull requests
   (PRs) by direct push rather than the merge button. Apply the
-  branch-cleanup method an individual practice set may already define (one
-  real individual set names this in its own `next-steps-after-commit`
-  practice; the repo is private, so this names the practice rather than
-  linking a page most readers cannot open): skip the repo's default branch
+  branch-cleanup method [the-boildown](the-boildown.md) carries for every
+  reply (it took the place of an individual set's own rule): skip the repo's default branch
   and its protected integration branch, and report each remaining one with
   a one-click delete link. **The link form, the encoding, the substring
   check and the separated unmerged list are
@@ -1842,9 +1858,9 @@ Last because none of it strands an adopter, and none of it is cheap.
 
   **This sweep stays inside the repos this check already reads — the
   checkout and the sources that are their own git checkouts — and is never
-  widened to every Precedent repo the person owns.** That fleet sweep is
-  [chief-of-staff](chief-of-staff.md)'s, placed there by Morgan on
-  2026-09-21 with the reasoning worth keeping: branch hygiene is per-repo
+  widened to every Precedent repo the person owns.** Morgan kept the fleet
+  sweep out of this check on 2026-09-21, with the reasoning worth keeping:
+  branch hygiene is per-repo
   bookkeeping, not a finding in the seam between two repos, which is the
   class this check exists for. Widening it here would duplicate that
   practice and make an already expensive check more expensive for no new
@@ -1967,16 +1983,6 @@ Last because none of it strands an adopter, and none of it is cheap.
 
 - **What landed on the base branch and never came across.** The cheap half
   of the same relationship the rehearsal below tests, asked much earlier.
-  **Where the repo has branch tiers it asks it of every pair**: what
-  `staging` and `main` carry that `pre-staging` never took, and what `main`
-  carries that `staging` never took — work lands on `pre-staging` now, so
-  the old single question (the declared base against the default branch)
-  was looking one tier too high. A row on a pair into `pre-staging` is not a
-  choice to put to the person: everything above belongs below, and
-  `python3 tools/precedent_branches.py --sync-pre-staging` (which a Promote
-  runs first anyway) brings it down. A row nobody wants is a revert owed on
-  the upper branch. Added 2026-09-28 (Morgan, strength: decided, "Go
-  update").
   Runs only where the branch this repo works on is not its base branch —
   where they are the same branch there is nothing to drift from, and the
   section is recorded as skipped for that reason rather than as clean.
@@ -2003,21 +2009,18 @@ Last because none of it strands an adopter, and none of it is cheap.
   run record, with its reason.
 
   **A repo that also keeps a carry watermark reads both.** This one did
-  until 2026-09-27, when its upstream-carry notice was retired: main takes
-  all its work from staging by Promote now, and the drift check in `tools/precedent_branches.py` answers by files what the
-  watermark answered by commits. A watermark answers "has the base moved
-  since somebody last carried from it"; this answers "what, specifically,
-  has never come across", which is the thing a person can decide about. The
-  first can read *current* while the second has rows, because a carry
-  records the point it reached, not that everything behind it was taken.
+  until 2026-09-27, when its upstream-carry notice was retired, and the
+  drift check in [tools/precedent_branches.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_branches.py)
+  answers by files what the watermark answered by commits. A watermark
+  answers "has the base moved since somebody last carried from it"; this
+  answers "what, specifically, has never come across", which is the thing
+  a person can decide about. The first can read *current* while the second
+  has rows, because a carry records the point it reached, not that
+  everything behind it was taken.
 
 - **The endgame merge, rehearsed against the whole tree.** A repo whose work
   is pinned to an integration branch is aimed at a merge it has not yet
-  performed — this repo's fold-in of `staging` into `main` was the first
-  case — and **with branch tiers it is every merge a Promote makes**:
-  `pre-staging` into `staging`, then `staging` into `main`, each rehearsed
-  in that order (since 2026-09-28; before then only the second was, and the
-  first is the one that happens every day). Rehearse them here, every run:
+  performed. Rehearse it here, every run:
   [tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py) merges the
   integration branch into its base in a throwaway worktree, commits nothing,
   and reports **two sets, separately**. *Conflicting paths* are loud, and
@@ -2045,10 +2048,10 @@ Last because none of it strands an adopter, and none of it is cheap.
   person will catch.
 
 ## Why
-The mechanical audits ([doc_lint.py](../tools/doc_lint.py),
+The mechanical audits ([doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py),
 [leak_gate.py](https://github.com/alex137/BestPractice/blob/staging/tools/leak_gate.py),
-[precedent_check.py](../tools/precedent_check.py),
-[doc_sync.py](../tools/doc_sync.py)) catch broken links, bad syntax, and enforcement drift; the
+[precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py),
+[doc_sync.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_sync.py)) catch broken links, bad syntax, and enforcement drift; the
 routing audit catches a practice that should have fired and didn't. None of
 them reads a document's own argument for whether it still makes sense, and
 none of them can ask whether a check is checking the right thing — a check
@@ -2397,7 +2400,7 @@ this tool's own freshness gate** with *"could not read Username for
 `https://github.com`"*, and the run refused to read a line. The token was
 fine. The tool's `_run_git` shelled out to plain `git`, while the
 credential lives behind a helper only
-[tools/precedent_source_bootstrap.py](../tools/precedent_source_bootstrap.py)
+[tools/precedent_source_bootstrap.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_source_bootstrap.py)
 was passing — so a source could be **cloned** at session start and then not
 **fetched** by the check that reads it.
 
@@ -2476,7 +2479,7 @@ that morning, in the conversation that took the markdown check out of CI:
 *"remove all markdown checks in the yml github actions check (but we
 should use the strict markdown in our own that we do)."* The removal
 landed; the parenthesis did not, until now.
-[doc_lint.py](../tools/doc_lint.py)'s warning classes had been gated
+[doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py)'s warning classes had been gated
 nowhere since the strict gate was withdrawn that same day — the right call for a
 commit gate, and it left the classes with no reader at all, because the
 light check only ever sees what a change touched. A sweep is the one
@@ -2484,7 +2487,7 @@ context where a wall of pre-existing warnings is the thing being asked for
 rather than an obstacle to the work in hand.
 
 Building it surfaced two things worth recording. **`--strict` did not
-exist, and nothing said so**: [doc_lint.py](../tools/doc_lint.py) ignored
+exist, and nothing said so**: [doc_lint.py](https://github.com/alex137/BestPractice/blob/staging/tools/doc_lint.py) ignored
 unknown options silently, so [documentation/GITHUB_ACTIONS.md](https://github.com/alex137/BestPractice/blob/staging/documentation/GITHUB_ACTIONS.md)
 had been telling adopters to run `doc_lint.py --strict <files>` as their
 by-hand markdown check — an instruction added by the very commit that
@@ -2620,12 +2623,16 @@ it landed and still unreviewed.
 - **Extended 2026-09-29, Morgan (strength: decided)**, so a renamed repository is found wherever it is named -- every tracked file in this checkout and in every source, not only the always-loaded instructions files -- and fixed in the run: the clone's remote repointed and every current reference rewritten, history left as written. Asked as a question first ("does Very Deep Check do a check to see if any called repos are redirected ... add that to VDC if it doesn't"); it reported renames in two places and fixed none.
 - **Extended 2026-09-29, Morgan (strength: decided)**, with the GENERATED FILES lines: the reverse search for a file a tool writes that the new list of generated files does not name. Asked as a question ("does bestpractice maintain a list of all files that are auto-generated ... Is this checked in VDC and/or should it be?"); there was no single list, and todo/TODO.md had gone out of date with nothing checking it.
 - **Extended 2026-10-01, Morgan (strength: decided)**, so Pass 3 measures every always-loaded surface against its target as well as its ceiling, and over target runs a reduction pass with its practice-by-practice review of the occasion index and resident block -- "this reduction pass is great; if it's not part of Very Deep Check, it absolutely should be." -- after the first such review found about 1,040 tokens of room that the menu's lossless moves could not. The SESSION LOAD section prints an OVER TARGET finding for it.
+- **Rewritten 2026-10-02, Morgan (strength: decided)**, so the branch sweep and its tiers are described without the ladder's words, which now belong to a set a person brings (spec/LADDER_OPT_IN_PLAN.md). That set carried a full copy, same slug, until 2026-10-06; since then it adds to this practice in one of its own and repeats none of it ([no-duplication](no-duplication.md)), so a change here is made here only.
+
+- **Extended 2026-10-06, Morgan (strength: decided)**, with the RETIRED SETS section: a declared set that says it is retired, or that GitHub reports archived, is reported with the command that drops it, and Update Vendors drops it on its own -- only when no active rule would be lost, and never on "Not Found". He chose that option ("C") from three put to him.
+- **Extended 2026-10-06, Morgan (strength: decided)**, so the review page is always published as an Artifact and never handed over as an HTML file, after a run sent it as an attached file: "That HTML doc - give me that info as an artifact - and update very deep check so that in the future, that is always an artifact, not a HTML file." Both tools that write or announce the page now say so in what they print.
 
 ## Install
 [tools/very_deep_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/very_deep_check.py) enumerates the scope
 (this checkout's own top-level documents plus every active source's
 `practices/*.md` tree, reusing
-[tools/precedent_resolve.py](../tools/precedent_resolve.py)'s own source
+[tools/precedent_resolve.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_resolve.py)'s own source
 resolution) and prints this practice's Detail section — read from this file
 at run time rather than kept as a second copy
 inside the script, so the passes the tool prints cannot drift from the

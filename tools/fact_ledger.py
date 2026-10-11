@@ -1,4 +1,6 @@
-"""fact_ledger -- verified facts that let a gate skip work that cannot have
+"""Verified facts (code fingerprint, recorded reads, result) that let a drift gate or an audit skip a unit whose fact still holds
+
+fact_ledger -- verified facts that let a gate skip work that cannot have
 changed (practice: slow-steps-report-and-cache).
 
 A gate that re-runs a script to prove its output still matches spends most
@@ -239,6 +241,43 @@ def sha(data):
     return content_record.digest(data, 16)
 
 
+# A caller that runs gates and must tell the facts they cached from real work
+# (precedent_push_check.py, which records a pass only over a clean tree) names
+# a file in this variable; every ledger saved under it appends its absolute
+# path there. A ledger only caches facts that verify themselves (a stale line
+# costs a re-run, never a skipped unit), so a run that refreshed one has
+# changed no verdict, and the caller may record its pass for the commit.
+WRITTEN_ENV = "FACT_LEDGER_WRITTEN"
+
+
+def note_written(path):
+    """Append `path` to the file WRITTEN_ENV names, if any. Never raises."""
+    out = os.environ.get(WRITTEN_ENV)
+    if not out:
+        return
+    try:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(str(Path(path).resolve()) + "\n")
+    except OSError:
+        pass
+
+
+# The repository's own .git entry is a directory in a clone and a file in a
+# worktree, so an existence probe of it (git discovery, a ROOT/".git" test)
+# records how the repository was checked out, not anything the work read.
+# Recorded, it made every fact taken in a landing worktree fail in every
+# clone, and the reverse: a full re-run and a rewritten ledger each time
+# (found 2026-10-07, a consuming repo's model audit re-running all 70 of its
+# scripts inside the full check). The git state work can see is kind "g".
+def checkout_layout(rel):
+    """True for a read of the repository's own .git entry."""
+    return rel == ".git"
+
+
+def _kept(reads):
+    return [r for r in reads if not checkout_layout(r[1])]
+
+
 class Ledger:
     def __init__(self, root, path=None, reach_dirs=(), ignore=()):
         self.root = Path(root)
@@ -354,6 +393,7 @@ class Ledger:
         lines = [json.dumps(self.facts[k][-1], sort_keys=True, separators=(",", ":"))
                  for k in sorted(self.facts)]
         (self.root / self.path).write_text("".join(ln + "\n" for ln in lines))
+        note_written(self.root / self.path)
 
     def holds(self, f, code, out=None):
         """A fact holds when its code, every read, and (when given) the
@@ -365,7 +405,7 @@ class Ledger:
         """The fact was taken under this hook and every read it recorded
         still has the content the work saw."""
         return (f.get("hook") == HOOK_VERSION and f.get("reads") is not None
-                and content_record.Record(f["reads"]).holds(self.reader, self.ignore)[0])
+                and content_record.Record(_kept(f["reads"])).holds(self.reader, self.ignore)[0])
 
     def find(self, scope, name, code, out=None):
         """The holding fact for (scope, name), or None."""
@@ -379,7 +419,7 @@ class Ledger:
         # each read carries the content the work saw (hashed by the hook at
         # the time), never the content at recording time
         keep = {}
-        for r in reads:
+        for r in _kept(reads):
             kind, rel, sig = r if len(r) == 3 else (r[0], r[1], None)
             if kind == "m" and rel in covered:
                 continue

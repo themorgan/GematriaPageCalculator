@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""frontmatter_yaml.py -- shared real-YAML frontmatter check, called from
+"""The real-YAML frontmatter parser doc_lint.py and verify_harness.py both check against, shared so the two never drift
+
+frontmatter_yaml.py -- shared real-YAML frontmatter check, called from
 both tools/verify_harness.py (check_frontmatter_is_real_yaml, deep check)
 and tools/doc_lint.py (light check, gated on touched files: (practice:
 two-check-levels), whose Install section folds a repo's own JSON/YAML
@@ -12,6 +14,19 @@ frontmatter fields, and the fixer that puts a file into it:
 
     python3 tools/frontmatter_yaml.py --fix-order [PATH ...]
     python3 tools/frontmatter_yaml.py --check-order [PATH ...]
+    python3 tools/frontmatter_yaml.py --fix-staged
+
+`--fix-staged` is what the engine's commit hook runs, so the order is kept
+rather than checked after the fact (2026-10-05: the field-order check sat
+warning-only for nine days waiting for a fixer nothing ever ran). It never
+refuses a commit, and it touches a staged practices/*.md file only when all
+of these hold: the repository declares itself a practice source (its own
+precedent-source.json), another source does not own the file, the working
+copy is exactly what is staged (rewriting and re-staging a partly staged
+file would pull unstaged edits into the commit -- practice:
+repair-cannot-discard-work), and the file carries no field this copy of the
+engine does not know (an older copy would push a newer field to the end).
+Anything it leaves alone is left to the check.
 
 With no PATH both cover this repo's own practices/*.md, leaving out any a
 committed MANIFEST.json says another source owns (those are copies, fixed
@@ -77,6 +92,10 @@ FIELD_ORDER = (
     'title',
     'tier',
     'severity',
+    # How binding the practice is, and who set that: absent means Protocol
+    # (tools/practice_standing.py; spec/PRACTICE_STANDING_AND_RECHECK_PLAN.md).
+    'standing',
+    'standing_by',
     'scope',
     'applies_to',
     # Why applies_to is what it is -- moved here from tools/routing_scope.json
@@ -89,13 +108,29 @@ FIELD_ORDER = (
     'index_required',
     'checked_by',
     'ships',
+    # A Claude Code hook the practice needs wired, running a file it ships
+    # (build_views.practice_hooks; precedent_sync_views.py adds it).
+    'hooks',
     'defines',
+    # The documents a practice exists to uphold -- a risk register, a
+    # policy page -- as paths or links. Informational: no engine reads it.
+    # A project repository used it before the spec listed it, and every
+    # check warned (2026-10-06).
+    'upholds',
     'command',
     'status',
     'in_force_at',
     'expires',
+    'requires',
+    # Who a session shows the practice to: absent for everyone, `code-owners`
+    # for the repository's code owners only (tools/precedent_audience.py).
+    'visible_to',
     'supersedes',
     'overrides',
+    # The rule this practice adds to, by slug: it loads with that rule and
+    # takes no occasion-index line of its own (build_views.ADDS_TO_FIELD;
+    # Morgan, 2026-10-09).
+    'adds_to',
     'added',
     'approved_by',
     'strength',
@@ -145,12 +180,42 @@ def _rank(key):
     return FIELD_ORDER.index(key) if key in FIELD_ORDER else len(FIELD_ORDER)
 
 
-def unlisted_fields(text):
-    """Frontmatter keys in TEXT that FIELD_ORDER does not list."""
+# A REPOSITORY MAY DECLARE FIELDS OF ITS OWN (2026-10-06). precedent.json's
+# `own_frontmatter_fields` lists frontmatter keys this repository's own
+# tooling reads, so its practices may carry them without a warning on every
+# run. Reported from a consumer: nine of its repo-local practices carry a
+# field its own check reads, and once unlisted fields warned again they
+# warned on every run, for ever, with no way to say the field was meant.
+# Declared fields sort after every field the spec lists (_rank already puts
+# any key FIELD_ORDER does not know last), and a declared name the spec
+# lists is ignored -- the spec's meaning wins.
+OWN_FIELDS_KEY = 'own_frontmatter_fields'
+
+
+def own_fields(root):
+    """-> the frontmatter keys `root`'s precedent.json declares as its own,
+    less any FIELD_ORDER already lists. () when it declares none."""
+    import json
+    try:
+        data = json.loads((pathlib.Path(root) / 'precedent.json')
+                          .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return ()
+    got = data.get(OWN_FIELDS_KEY) if isinstance(data, dict) else None
+    if not isinstance(got, list):
+        return ()
+    return tuple(k for k in got if isinstance(k, str) and k
+                 and k not in FIELD_ORDER)
+
+
+def unlisted_fields(text, own=()):
+    """Frontmatter keys in TEXT that FIELD_ORDER does not list and the
+    repository has not declared as its own (`own`, from own_fields())."""
     parts = _split(text)
     if parts is None:
         return []
-    return [k for k, _ in _field_blocks(parts[0])[1] if k not in FIELD_ORDER]
+    return [k for k, _ in _field_blocks(parts[0])[1]
+            if k not in FIELD_ORDER and k not in own]
 
 
 def field_order_problem(text):
@@ -234,9 +299,63 @@ def own_practice_files(root=None):
             if p.stem not in foreign]
 
 
+def _git(root, *args):
+    import subprocess
+    return subprocess.run(['git', '-C', str(root), *args],
+                          capture_output=True, text=True)
+
+
+def fix_staged(root=None):
+    """Put the staged practice files of the repository at ROOT (default:
+    the one the current directory is in) in field order and re-stage them.
+    -> the list of paths it reordered. Never raises for a file it cannot
+    fix: it skips it, says why, and leaves it to the check."""
+    if root is None:
+        top = _git(pathlib.Path.cwd(), 'rev-parse', '--show-toplevel')
+        if top.returncode != 0:
+            return []
+        root = pathlib.Path(top.stdout.strip())
+    root = pathlib.Path(root)
+    if not (root / 'precedent-source.json').is_file():
+        return []
+    staged = _git(root, 'diff', '--cached', '--name-only', '--diff-filter=AM',
+                  '--', 'practices/*.md').stdout.split()
+    foreign = _foreign_slugs(root)
+    fixed = []
+    for rel in staged:
+        p = root / rel
+        if p.parent.name != 'practices' or p.stem in foreign or not p.is_file():
+            continue
+        if _git(root, 'diff', '--quiet', '--', rel).returncode != 0:
+            print(f'frontmatter_yaml: {rel} is only partly staged -- left '
+                  f'for the field-order check')
+            continue
+        text = p.read_text(encoding='utf-8')
+        unknown = unlisted_fields(text, own_fields(root))
+        if unknown:
+            print(f'frontmatter_yaml: {rel} carries {", ".join(unknown)}, '
+                  f'which this copy of the engine does not know -- left alone')
+            continue
+        try:
+            new = reorder_fields(text)
+        except AssertionError as e:
+            print(f'frontmatter_yaml: {rel} not reordered ({e})')
+            continue
+        if new == text:
+            continue
+        p.write_text(new, encoding='utf-8')
+        _git(root, 'add', '--', rel)
+        fixed.append(rel)
+        print(f'frontmatter_yaml: put {rel} in field order and re-staged it')
+    return fixed
+
+
 def main(argv):
     if argv and argv[0] in ('-h', '--help'):
         print(__doc__)
+        return 0
+    if argv and argv[0] == '--fix-staged':
+        fix_staged()
         return 0
     if not argv or argv[0] not in ('--fix-order', '--check-order'):
         print(__doc__)

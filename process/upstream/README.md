@@ -4,18 +4,12 @@
 machines. ([Humans at our
 Best](https://github.com/alex137/BestPractice/blob/staging/philosophy/HUMANS_AT_OUR_BEST.md))*
 
-Attempts to Describe Precedent in <40 words:
+✍️ **We're trying to capture the concept in 1 sentence -- [see our ideas
+here](documentation/ONE_SENTENCE.md)!** 💡
 
-- **Humans collaborate** and **AI pattern matches**.
-- **All is lost when you close** a Claude/ChatGPT/AI Assistant Session. It
-  should be smartly shared and learned from.
-- AI watches you collaborate, and **suggests (and can enforce)** patterns,
-  protocols, rules.
-- You work; **AI uses github to remember**, organize, and suggest protocols.
-- **Three insights together:** AI intermediates & improves ALL work, you
-  don't write ANYTHING yourself + AI organizes work as you do it in
-  Github + AI finds & suggests rules based on what each of you decides or
-  pushes.
+Our favorite one so far is: *"The intern you taught every little
+preference and policy of yours to, who then remembers it and enforces it
+everywhere."*
 
 The **three biggest frustrations** of working with people and/or AI
 are solved by Precedent:
@@ -108,7 +102,7 @@ Precedent can be seen as "Google Docs/Slides meets software" — work
 through the ideas and challenges together, iterating together, and
 patterns and rules emerge that you keep in your open system.
 
-- **Start a repo, not a doc — then vendor-in Precedent.** Spin the repo up
+- **Start a repo, not a doc — then copy Precedent into it.** Spin the repo up
   for the idea the same way you'd start a shared doc, then bring
   Precedent's practice engine into it — that's what turns everything below
   from a wish into something that actually happens.
@@ -129,7 +123,7 @@ Day to Day](documentation/DAILY_HABITS.md).
 The three ideas above aren't just this project's engineering choices —
 they're one working expression of a broader philosophy about how people
 and AI should work together. **That fuller argument lives in
-[philosophy/](philosophy/)**, starting at
+[philosophy/](https://github.com/alex137/BestPractice/tree/staging/philosophy)**, starting at
 [philosophy/README.md](https://github.com/alex137/BestPractice/blob/staging/philosophy/README.md). It is argument and
 observation: none of it binds work anywhere else in this repository, which
 is what [practices/](practices/) is for.
@@ -169,7 +163,7 @@ Precedent)](documentation/WHY_PRECEDENT.md) for the fuller pitch, and
 the how-to guide for your situation: [if you write
 code](documentation/FOR_DEVELOPERS.md), or [if you
 don't](documentation/FOR_EVERYONE_ELSE.md). If a word like "individual set" or
-"pre-staging" trips you up, [Our Language](documentation/OUR_LANGUAGE.md)
+"shared set" trips you up, [Our Language](documentation/OUR_LANGUAGE.md)
 is the short list of what each one means.
 
 **Already set up?** [How to Use This Day to Day](documentation/DAILY_HABITS.md)
@@ -181,7 +175,7 @@ conversation.
 
 ## Get Up and Running!
 
-To get going, vendor in Precedent to a repo, connect that repo to your
+To get going, copy Precedent into a repo, connect that repo to your
 favorite AI via their coding platform — and go!
 
 Learn more about it: [the guide for adopting

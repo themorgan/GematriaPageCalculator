@@ -4,9 +4,10 @@
     "vendored_at": "process/upstream",
     "scrub_blocklist": null,
     "_scrub_blocklist_comment": "Opted out on purpose (2026-10-02, Morgan): this repo is public -- the extension is published on the Chrome Web Store and Firefox Add-ons -- so it has no private vocabulary to keep out of the vendored tree. The leak gate (tools/leak_gate.py) still scans every push against the default list and the person's own private list.",
-    "commit": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
-    "synced_from": "64995950cdad5a76bc6d4a6344afc6df336d9c81",
-    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-02; verified tree-identical)."
+    "commit": "09fba87f6623895751770f347ec394e6b3b36ef1",
+    "synced_from": "09fba87f6623895751770f347ec394e6b3b36ef1",
+    "_note": "commit = upstream hash last synced (Update Vendors, recorded 2026-10-11; verified tree-identical).",
+    "copy_tree": "b1d670df19a03bf7687236ed6584798831174a8b"
   },
   "entries": [
     {
@@ -16,7 +17,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Instantiated with this repo's real quick-index, build workflow, and file classes. Structure kept identical to the template. 2026-08-20 upstream sync (BestPractice @ 47aabda4b447): propagated the new practice-36 (section ordering), practice-39 (PR-description), and practice-34 (outward-facing documents) Conventions bullets, plus the practice-16 date-source clarification, verbatim.",
-      "local_sha256": "07b65aca7a948cbeba705be000a90c525129dd100b3c02bf81cb388847ddcc96"
+      "local_sha256": "2c0a55e1a9e9ef3df2ff5ff6307adfc64bbd5e47e3132c4cb085ef85a3193177"
     },
     {
       "practice": "harness-claude-code-pointer",
@@ -34,7 +35,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Added one repo-specific allowlist entry (./build/build.sh) beyond the template's baseline commands.",
-      "local_sha256": "afe08bdc6a8d7155129ff9219f46921629fb8fb468abdd8d2b2db32dd6abcf14"
+      "local_sha256": "95c738c9c8447a169b79e00d589a73c616520602925f471818e1258f227f1ad5"
     },
     {
       "practice": "harness-claude-code-hook",
@@ -43,7 +44,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "Verbatim wrapper.",
-      "local_sha256": "2c16cad048d761c0f10c2c0f51884ec0465dd58868be77c65b20c6c27af5f883"
+      "local_sha256": "847b8e74395671781aa1d274ff50d643cbb5de553b2c490aec801a61dc0a4268"
     },
     {
       "practice": "bootstrap",
@@ -115,7 +116,7 @@
       "granularity": "file",
       "status": "synced",
       "notes": "New template introduced upstream (practice 39, BestPractice @ 47aabda4b447). Instantiated per INSTALL.md §2 step 3: copied verbatim, stripping only the template's own top install-instruction comment, same treatment as the readme-agent-entry marker block.",
-      "local_sha256": "f9292be467ab7e9706aa69f74a73cbd015256e350af9f1411a0b7acf9a27a42c"
+      "local_sha256": "7263abf3e3823f7d7ae4c4ec57646e2faa6e29d27192a6747bbc3ff419868039"
     }
   ]
 }

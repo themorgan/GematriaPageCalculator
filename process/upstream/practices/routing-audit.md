@@ -4,8 +4,8 @@ title:       The routing audit checks coverage, not content
 tier:        on-demand
 severity:    default
 scope:       engine-dev
-applies_to:  ["tools/routing_audit.py", "tools/routing_audit_state.json"]
-applies_to_why: "The audit's own tool and the state file it rolls forward: running or changing the audit touches one of them. Decided: 2026-09-03, full-practice-audit / routing-audit session; real paths, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+applies_to:  ["practices/*.md", "tools/routing_audit.py", "tools/routing_audit_state.json"]
+applies_to_why: "Any practice file, because editing a practice is when its routing can break -- and the audit's own tool and the state file it rolls forward. Until 2026-10-05 it named only those two, so only a session already running the audit was ever shown it, and its state file went untouched from its seeding on 2026-09-04 (gotcha-2026-10-05). practices/*.md added 2026-10-05, Morgan (strength: assented). Decided: 2026-09-03, full-practice-audit / routing-audit session; real paths, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)."
 occasion:    "checking whether practices that should have fired for recent work did"
 gates:       []
 index_clause: "run the mechanical coverage check now; roll the deep-read slice forward"
@@ -16,12 +16,12 @@ in_force_at: null
 supersedes:  []
 overrides:   null
 added:       null
-approved_by: "pending review; real paths, index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+approved_by: "pending review; real paths, index line dropped: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)"
 ---
 ## Rule
 Ask a narrower question than "did we follow every practice": **did every
 practice that should have fired, fire?** Two parts, run with
-[tools/routing_audit.py](../tools/routing_audit.py): a mechanical coverage
+[tools/routing_audit.py](https://github.com/alex137/BestPractice/blob/staging/tools/routing_audit.py): a mechanical coverage
 check (`coverage`) — every judgment-only on-demand practice (no
 `checked_by`, no `gates`) whose `applies_to` glob matches the files in
 question, reported as a routing-failure candidate — and a rotating deep
@@ -83,7 +83,7 @@ fell through, and what else the plan approved that the tree does not show.
 **Real paths from 2026-10-01.** The reduction pass for precedent-individual's session-start file ([the session-file open item](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)) gave this rule the audit's own tool and state file in place of `**`, so it leaves the occasion index and fires when the audit is run or changed. Morgan approved (strength: decided): *"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)"*
 
 ## Install
-[tools/routing_audit.py](../tools/routing_audit.py) implements both parts;
+[tools/routing_audit.py](https://github.com/alex137/BestPractice/blob/staging/tools/routing_audit.py) implements both parts;
 `tools/precedent_check.py`'s `routing-audit` check verifies the tool exists
 and that `tools/routing_audit_state.json`, if present, carries no rotation
 entry for a practice that is no longer active — stale bookkeeping a

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""build_views.py — phase-2 generated views (PRACTICE_ENGINE_PLAN.md,
+"""This file, GLOSSARY.md, and AGENTS.md's loader block — generated views
+
+build_views.py — phase-2 generated views (PRACTICE_ENGINE_PLAN.md,
 Sequence row 2: "make AGENTS.md, MAP.md, GLOSSARY.md and the index
 generated"). Regenerates:
 
@@ -35,10 +37,14 @@ Run:
   python3 tools/build_views.py --agents-only [--check]
       # write (or check) only AGENTS.md's loader block. MAP.md and
       # GLOSSARY.md's content is specific to how THIS repo is laid out
-      # (render_map_md()'s TOOLS_DESCRIPTIONS table, its "this repo is
+      # (render_map_md()'s engine table, its "this repo is
       # BestPractice itself" prose); a shared or individual source repo
       # vendoring this same file for its own practices/ catalogue wants
       # the resident-block/occasion-index mechanism, not those two.
+  python3 tools/build_views.py --views-only [--check]
+      # write (or check) MAP.md, GLOSSARY.md and WHERE_THINGS_ARE.md, never
+      # AGENTS.md -- what a repository using Precedent runs, since its
+      # loader block is precedent_sync_views.py's to write
   python3 tools/build_views.py --repo DIR [--agents-only] [--check]
       # operate on DIR's practices/AGENTS.md/MAP.md/GLOSSARY.md instead of
       # this repo's own -- --repo defaults to this script's own parent
@@ -80,6 +86,30 @@ GLOSSARY_MD = ROOT / 'GLOSSARY.md'
 # make, so AGENTS.md stays a person's file for that purpose.
 FULLY_GENERATED_VIEWS = ('MAP.md', 'GLOSSARY.md')
 
+
+def is_generated_view(path):
+    """True when `path` is missing or carries this tool's own
+    `generated_by: tools/build_views.py` header -- the only MAP.md or
+    GLOSSARY.md it may write. An adopter's hand-made map is theirs: the plain
+    form used to replace it with this repository's own
+    (todo-2026-09-21-pass-1-install-and-update-findings, finding 1), and a
+    consumer whose map IS generated still needs it kept current after a sync
+    removes practices (a consumer's report, 2026-10-03)."""
+    try:
+        head = pathlib.Path(path).read_text(encoding='utf-8')[:2000]
+    except FileNotFoundError:
+        return True
+    except (OSError, UnicodeDecodeError):
+        return False
+    return bool(GENERATED_BY_RE.match(head))
+
+
+# The header render_map_md / render_glossary_md write (generated_label), read
+# back: front matter whose generated_by names this tool, quoted or not. The
+# one definition -- precedent_update.generated_full_views asks this too.
+GENERATED_BY_RE = re.compile(
+    r'\A---\n(?:.*\n)*?generated_by:\s*["\']?tools/build_views\.py', re.M)
+
 sys.path.insert(0, str(_ENGINE_DIR))
 import split_practices as sp
 import summary_text  # a withdrawn reason is a summary: links out before the cut
@@ -91,8 +121,8 @@ END_MARKER = '<!-- END GENERATED -->'
 # always-loaded ceiling, so the resident cap is not spelled twice. The literal
 # is the fallback for a vendored copy that arrived without the registry, and
 # is the value the registry was created with.
-def _budget(key, default):
-    f = pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
+def _budget(key, default, registry=None):
+    f = registry or pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
     try:
         v = json.loads(f.read_text(encoding='utf-8')).get(key)
     except (OSError, ValueError, AttributeError):
@@ -120,7 +150,7 @@ OCCASION_INDEX_BUDGET_TOKENS = _budget('occasion_index_tokens', 4000)
 REPO_LOCAL_OCCASION_TOKENS = _budget('repo_local_occasion_tokens', 400)
 
 
-def surface_budget(name, default):
+def surface_budget(name, default, registry=None):
     """The declared ceiling for ONE named surface in session_load_budgets.json.
 
     RESIDENT_BUDGET_TOKENS above is the ceiling for the resident block of the
@@ -132,9 +162,10 @@ def surface_budget(name, default):
     file unbuildable in two real practice sets on 2026-09-13 -- 1,396 tokens
     of universal residents against a 425- and a 550-token cap that were never
     about them (practice: registry-source-of-truth -- one registry, read the
-    row you mean).
+    row you mean). `registry` reads that file from another repository
+    instead of beside this one (effective_budgets says why).
     """
-    f = pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
+    f = registry or pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
     try:
         row = (json.loads(f.read_text(encoding='utf-8'))
                .get('surfaces', {}).get(name, {}))
@@ -188,7 +219,7 @@ def own_occasion_allowance(root):
     return v if isinstance(v, int) else None
 
 
-def derived_occasion_cap(root, sources=None):
+def derived_occasion_cap(root, sources=None, registry=None):
     """-> (cap, why) for a repository with no occasion_index_tokens of its own:
     the sum of every declared source's allowance plus its repo-local
     allowance (repo_local_occasion_tokens, 400 unless its registry says
@@ -212,10 +243,12 @@ def derived_occasion_cap(root, sources=None):
     except (Exception, SystemExit) as e:                    # noqa: BLE001
         return None, f'the declared sources could not be read ({e})'
     total, parts = 0, []
+    local = (_budget('repo_local_occasion_tokens', 400, registry) if registry
+             else REPO_LOCAL_OCCASION_TOKENS)
     for src in sources:
         if _pr.normalize_level(src.get('level')) == 'repo-local':
-            total += REPO_LOCAL_OCCASION_TOKENS
-            parts.append(f'repo-local {REPO_LOCAL_OCCASION_TOKENS}')
+            total += local
+            parts.append(f'repo-local {local}')
             continue
         try:
             m = _pr.read_source_manifest(src['path']) or {}
@@ -234,7 +267,7 @@ def derived_occasion_cap(root, sources=None):
     return (total, ' + '.join(parts)) if parts else (None, 'no sources declared')
 
 
-def occasion_cap(root):
+def occasion_cap(root, registry=None):
     """-> (cap, why): this repository's own occasion_index_tokens when its
     registry declares one (a decision it took), else the sum of the
     allowances of the sources whose practices THIS block carries, else the
@@ -255,48 +288,50 @@ def occasion_cap(root):
     fallback (practice: vendor-rollout-disclosed, question 3): a set made
     before allowances existed, or by a bootstrap that does not write one,
     builds as it always did."""
-    f = pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
+    f = registry or pathlib.Path(__file__).resolve().parent / 'session_load_budgets.json'
     try:
         explicit = json.loads(f.read_text(encoding='utf-8')).get('occasion_index_tokens')
     except (OSError, ValueError, AttributeError):
         explicit = None
     if isinstance(explicit, int):
         return explicit, 'occasion_index_tokens in tools/session_load_budgets.json'
-    return block_occasion_cap(root)
+    return block_occasion_cap(root, registry)
 
 
-def block_occasion_cap(root):
+def block_occasion_cap(root, registry=None):
     """-> (cap, why) from the sources this repo's block carries, as
     occasion_cap() describes; the part of it no registry overrides."""
     root = pathlib.Path(root)
+    fallback = (_budget('occasion_index_tokens', 4000, registry) if registry
+                else OCCASION_INDEX_BUDGET_TOKENS)
     try:
         sys.path.insert(0, str(_ENGINE_DIR))
         import precedent_resolve as _pr
         carried, _deferred, _notes = sources_for_tracked_block(
             root, _pr.load_config(str(root)))
     except (Exception, SystemExit) as e:                    # noqa: BLE001
-        return (OCCASION_INDEX_BUDGET_TOKENS,
+        return (fallback,
                 f'the fallback (the declared sources could not be read: {e})')
     total, parts = 0, []
     if (root / 'precedent-source.json').is_file() and not any(
             _same_repository(s['path'], root) for s in carried):
         own = own_occasion_allowance(root)
         if own is None:
-            return (OCCASION_INDEX_BUDGET_TOKENS,
+            return (fallback,
                     'the fallback (this source declares no '
                     'occasion_share_tokens in precedent-source.json yet)')
         total, parts = own, [f'this source {own}']
     if carried:
-        cap, why = derived_occasion_cap(root, carried)
+        cap, why = derived_occasion_cap(root, carried, registry)
         if cap is not None:
             total += cap
             parts.append(why)
     if not parts:
-        return OCCASION_INDEX_BUDGET_TOKENS, 'the fallback (no sources declared)'
+        return fallback, 'the fallback (no sources declared)'
     return total, f"the sum of its sources' allowances: {' + '.join(parts)}"
 
 
-def effective_budgets(root):
+def effective_budgets(root, registry=None):
     """-> {key: tokens or None} for every budget in force in `root`, each read
     through the SAME function that enforces it -- never from the JSON field
     alone. None means uncapped.
@@ -318,15 +353,37 @@ def effective_budgets(root):
     measured in CI is not the cap in force); occasion_share_tokens (this
     repo's allowance in its consumers, when it is a source); and per surface
     surfaces/<name> (its ceiling), surfaces/<name>/target and
-    surfaces/<name>/hard_ceiling."""
+    surfaces/<name>/hard_ceiling.
+
+    `registry` is another repository's tools/session_load_budgets.json, read
+    in place of the one beside this file. Update Vendors runs from the
+    BestPractice clone and seeds a consumer's approvals: without it, the
+    consumer was seeded with BestPractice's own numbers (resident 1,750
+    against its 2,000), and its first check refused every budget as an
+    unapproved raise (2026-10-06). The repo's own engine copy is not imported
+    to get them: importing a repo's script runs it."""
     root = pathlib.Path(root)
-    out = {'resident_block_tokens': RESIDENT_BUDGET_TOKENS}
-    cap, why = occasion_cap(root)
+    out = {'resident_block_tokens':
+           _budget('resident_block_tokens', 2000, registry) if registry
+           else RESIDENT_BUDGET_TOKENS}
+    cap, why = occasion_cap(root, registry)
     if 'could not be read' not in why:
         out['occasion_index'] = cap
     if (root / 'precedent-source.json').is_file():
         out['occasion_share_tokens'] = own_occasion_allowance(root)
-    f = _ENGINE_DIR / 'session_load_budgets.json'
+        # The sets a person brings are held to this (precedent_session_practices
+        # .brought_budget reads the same field). Left out of this function
+        # until 2026-10-08, so a session raised it from 700 to 1,200 with no
+        # check able to see it; Morgan: "don't update token limits unless I
+        # explicitly authorize it".
+        try:
+            man = json.loads((root / 'precedent-source.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            man = None
+        brought = man.get('brought_sets_tokens') if isinstance(man, dict) else None
+        if isinstance(brought, int) and not isinstance(brought, bool):
+            out['brought_sets_tokens'] = brought
+    f = registry or _ENGINE_DIR / 'session_load_budgets.json'
     try:
         surfaces = json.loads(f.read_text(encoding='utf-8')).get('surfaces') or {}
     except (OSError, ValueError, AttributeError):
@@ -334,7 +391,7 @@ def effective_budgets(root):
     for name, row in sorted(surfaces.items()):
         if name.startswith('_') or not isinstance(row, dict):
             continue
-        v = surface_budget(name, None)
+        v = surface_budget(name, None, registry)
         if isinstance(v, int):
             out[f'surfaces/{name}'] = v
         for k in ('target', 'hard_ceiling'):
@@ -413,7 +470,20 @@ def _approx_tokens(text):
 # tools/precedent_session_practices.py renders exactly this complement into
 # an untracked file instead -- one definition, so the two cannot disagree
 # about which practices a public repo's session is otherwise never shown.
-PRIVATE_LEVELS = ('shared', 'team', 'individual')
+PRIVATE_LEVELS = ('shared', 'individual')
+
+
+def _declared_level(src):
+    """precedent_resolve.declared_level -- a declared source's level with
+    `team` read as `shared` -- imported when called, since that module
+    imports this one. Compare levels only through it: a list of private
+    levels then never needs the old word in it. A copy of this file with no
+    resolver beside it has only the raw field."""
+    try:
+        import precedent_resolve as _pr
+    except Exception:                                           # noqa: BLE001
+        return src.get('level') if isinstance(src, dict) else None
+    return _pr.declared_level(src)
 
 
 _VISIBILITY_WARNED = set()
@@ -498,8 +568,8 @@ def repo_is_public(root):
             for src in (json.loads(
                     (pathlib.Path(root) / 'precedent.json').read_text(
                         encoding='utf-8')).get('sources') or []):
-                if src.get('level') in PRIVATE_LEVELS:
-                    dropped.append(f"{src.get('level')}:{src.get('name')}")
+                if _declared_level(src) in PRIVATE_LEVELS:
+                    dropped.append(f"{_declared_level(src)}:{src.get('name')}")
         except (ValueError, OSError, AttributeError, TypeError):
             dropped = []
         if dropped:
@@ -856,6 +926,79 @@ def ship_path_problem(path):
     return None
 
 
+# `hooks:` -- a Claude Code hook a practice needs wired to work, declared so
+# a sync can add it (spec/PRACTICE_FORMAT.md, "hooks"). Parsed and validated
+# HERE, once, as `ships:` is: precedent_sync_views.py wires what it returns
+# and precedent_check.py holds a source to it.
+#
+# WHY (2026-10-06). The writing set's dated-download-names ships
+# tools/dated_name.py and a check that fails unless a PreToolUse hook on
+# SendUserFile runs it, and said the hook "is wired by hand". Nothing wired
+# it, so a consumer failed that check right after a clean sync, on a file
+# the harness refuses a session to hand-edit. A practice that needs a hook
+# now says so, and the sync adds it -- added only, never changing an entry.
+#
+# Bounded on purpose: a hook runs on the person's machine at every matching
+# event, and a set reaches every repository that declares it. So a declared
+# hook may only run a file the same practice ships, with python3, at one of
+# a few events, with plain arguments -- never a command line of its own.
+HOOKS_FIELD = 'hooks'
+HOOK_EVENTS = ('PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop',
+               'SessionStart')
+_TOOL_EVENTS = ('PreToolUse', 'PostToolUse')
+_HOOK_ARG_RE = re.compile(r'^[A-Za-z0-9_.,=/:-]+$')
+_HOOK_MATCHER_RE = re.compile(r'^[A-Za-z0-9_|*.:-]+$')
+
+
+def practice_hooks(fm):
+    """-> [{'event', 'matcher', 'run', 'args'}] for the `hooks:` field, []
+    when absent or null. Raises ValueError, naming the entry, for anything
+    the rules above refuse: a declaration nobody can wire is not the same as
+    no declaration."""
+    raw = fm.get(HOOKS_FIELD)
+    if raw is None or str(raw).strip() in ('', 'null', '[]'):
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError(f'`{HOOKS_FIELD}:` is not a JSON list: {raw!r}')
+    if not isinstance(value, list):
+        raise ValueError(f'`{HOOKS_FIELD}:` must be a JSON list, got {raw!r}')
+    shipped = set(ships_paths(fm))
+    out = []
+    for e in value:
+        if not isinstance(e, dict) or set(e) - {'event', 'matcher', 'run', 'args'}:
+            raise ValueError(f'`{HOOKS_FIELD}:` entry {e!r} must be an object '
+                             f'with event, run and optionally matcher and args')
+        event, matcher = e.get('event'), e.get('matcher')
+        run, args = e.get('run'), e.get('args', [])
+        if event not in HOOK_EVENTS:
+            raise ValueError(f'`{HOOKS_FIELD}:` event {event!r} is not one of '
+                             f'{", ".join(HOOK_EVENTS)}')
+        if event in _TOOL_EVENTS and not (isinstance(matcher, str)
+                                          and _HOOK_MATCHER_RE.match(matcher)):
+            raise ValueError(f'`{HOOKS_FIELD}:` a {event} entry needs a matcher '
+                             f'naming the tool, got {matcher!r}')
+        if event not in _TOOL_EVENTS and matcher is not None:
+            raise ValueError(f'`{HOOKS_FIELD}:` a {event} entry takes no matcher')
+        if not isinstance(run, str) or run not in shipped or not run.endswith('.py'):
+            raise ValueError(f'`{HOOKS_FIELD}:` run {run!r} must be a .py file '
+                             f'this practice lists in `{SHIPS_FIELD}:`')
+        if not isinstance(args, list) or not all(
+                isinstance(a, str) and _HOOK_ARG_RE.match(a) for a in args):
+            raise ValueError(f'`{HOOKS_FIELD}:` args {args!r} must be a list of '
+                             f'plain words (letters, digits and _.,=/:-)')
+        out.append({'event': event, 'matcher': matcher, 'run': run,
+                    'args': list(args)})
+    return out
+
+
+def hook_command(hook):
+    """The settings.json command a declared hook is wired as: the shipped
+    file, run with python3 from the project directory."""
+    return ' '.join([f'python3 $CLAUDE_PROJECT_DIR/{hook["run"]}', *hook['args']])
+
+
 # A handful of practices carry a non-canonical rule-opening label kept as
 # literal content by split_practices.py (e.g. "**The practice.**" -- see its
 # _label_to_section: only the exact canonical words rule/why/install get
@@ -892,9 +1035,27 @@ def _index_clause(fm, sections):
     fallback so a newly added practice renders before its clause is written,
     rather than silently rendering nothing."""
     written = _json_str(fm.get('index_clause', ''))
-    if written:
-        return written
-    return _occasion_clause(sections.get('rule', ''))
+    clause = written or _occasion_clause(sections.get('rule', ''))
+    # A Principle or a Preference says so on its one line, so a session
+    # deciding from the index knows how binding it is (practice:
+    # practice-standing). A Protocol, the default, carries nothing.
+    return _standing_prefix(fm) + clause
+
+
+def _standing_note(fm):
+    try:
+        import practice_standing
+    except ImportError:                       # practice: fail-gracefully
+        return ''
+    return practice_standing.inline_note(fm)
+
+
+def _standing_prefix(fm):
+    try:
+        import practice_standing
+    except ImportError:                       # practice: fail-gracefully
+        return ''
+    return practice_standing.clause_prefix(fm)
 
 
 _INDEX_CLAUSE_LINE_RE = re.compile(r'^index_clause:.*$', re.M)
@@ -1003,6 +1164,30 @@ def _occasion_clause(rule_text, max_len=90):
 # full by every session, so a line that routes nothing is paid for every turn.
 INDEX_REQUIRED_FIELD = 'index_required'
 
+# AN ADDITION LOADS WITH THE RULE IT ADDS TO (Morgan, 2026-10-09, strength:
+# decided, "Option 1"). A set may hold a footnote to another source's rule:
+# what that rule means where the set is in force. It used to reach a session
+# only through an occasion-index line of its own, some forced in with
+# index_required, so every session paid a line for a rule it already had in
+# view whenever the base did. `adds_to: <slug>` names the base instead, and
+# every channel that shows the base shows the addition with it:
+# precedent_show.py SLUG, the gate that prints the base, and a spoken-command
+# line's marker. So an addition never gets an index line of its own and is
+# never resident (spec/PRACTICE_FORMAT.md, "adds_to").
+ADDS_TO_FIELD = 'adds_to'
+
+
+def adds_to(fm):
+    """-> the slug this practice adds to, or '' when it adds to none (the
+    field absent, empty or `null`). The one reading of the field, so the
+    renderer, the check and every channel that attaches an addition to its
+    base agree on what counts as one."""
+    raw = fm.get(ADDS_TO_FIELD)
+    if not isinstance(raw, str):
+        return ''
+    value = _json_str(raw).strip()
+    return '' if value in ('', 'null') else value
+
 
 def _routes_by_path(fm):
     """True when `applies_to` names REAL paths, so precedent_paths.py fires.
@@ -1048,6 +1233,55 @@ def index_is_redundant(fm):
         return False
     gates = _json_list(fm.get('gates', '')) or []
     return _routes_by_path(fm) or bool(gates)
+
+
+def lands_in_occasion_index(fm, omit_commands=False):
+    """Whether this practice costs an occasion-index line in a block that
+    carries it -- the one test build_loader_block applies, kept here so
+    precedent_check.py's `code-owner-practice-stays-out-of-the-index` asks
+    the same question the renderer answers. `omit_commands` as there: the
+    session file leaves a command's line out, since its spoken words are
+    listed on their own.
+
+    An addition (`adds_to:`) never lands: it loads with the rule it adds
+    to, through precedent_show.py and the gates (ADDS_TO_FIELD)."""
+    if fm.get('tier') != 'on-demand' or not _json_str(fm.get('occasion', '')):
+        return False
+    if adds_to(fm):
+        # Shown with its base wherever the base is shown, so a line of its
+        # own would be paid for twice -- index_required included, which
+        # asked for a line only because no other channel existed then.
+        return False
+    if omit_commands and command_phrases(fm):
+        return False
+    return not index_is_redundant(fm)
+
+
+def command_phrases(fm):
+    """-> [phrase] for the spoken commands a practice's `command:` defines,
+    or [] for none, `null`, or a value that does not parse.
+
+    The one test of "this practice defines a command" that both ends of the
+    session file use: precedent_session_practices.spoken_block() lists the
+    practice by these words, and build_loader_block(omit_commands=True)
+    leaves its index line out for the same reason. Were the two to answer
+    differently, a malformed command would fall out of both lists at once."""
+    raw = fm.get('command')
+    if isinstance(raw, (dict, list)):
+        parsed = raw
+    else:
+        raw = str(raw or '').strip()
+        if not raw or raw == 'null':
+            return []
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return []
+    if isinstance(parsed, dict):
+        parsed = list(parsed)
+    if not isinstance(parsed, list):
+        return []
+    return [w for w in parsed if isinstance(w, str) and w.strip()]
 
 
 def _live_gates(practices):
@@ -1253,7 +1487,8 @@ def _place_rule_links(text, practice_file, block_dir, repo_root=None,
 def build_loader_block(practices, source_levels=None, defers_sources=False,
                        block_dir=None, repo_root=None, planned=(),
                        budget_tokens=None, occasion_budget_tokens=None,
-                       carried=None, regen_comment=True):
+                       carried=None, regen_comment=True,
+                       include_code_owners=False, omit_commands=False):
     """practices: (fm, sections, file) triples, exactly as load_practices()
     returns for this repo's own single-source catalogue. source_levels:
     optional {slug: level} for a caller resolving MULTIPLE sources (e.g.
@@ -1285,15 +1520,30 @@ def build_loader_block(practices, source_levels=None, defers_sources=False,
     regen_comment=False leaves out the "Regenerate with build_views.py"
     comment, which is true only of a block build_views writes into a tracked
     file -- the session-practices file is rebuilt by its own tool every
-    session and has nothing to hand-edit or --check."""
+    session and has nothing to hand-edit or --check.
+
+    omit_commands=True leaves out the occasion-index line of every practice
+    that defines a spoken command (command_phrases). Only the session file
+    asks for it, because it opens with those commands already, one line
+    each (precedent_session_practices.spoken_block), and a session paid for
+    every command twice: once in that list and again in this index. A
+    tracked AGENTS.md has no such list, so its block keeps them."""
+    # A practice for code owners only never goes in a block everyone reads
+    # (AGENTS.md, whichever tool renders it); the untracked session file asks
+    # for them with include_code_owners=True, for a code owner (2026-10-05).
+    if not include_code_owners:
+        practices = [p for p in practices if not _code_owners_only(p[0])]
     # Resolved, so the warning below names a path a reader can act on: a
     # caller passing `--repo .` otherwise produced "cannot be placed
     # relative to .", which says nothing.
     block_dir = (pathlib.Path(block_dir) if block_dir is not None else ROOT).resolve()
     repo_root = (pathlib.Path(repo_root).resolve()
                  if repo_root is not None else block_dir)
+    # An addition is never resident: it loads with the rule it adds to
+    # (ADDS_TO_FIELD), and precedent_check's `adds-to-names-a-rule-in-force`
+    # refuses one marked resident.
     resident = [(fm, sections, f) for fm, sections, f in practices
-                if fm.get('tier') == 'resident']
+                if fm.get('tier') == 'resident' and not adds_to(fm)]
     resident.sort(key=lambda t: t[0]['slug'])
 
     placed = []
@@ -1319,7 +1569,8 @@ def build_loader_block(practices, source_levels=None, defers_sources=False,
     # text that actually goes in the block.
     resident = [(fm, sections) for fm, sections, _f in resident]
     resident_text = '\n\n'.join(
-        f"**{fm['slug']}.** {rule}" for fm, _sections, rule in placed
+        f"**{fm['slug']}.** {_standing_note(fm)}{rule}"
+        for fm, _sections, rule in placed
     )
     budget = (RESIDENT_BUDGET_TOKENS if budget_tokens is None
               else budget_tokens)
@@ -1332,12 +1583,11 @@ def build_loader_block(practices, source_levels=None, defers_sources=False,
     routed_out = []
     for fm, sections in on_demand:
         occasion = _json_str(fm.get('occasion', ''))
-        if not occasion:
-            continue
-        if index_is_redundant(fm):
-            routed_out.append(fm['slug'])
-            continue
-        by_occasion[occasion].append((fm['slug'], _index_clause(fm, sections)))
+        if lands_in_occasion_index(fm, omit_commands):
+            by_occasion[occasion].append((fm['slug'], _index_clause(fm, sections)))
+        elif occasion and not adds_to(fm) \
+                and not (omit_commands and command_phrases(fm)):
+            routed_out.append(fm['slug'])       # index_is_redundant
 
     index_lines = []
     for occasion in sorted(by_occasion):
@@ -1543,9 +1793,17 @@ def build_loader_block(practices, source_levels=None, defers_sources=False,
     # So the caller now passes whether sources_for_tracked_block() actually
     # deferred anything, which is the question, and the two reasons cannot
     # drift apart from it again.
-    if instruction and defers_sources:
+    #
+    # And then it was too narrow a third time: a set a PERSON brings is
+    # deferred too, but left out of defers_sources so a tracked file reads the
+    # same whoever regenerates it -- so a consumer's block never pointed at
+    # the file that carried the ladder's stage words, and a session there had
+    # to search for "Debut" (2026-10-04). The sentence is conditional on the
+    # file existing, so it is true in every repository and the same for every
+    # person: it is always carried.
+    if instruction:
         instruction.append(
-            "If `.precedent/SESSION_PRACTICES.md` exists, read it too: it carries the "
+            "If .precedent/SESSION_PRACTICES.md exists, read it too: it carries the "
             "practices in force from the other sources this repo declares, which are "
             "NOT in this block and bind work here exactly as these do. It is "
             "regenerated at session start and is deliberately untracked — never commit "
@@ -1595,6 +1853,18 @@ def repo_is_practice_source(root):
     mf = root / 'tools' / 'ENGINE_MANIFEST.json'
     try:
         return json.loads(mf.read_text()).get('kind') == 'source'
+    except Exception:                                        # noqa: BLE001
+        return False
+
+
+def repo_is_consumer(root):
+    """Whether this repo CONSUMES the practice sets: tools/ENGINE_MANIFEST.json
+    says `kind: consumer`. BestPractice itself has no manifest and a practice
+    set says `source`, so neither reads as one; an unreadable manifest is not
+    one either."""
+    mf = root / 'tools' / 'ENGINE_MANIFEST.json'
+    try:
+        return json.loads(mf.read_text()).get('kind') == 'consumer'
     except Exception:                                        # noqa: BLE001
         return False
 
@@ -1714,6 +1984,25 @@ def sources_for_tracked_block(root, declared):
     tree the text lives in, not what the level is called.
     """
     notes = []
+    # A set a PERSON brings (spec/LADDER_OPT_IN_PLAN.md D2, D6) is never
+    # rendered into a committed file, whatever the repository: it is in force
+    # for that one person, so writing it into a tracked view would hand it to
+    # everyone who works here -- and make the view differ by who regenerated
+    # it last.
+    brought = [s for s in declared if s.get('brought')]
+    if brought:
+        declared = [s for s in declared if not s.get('brought')]
+        notes.append(
+            f"{', '.join(s['name'] for s in brought)} deferred to "
+            f".precedent/SESSION_PRACTICES.md -- brought by the person "
+            f"working here, not declared by this repository")
+    tracked, deferred, more = _split_declared(root, declared)
+    return tracked, brought + deferred, notes + more
+
+
+def _split_declared(root, declared):
+    """sources_for_tracked_block's split of what the repository DECLARES."""
+    notes = []
     if repo_is_practice_source(root):
         deferred = [s for s in declared if s['level'] != 'repo-local'
                     and not _same_repository(s['path'], root)]
@@ -1726,8 +2015,8 @@ def sources_for_tracked_block(root, declared):
                 f"second copy of it")
         return tracked, deferred, notes
     if repo_is_public(root):
-        deferred = [s for s in declared if s['level'] in PRIVATE_LEVELS]
-        tracked = [s for s in declared if s['level'] not in PRIVATE_LEVELS]
+        deferred = [s for s in declared if _declared_level(s) in PRIVATE_LEVELS]
+        tracked = [s for s in declared if _declared_level(s) not in PRIVATE_LEVELS]
         if deferred:
             notes.append(
                 f"{', '.join(s['name'] + ' (' + s['level'] + ')' for s in deferred)} "
@@ -1768,7 +2057,14 @@ def defers_any_source(root):
               file=sys.stderr)
         return False
     _tracked, deferred, _notes = sources_for_tracked_block(root, declared)
-    return bool(deferred)
+    # Only what THIS REPOSITORY declares. A set the person brings is deferred
+    # too, but reaches their session through the session-start hook, and a
+    # tracked file must read the same whoever regenerates it: counting it
+    # here wrote the pointer for a person who brings a set and not for one
+    # who does not, so in a repository that uses Precedent build_views.py
+    # and the view sync disagreed, and its full check failed for everyone
+    # who brings one (found 2026-10-03, migrating a real consumer's copy).
+    return any(not s.get('brought') for s in deferred)
 
 
 def source_levels_from_manifest(root):
@@ -1803,11 +2099,95 @@ def source_levels_from_manifest(root):
 
 
 class _BlockNotVerifiable(Exception):
-    """A declared source is unreachable, so the block cannot be judged."""
+    """A source the block was built from is unreachable here, so the block
+    cannot be judged. The reason, when there is one, is its first argument."""
 
 
-def loader_practices(root, own_practices):
+# The two marks render_agents_md leaves of individual-level practices in a
+# block: the "machine-dependent" disclosure paragraph, and the resident
+# header's level breakdown, "(5 individual, 6 universal)".
+_INDIVIDUAL_PARAGRAPH = re.compile(
+    r'\*\*(\d+) of the practices in this generated\s+tree came from an '
+    r'INDIVIDUAL source\*\*')
+_INDIVIDUAL_IN_HEADER = re.compile(r'[(,]\s*(\d+) individual[,)]')
+
+
+def committed_individual_count(root):
+    """-> how many individual-level practices this repository's COMMITTED
+    views say were in force when they were generated, 0 when none.
+
+    The one reader of that evidence, for every check that regenerates or
+    measures the loader block. Three places can show it: the loader block's
+    disclosure paragraph, its resident header's level breakdown, and the
+    levels MANIFEST.json records. Each can be absent on its own (a block
+    with no resident practice has neither of the first two), so the largest
+    count any of them shows is the answer."""
+    counts = [0]
+    agents = root / 'AGENTS.md'
+    try:
+        text = agents.read_text(encoding='utf-8') if agents.is_file() else ''
+    except OSError:
+        text = ''
+    if BEGIN_MARKER in text and END_MARKER in text:
+        block = text[text.index(BEGIN_MARKER):text.index(END_MARKER)]
+        counts += [int(m) for m in _INDIVIDUAL_PARAGRAPH.findall(block)]
+        for line in block.splitlines():
+            if line.startswith('## Resident block'):
+                counts += [int(m) for m in _INDIVIDUAL_IN_HEADER.findall(line)]
+    levels = source_levels_from_manifest(root) or {}
+    counts.append(sum(1 for lvl in levels.values() if lvl == 'individual'))
+    return max(counts)
+
+
+def individual_not_verifiable(root, sources):
+    """-> why the loader block cannot be judged here, or None.
+
+    THE SHARED DECISION for every check that regenerates or measures the
+    loader block (build_views --check and --budgets, and
+    precedent_sync_views --check, which precedent_check and the push check
+    call). An individual source is never declared in a repository's own
+    precedent.json: it resolves through the person's user-level config, so
+    on a bare GitHub runner it is not "missing", it is simply not there, and
+    the declared-source guard in loader_practices never sees it. A block
+    committed with individual practices, regenerated without them, read as
+    hand-edited -- a consuming repository's pull request into main failed
+    GitHub's light check on exactly that, with nothing stale (2026-10-09).
+
+    `sources` is what load_config returned here: an individual source
+    declared in the user config is in it even when its clone is absent, and
+    that case is the ordinary missing-source report. This answers only the
+    other one -- no individual source at all, while the committed views say
+    one was in force -- so a real hand-edit is still caught wherever the
+    person's individual set does resolve."""
+    if any(_declared_level(s) == 'individual' for s in sources):
+        return None
+    n = committed_individual_count(root)
+    if not n:
+        return None
+    return (f"the committed views carry {n} practice(s) from an individual "
+            f"source, which resolves through a person's user-level config, "
+            f"and none resolves in this environment")
+
+
+def _code_owners_only(fm):
+    """Whether a practice is marked `visible_to: code-owners`."""
+    try:
+        sys.path.insert(0, str(_ENGINE_DIR))
+        import precedent_audience as _pa
+    except Exception:                                        # noqa: BLE001
+        return False
+    return _pa.for_code_owners(fm)
+
+
+def loader_practices(root, own_practices, individual_absent='notice'):
     """-> (practices, source_levels) for the AGENTS.md loader block.
+
+    `individual_absent` says what to do when the committed block carries
+    individual practices and no individual set resolves here
+    (individual_not_verifiable): 'raise' _BlockNotVerifiable, for a run that
+    only judges the block (--check, --budgets); 'notice', for a write, which
+    goes on and says what it leaves out; 'ignore', for a run that never
+    touches the block (--views-only).
 
     THE BLOCK RENDERS EVERY SOURCE THE REPO DECLARES, not just its own
     catalogue. Precedent's own repo declares three -- universal (itself),
@@ -1864,6 +2244,7 @@ def loader_practices(root, own_practices):
               file=sys.stderr)
         return own_practices, source_levels_from_manifest(root)
 
+    loaded = declared
     # Exclude, keep going, and SAY so on stderr rather than silently.
     declared, _deferred, _notes = sources_for_tracked_block(root, declared)
     for n in _notes:
@@ -1873,7 +2254,21 @@ def loader_practices(root, own_practices):
     if len(declared) <= 1:
         return own_practices, source_levels_from_manifest(root)
 
-    res = _pr.resolve(declared)
+    # The individual set is not declared here, so the missing-source guard
+    # below never sees it: in a bare checkout it is absent, not missing.
+    why = individual_not_verifiable(root, loaded)
+    if why and individual_absent == 'raise':
+        print(f"build_views: NOT VERIFIABLE -- {why}, so the loader block can "
+              f"be neither confirmed current nor reported stale here. Re-run "
+              f"where that person's individual set resolves.", file=sys.stderr)
+        raise _BlockNotVerifiable(why)
+    if why and individual_absent == 'notice':
+        print(f"build_views NOTICE: {why}; the block written here leaves "
+              f"those practices out.", file=sys.stderr)
+
+    # A brought set is left out of the block but still counts for what is in
+    # force (precedent_resolve.resolve's `context`).
+    res = _pr.resolve(declared, context=[s for s in _deferred if s.get('brought')])
     if res['missing']:
         # A declared source that does not resolve HERE makes the block
         # unverifiable, not stale. A shared source is a sibling clone and an
@@ -1912,7 +2307,7 @@ def loader_practices(root, own_practices):
     # without it, a real consumer's AGENTS.md disagreed permanently with
     # what precedent_sync_views.py (materialize.py + build_views.py
     # --agents-only) actually produces for the same tree.
-    if not any(s['level'] == 'universal' and _same_repository(s['path'], root)
+    if not any(_declared_level(s) == 'universal' and _same_repository(s['path'], root)
                for s in declared):
         resolved = {slug: v for slug, v in resolved.items()
                     if not _is_engine_dev_scoped(v['fm'])}
@@ -1932,10 +2327,10 @@ BUDGETS_NOT_VERIFIED = 'build_views --budgets NOT VERIFIED'
 def _over_cap_warning(msg):
     """Say that a loader cap is exceeded, and that it is allowed onto
     pre-staging but not staging (see render_agents_md)."""
-    print(f"build_views WARNING: {msg} Written anyway: this may land on "
-          f"pre-staging, but it must be brought under the cap before it "
-          f"can go to staging -- the full check at the Debut refuses it "
-          f"(loader-within-caps). Tell the person.", file=sys.stderr)
+    print(f"build_views WARNING: {msg} Written anyway: the quick check lets "
+          f"it through, but the full check refuses it (loader-within-caps), "
+          f"so bring it under the cap before it goes further. Tell the "
+          f"person.", file=sys.stderr)
 
 
 def render_agents_md(practices, agents_md=None, source_levels=None,
@@ -1997,7 +2392,10 @@ def render_agents_md(practices, agents_md=None, source_levels=None,
                  f"{BEGIN_MARKER} / {END_MARKER} markers to regenerate between.")
     pre = original[:original.index(BEGIN_MARKER)]
     post = original[original.index(END_MARKER) + len(END_MARKER):]
-    return pre + block + post, (tokens, n_resident, len(practices))
+    # The total counts what the block carries: build_loader_block leaves the
+    # code-owners-only practices out, so they are not counted either.
+    n_total = sum(1 for p in practices if not _code_owners_only(p[0]))
+    return pre + block + post, (tokens, n_resident, n_total)
 
 
 
@@ -2166,7 +2564,7 @@ def _engine_scope_files():
     durable signal a vendored copy carries about itself; its absence means
     every *.py here really is this project's own tooling, same as always).
 
-    render_map_md()'s "no TOOLS_DESCRIPTIONS entry" assertion below used to
+    render_map_md()'s "every engine file is described" assertion used to
     run over every *.py sitting beside this script (`_ENGINE_DIR.glob`),
     which cannot tell the vendored engine apart from a CONSUMER's own local
     scripts living in that identical directory -- `tools/` in a consumer
@@ -2212,22 +2610,235 @@ def generated_label(generated_by, edit_instead, regenerate):
             'note: "' + note.replace('"', "'") + '"', '---']
 
 
-def render_map_md(practices, withdrawn=()):
+# WHERE_THINGS_ARE.md AND AGENTS.md'S SHORT TABLE, FROM ONE SOURCE
+# (spec/GENERATED_FILES_PLAN.md step 2; Morgan, 2026-10-03: generated files
+# are never hand-edited, and a copy "should either cite the original instead
+# of repeating it OR make sure they are kept in sync"). The short table was a
+# hand copy of a dozen rows of the full one, and by then several read
+# differently -- the full one still named the reply's closing section by its
+# old name. Both render from where_things_are.json now; a repository without
+# that file has neither, and nothing here touches it.
+WHERE_SOURCE = 'where_things_are.json'
+WHERE_PAGE = 'WHERE_THINGS_ARE.md'
+QUICK_BEGIN = '<!-- BEGIN GENERATED: where-things-are -->'
+QUICK_END = '<!-- END GENERATED: where-things-are -->'
+_ROW_LINK = re.compile(r'\]\(([^)\s]+)\)')
+
+
+def _where_source(root):
+    """-> where_things_are.json's content, or None when the repository has
+    none. Every relative link in a row must resolve, or the build stops
+    naming each one: a row that sends a reader to a file that moved is the
+    staleness this page exists to prevent."""
+    path = pathlib.Path(root) / WHERE_SOURCE
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except ValueError as e:
+        sys.exit(f"build_views FAIL: {WHERE_SOURCE} is not valid JSON: {e}")
+    broken = []
+    for row in data.get('rows') or []:
+        for cell in (row.get('looking_for', ''), row.get('go_to', '')):
+            for target in _ROW_LINK.findall(cell):
+                if re.match(r'[a-z]+:|#', target):
+                    continue
+                rel = target.split('#', 1)[0]
+                if rel and not (pathlib.Path(root) / rel).exists():
+                    broken.append(f"{row.get('looking_for', '')[:60]!r} -> {target}")
+    if broken:
+        sys.exit(f"build_views FAIL: {WHERE_SOURCE} links to paths that do not "
+                 f"exist -- fix the row there, then run this again:\n  "
+                 + '\n  '.join(broken))
+    return data
+
+
+def _where_row(row):
+    return f"| {row['looking_for']} | {row['go_to']} |"
+
+
+def render_where_things_are(data):
+    """-> WHERE_THINGS_ARE.md: the label, the intro and every row."""
+    lines = [*generated_label('tools/build_views.py', WHERE_SOURCE,
+                              'python3 tools/build_views.py'),
+             '', '# Where things are — the full index', '',
+             *data.get('intro', []), '',
+             '| Looking for… | Go to |', '|---|---|',
+             *(_where_row(r) for r in data.get('rows') or [])]
+    return '\n'.join(lines) + '\n'
+
+
+def splice_quick_index(text, data):
+    """-> `text` (AGENTS.md) with the rows marked `quick` written between
+    QUICK_BEGIN and QUICK_END, in their `quick` order, and a last row
+    pointing at the full page."""
+    if QUICK_BEGIN not in text or QUICK_END not in text:
+        sys.exit(f"build_views FAIL: {WHERE_SOURCE} exists but AGENTS.md has no "
+                 f"{QUICK_BEGIN} / {QUICK_END} markers for its short table.")
+    quick = sorted((r for r in data.get('rows') or [] if r.get('quick')),
+                   key=lambda r: r['quick'])
+    block = [QUICK_BEGIN, '| Looking for… | Go to |', '|---|---|',
+             *(_where_row(r) for r in quick),
+             f'| Anything else — the full index | [{WHERE_PAGE}]({WHERE_PAGE}) |',
+             QUICK_END]
+    pre = text[:text.index(QUICK_BEGIN)]
+    post = text[text.index(QUICK_END) + len(QUICK_END):]
+    return pre + '\n'.join(block) + post
+
+
+# A REPOSITORY'S OWN SECTIONS (spec/GENERATED_FILES_PLAN.md step 5; Morgan,
+# 2026-10-03: MAP.md and GLOSSARY.md are generated in every repository, and
+# a repository that uses Precedent keeps what it wrote). What a repository
+# says about itself -- its deliverables, who depends on it, its own names --
+# lives in MAP.source.md and GLOSSARY.source.md, written by hand, and is
+# copied into the generated view word for word, ahead of the sections
+# generated from the catalogue and the engine. A repository with neither
+# file gets the views exactly as before.
+MAP_SOURCE = 'MAP.source.md'
+GLOSSARY_SOURCE = 'GLOSSARY.source.md'
+
+# THE SOURCE AS A DIRECTORY (Alex, 2026-10-04: "should we modify map.md to be
+# a directory so we don't have so many collisions when multiple threads are
+# running?"). A one-file source is edited by every branch that adds a row, so
+# two branches adding rows to the same table conflict on merge, and the
+# generated view conflicts after them. The same text may instead live in a
+# directory beside it -- MAP.source/ for MAP.source.md, GLOSSARY.source/ for
+# GLOSSARY.source.md -- one file per entry, so two branches that each add a
+# row add two files and never meet. todo/ and gotchas/ solved the same
+# collision the same way. The directory is assembled in name order:
+#   - a top-level FILE is a block of text, copied as it is;
+#   - a top-level DIRECTORY is a section: its _head.md (the heading, prose
+#     and table header), then every other .md file in it as the rows that
+#     follow with no blank line between them, then its _tail.md after a
+#     blank line;
+#   - blocks are separated by one blank line.
+# Name entries with a numeric prefix with gaps (0010-, 0020-) so a new one
+# can go between two others. `precedent_migrate_views.py --split` turns a
+# one-file source into a directory, refusing any section it cannot split
+# without changing a word. A repository may have the file or the directory,
+# never both.
+SOURCE_DIR_SUFFIX = '.source'
+SECTION_HEAD = '_head.md'
+SECTION_TAIL = '_tail.md'
+
+
+def source_dir_name(name):
+    """'MAP.source.md' -> 'MAP.source' (the directory form of a source)."""
+    return name[:-len('.md')] if name.endswith('.md') else name
+
+
+def own_source_path(root, name):
+    """-> the path of a repository's own source for `name` (the file or its
+    directory form), or None when it has neither. Both at once is refused:
+    which one is the truth would be a guess."""
+    root = pathlib.Path(root or ROOT)
+    f, d = root / name, root / source_dir_name(name)
+    if f.is_file() and d.is_dir():
+        sys.exit(f"build_views FAIL: both {name} and {d.name}/ exist; keep one "
+                 f"(precedent_migrate_views.py --split moves the file into the "
+                 f"directory).")
+    if f.is_file():
+        return f
+    if d.is_dir():
+        return d
+    return None
+
+
+def has_own_source(root, name):
+    """True when a repository has its own source for `name`, as a file or a
+    directory -- what every 'is this view generated here?' test asks."""
+    return own_source_path(root, name) is not None
+
+
+def own_source_label(root, name):
+    """-> how the generated label names the source: the file, or the
+    directory with a trailing slash."""
+    p = own_source_path(root, name)
+    return f"{p.name}/" if p is not None and p.is_dir() else name
+
+
+def _entries(d):
+    return sorted((c for c in d.iterdir()
+                   if not c.name.startswith('.') and (c.is_dir() or c.suffix == '.md')),
+                  key=lambda c: c.name)
+
+
+def _read_block(path):
+    return path.read_text(encoding='utf-8').strip('\n')
+
+
+def assemble_source_dir(d):
+    """-> the text of a source directory, assembled by the rules above."""
+    blocks = []
+    for child in _entries(pathlib.Path(d)):
+        if child.is_dir():
+            files = [f for f in _entries(child) if f.is_file()]
+            head = [f for f in files if f.name == SECTION_HEAD]
+            tail = [f for f in files if f.name == SECTION_TAIL]
+            rows = [f for f in files if f.name not in (SECTION_HEAD, SECTION_TAIL)]
+            parts = [_read_block(head[0])] if head else []
+            if rows:
+                parts.append('\n'.join(_read_block(r) for r in rows))
+            text = '\n'.join(p for p in parts if p)
+            if tail:
+                text = f"{text}\n\n{_read_block(tail[0])}" if text else _read_block(tail[0])
+            if text:
+                blocks.append(text)
+        else:
+            text = _read_block(child)
+            if text:
+                blocks.append(text)
+    return '\n\n'.join(blocks)
+
+
+def _own_source(root, name):
+    """-> a repository's own hand-written section text, or None."""
+    path = own_source_path(root, name)
+    if path is None:
+        return None
+    if path.is_dir():
+        return assemble_source_dir(path)
+    return path.read_text(encoding='utf-8').rstrip('\n')
+
+
+def _vendored_engine(root):
+    """True when `root` carries a vendored copy of the engine -- a practice
+    set or a repository that uses Precedent -- rather than being the
+    engine's own repository. Only there may MAP.md introduce itself as
+    Precedent's own map: until 2026-10-03 every generated map, in every set
+    and consumer, opened with this repository's introduction."""
+    root = pathlib.Path(root or ROOT)
+    return any((root / d / 'ENGINE_MANIFEST.json').is_file()
+               for d in ('tools', 'process/upstream/tools'))
+
+
+def render_map_md(practices, withdrawn=(), root=None):
     by_tier = collections.Counter(fm.get('tier') for fm, _s, _f in practices)
+    own = _own_source(root, MAP_SOURCE)
     # The label every generated file opens with (tools/generated_files.json
     # lists them all): visible as a small table on GitHub, read by
     # precedent_check.py's generated-files-registered (Morgan, 2026-09-29).
-    lines = [
+    head = ([*generated_label('tools/build_views.py',
+                              f'{own_source_label(root, MAP_SOURCE)} and practices/*.md',
+                              'python3 tools/build_views.py'), '', own, '']
+            if own is not None else [
         *generated_label('tools/build_views.py', 'practices/*.md',
                          'python3 tools/build_views.py'),
         '',
         "# Repository map — where to find things",
         '',
+        *([("This repository's map of the practice catalogue in force here and "
+            "the engine's own code, generated, never hand-edited. What this "
+            "repository says about itself goes in MAP.source.md, which this map "
+            "then carries first.")]
+          if _vendored_engine(root) else [
         "Precedent's own repo map (PRACTICE_ENGINE_PLAN.md, Sequence row 2: "
         '"make AGENTS.md, MAP.md, GLOSSARY.md and the index generated"). '
         "For the plan and format spec, see AGENTS.md's quick index instead — this file "
-        "indexes the practice catalogue and the engine's own code, not the whole repo's prose.",
-        '',
+        "indexes the practice catalogue and the engine's own code, not the whole repo's prose."]),
+        ''])
+    lines = [
+        *head,
         "## The practice catalogue",
         '',
         f"`practices/` holds {len(practices)} practice files "
@@ -2256,127 +2867,37 @@ def render_map_md(practices, withdrawn=()):
     if engine_scope is not None:
         engine_names = [n for n in engine_names if n in engine_scope]
     for name in engine_names:
-        try:
-            desc = TOOLS_DESCRIPTIONS[name]
-        except KeyError:
-            sys.exit(f"build_views FAIL: tools/{name} exists but has no entry "
-                     f"in TOOLS_DESCRIPTIONS (build_views.py) -- this table used "
-                     f"to be a hand-written list that silently omitted whatever "
-                     f"wasn't added to it (missing over half of tools/ by the "
-                     f"time a 2026-09-01 deep-check audit found it, including "
-                     f"precedent_check.py and precedent_gate.py). Add a "
-                     f"one-line description for tools/{name} rather than "
-                     f"leaving it out.")
+        desc = tool_summary(_ENGINE_DIR / name)
+        if not desc:
+            # Every engine file is described, or the build stops: this table
+            # once silently omitted over half of tools/, including
+            # precedent_check.py and precedent_gate.py (a 2026-09-01 audit).
+            sys.exit(f"build_views FAIL: tools/{name} has no module docstring "
+                     f"to describe it in MAP.md. Give it one whose first line "
+                     f"says what it is -- that line is its row in the map.")
         lines.append(f"| [tools/{name}](tools/{name}) | {desc} |")
     lines.append('')
     return '\n'.join(lines) + '\n'
 
 
-# One entry per file in tools/*.py -- render_map_md() asserts every file that
-# EXISTS has one, so a new script silently missing from MAP.md's "## The
-# engine" table (the gap a 2026-09-01 deep-check audit found: 9 hardcoded
-# rows against 20 real files, missing precedent_check.py and
-# precedent_gate.py -- the implementations of two of the plan's four loading
-# channels -- from the very table orientation-map, a RESIDENT practice, exists
-# to keep current) fails the build instead of shipping quietly incomplete.
-TOOLS_DESCRIPTIONS = {
-    'behavioral_replay.py': "Measures the path-triggered loader against this repo's own commit history",
-    'build_views.py': "This file, GLOSSARY.md, and AGENTS.md's loader block — generated views",
-    'build_codeowners.py': "CODEOWNERS, generated -- a practice set's from its approvers.json, a project's from the maintainers and owned_paths in its precedent.json",
-    'catalogue_stats.py': "The figures about the catalogue that other documents cite, computed rather than hand-typed",
-    'checkin.py': "Drives the periodic check-in (INSTALL.md §4) mechanically",
-    'doc_html.py': "The one sortable-table HTML renderer for repo documents",
-    'result_cache.py': "The shared result cache -- code-keyed memos on one snapshot branch, a leased cold solve that peers wait for",
-    'reach_key.py': "A memo key over the code a solve can reach -- syntax trees of the definitions and constants an entry function touches, so an edit the solve never runs re-keys nothing",
-    'parse_check.py': "Does every JSON/YAML file in scope still parse — changed files for the deep check, the whole tree for the very deep check",
-    'doc_lint.py': "Markdown hygiene checks — strikethrough, links, acronyms",
-    'frontmatter_yaml.py': "The real-YAML frontmatter parser doc_lint.py and verify_harness.py both check against, shared so the two never drift",
-    'generated_blocks.py': "Whether a line is inside a generated block, in both marker styles, closing marker required -- the one answer every scan that skips generated text uses",
-    'doc_lifecycle.py': "The document status header — kind, status, "
-                        "supersession — checked across spec/ and record/",
-    'doc_sync.py': "Keeps script-generated blocks inside documents in sync with what the script emits",
-    'branch_store.py': "Small records on a dedicated branch of a shared remote, with the push as the lock: the git plumbing shared by the lease board and the result cache",
-    'content_record.py': "Hash a set of inputs now and say later whether they still hold and which moved, under frozen schemes: the hashing shared by the fact ledger and any drift check",
-    'fact_ledger.py': "Verified facts (code fingerprint, recorded reads, result) that let a drift gate or an audit skip a unit whose fact still holds",
-    'full_practice_audit.py': "The full practice audit — on-demand, whole-catalogue sweep across every source",
-    'lease_board.py': "The lease board -- work in flight across sessions, one JSON file per lease on a coordination branch, push as the lock",
-    'leak_gate.py': "The push-time leak gate — structural rules always, private-term blocklist when configured",
-    'model_audit.py': "Runs each computing script's own self-assertions and checks the figures it recites",
-    'practice_audit.py': "Audits the practice-export layer for a repo that vendors one (this repo does not)",
-    'practice_simulation.py': "Synthetic scenario generation for routing quality — invented cases, never a replayed benchmark",
-    'precedent_check.py': "The ENFORCED loading channel — runs every practice's `checked_by` script",
-    'precedent_ci_verified.py': "Did CI actually run, and pass, on the commit about to be merged — advisory, one API call",
-    'precedent_gate.py': "The GATE-TRIGGERED loading channel — Rules for a named moment (merge, review, push, reply)",
-    'precedent_reply_check.py': "The reply gate's BLOCKING half — refuses a stop when the reply missed what a source's reply_check.json requires",
-    'precedent_container_safe.py': "Would anything be lost if this container went away? Scans every git checkout in it for uncommitted, untracked and unpushed work",
-    'precedent_close_detect.py': "Stage 1's trigger — at the close of a session that merged and is ready to archive, offers at most one practice candidate found in that session's own material",
-    'precedent_bootstrap_source.py': "Instantiates a brand-new individual or shared practice set from a skeleton, for an adopter who has neither yet",
-    'precedent_source_bootstrap.py': "Clone-or-pull for a privately-scoped individual or shared source, used by its SessionStart hook and by precedent_resolve.py's own lazy self-heal",
-    'precedent_source_credentials.py': "Whether this environment can reach its private practice sources, and the git credential helper that lets a SessionStart hook clone them without add_repo",
-    'github_budget.py': "What this account has left of GitHub's API allowances and what each tool spent -- read off the X-RateLimit headers of calls already being made, because /rate_limit answers a pristine window from inside a session",
-    'precedent_source_names.py': "Whether each declared source repository is still CALLED what this repo calls it -- a rename redirects forever, so only the GitHub API can answer it",
-    'precedent_boundary_check.py': "Whether a document project's contributor boundary is actually ON -- branch protection shaped as spec/CONTRIBUTOR_ACCESS.md needs, read from the GitHub API; UNVERIFIED when it could not ask, which is not a pass",
-    'precedent_owned_paths.py': "Before a pull request: which changed files will wait for a code owner's review, and the plain-words sentence to say to the contributor about it",
-    'precedent_candidate.py': "Stage 2 (phase 5) — raise, list and expire creation-pipeline candidates",
-    'precedent_detect.py': "Stage 1 (phase 5) — the mechanical half of candidate detection",
-    'precedent_land.py': "Stage 5 (phase 5) — writes an approved candidate into practices/, enforcing the registered-check invariant",
-    'precedent_materialize.py': "Bridges precedent_resolve.py's multi-source resolution to the single-tree loader tools",
-    'philosophy_backlinks.py': "EXPERIMENTAL — reports item-to-item citations in "
-        "philosophy/ that run one way only; the return sentence is written by hand, "
-        "never generated",
-    'precedent_whats_new.py': "The mechanics behind \"What's new?\": which finished days on main a project's running log lacks, what changed on each, today so far, and marking the log current -- the entries themselves are the session's to write",
-    'precedent_push_check.py': "Everything GitHub CI used to run on a push, per kind of repository, run locally before it -- `push-check-gate.sh` refuses a push until it passes; a push to a working branch or pre-staging runs its basic tier only",
-    'precedent_branch_name.py': "The name for a session's feature branch, built the same way every time -- `claude/<date>-<slug>-<id>`, the id being the end of the session's ID, or random characters when there is none (practice: act)",
-    'precedent_branches.py': "The three branch tiers -- which branch is pre-staging, staging and main here, and whether a push to one gets the basic or the full push check (spec/BRANCH_TIERS_PLAN.md)",
-    'precedent_consumer_shape.py': "A practice source's check tests run the way a consuming repository runs them -- with git ignoring what a consumer typically ignores, in a copy without the source's own tools/ (only the engine, tools/checks/ and what practices ship) -- so a test that passes only in its home layout fails at home; a source's push check runs it",
-    'precedent_merge_check.py': "The push check on the merge GitHub would make, at its base branch's tier -- `merge-check-gate.sh` runs it before a pull request is merged through GitHub, a push no push gate sees, and again on the merge commit after it, reverting a merge that fails because the base moved in between",
-    'precedent_practice_refs.py': "Who cites a practice, across this repo and every source it declares -- live citations vs history; the lookup behind practice-change-propagates, the merge moment and Update Vendors",
-    'precedent_paths.py': "The PATH-TRIGGERED channel — matches a touched file against every practice's `applies_to`",
-    'precedent_promote.py': "Stage 3 (phase 5) — runs a candidate against the four promotion criteria",
-    'precedent_local_edits.py': "A consuming repo's committed edits to files it received (engine files in tools/, process/upstream/): resolved at Update Vendors -- kept, merged, or replaced by upstream's with the commit that holds them named -- and sent upstream as a scrubbed branch by `send` (spec/LOCAL_EDITS_TO_RECEIVED_FILES_PLAN.md)",
-    'precedent_update.py': "Update Vendors as one command: run from the BestPractice clone against a consuming repo, it refreshes the engine and catalogue, regenerates the views and runs the deep check, then reports DONE, LEFT FOR YOU (only that repo's own calls) or FAILED (spec/ONE_COMMAND_UPDATE_PLAN.md)",
-    'precedent_refresh_sources.py': "Reports which attached practice-set sources have a stale vendored engine, and with --apply brings them up to date; also writes the git credential helper into any attached source clone that has none",
-    'precedent_resolve.py': "Resolves the universal, shared and individual sources into one set, by precedence",
-    'precedent_run_session_hooks.py': "Runs each repo's own SessionStart hooks for a session opened in the folder above them",
-    'precedent_identity.py': "Resolves WHO this repo's commits belong to, from a declaration only -- an override, the repo's own identity.json, or the individual source's; raises rather than guessing",
-    'precedent_decommission.py': "Audits a deprecated file or directory before it is deleted -- refuses while anything still references it, or a workflow it names is still live -- then deletes and records it",
-    'precedent_migrate_status.py': "Classifies practices written under the old status vocabulary, where `retired` meant two different things; proposes, and refuses to guess a renamed successor",
-    'precedent_retire.py': "Stage 6 (phase 5) — the periodic removal report; proposes, never acts",
-    'precedent_session_practices.py': "Writes the shared/individual/repo-local practices in force into an untracked .precedent/ file at session start, since this repo is public and their text may not be committed",
-    'precedent_access_check.py': "Probes, at session start, which repos in force this session can actually push to -- so work destined for one it cannot reach is discovered before it is done, not after",
-    'precedent_session_check.py': "Reports whether this session's SessionStart guarantees are actually in effect -- practices file, commit identity, backstop, packages, refspec, freshness, and the branch it started on -- and `--apply` runs the hooks by hand when the harness never did",
-    'precedent_beta_watermark_check.py': "Says whether anyone other than you has pushed to precedent-beta-v01 since you were last told, against tools/beta_branch_watermark.json beside it -- one row per identity, since 'already told' is true of a person and not of a repository -- unlike the upstream watermark above it advances itself, but only on a run that actually reports somebody else's commits -- a run with nothing to tell you writes nothing at all, and a run whose checkout is mid-work or cannot push writes nothing either, keeping a gitignored per-container note instead, since it gates a notification rather than an action; session start always prints a line, the reply gate's own `remind()` stays silent except on a real alert",
-    'routing_reasons.py': "Every on-demand practice's routing choice on one page, built from each practice's applies_to_why and gates_why into spec/ROUTING_REASONS.md",
-    'our_language.py': "Our language: the short list of words a person needs to follow a conversation about Precedent, read from tools/our_language.json and rendered into documentation/OUR_LANGUAGE.md's generated table (spec/FIVE_STAGES_AND_OUR_LANGUAGE_PLAN.md)",
-    'precedent_which_repo.py': "Names the repo an engine tool reads, and warns when it is run from inside a different one -- engine tools read their own file's repo, never the current directory",
-    'precedent_vocabulary.py': "Lists every standing command in force -- each phrase and the plain sentence a person reads -- collected from the `command:` field of every practice across every resolved source; answers the \"Vocabulary\" command and emits the reader-facing table",
-    'precedent_show.py': "Loads a practice's Rule/Detail/Why/Story/Install — the one code path that reads a practice file",
-    'precedent_time.py': "The ONE emitter for every date and time this repo writes down — resolves whose zone, always carries the offset; run it bare to see which rung answered",
-    'precedent_simulate.py': "One command over the reach/mechanical-correctness and synthetic-batch tiers, plus the running trend log",
-    'precedent_sync_views.py': "One command for a consuming repo: precedent_materialize.py + build_views.py --agents-only, glued together",
-    'precedent_move.py': "Moves an existing practice between levels in the one safe order: lands it at the destination with its text and approval carried, then deduplicates the source copy and regenerates both sets' views; refuses the unsafe states by name",
-    'precedent_install.py': "Installs Precedent into a project in one command (INSTALL.md section 0 performed mechanically: catalogue, engine, precedent.json, templates, sync, lint) and prints the placeholders it left for a person to adapt",
-    'precedent_vendor_engine.py': "Vendors the minimal source-repo engine (this file, precedent_gate/paths/show.py, split_practices.py, a trimmed routing_scope.json) into an individual or shared set, and keeps it refreshable",
-    'resplit_sections.py': "The editorial Rule/Detail/Why/Story/Install split, applied from tools/section_split.json",
-    'todo_progress.py': 'which open items a change may have moved, and which name a file that is gone -- reports a resemblance, never a verdict',
-    'move_paths.py': "Moves tracked files or directories and repoints every reference to them in the same change — relative links, path strings, globs, blob URLs; immutable files reported, never rewritten",
-    'routing_audit.py': "The routing audit — mechanical coverage check plus a rotating deep-read slice",
-    'routing_eval.py': "Measures whether trigger-based loading actually beats carrying the whole catalogue",
-    'routing_eval_synthetic.py': "Stress-tests the occasion-index channel alone, on hand-written synthetic tasks rather than real commits",
-    'session_load_trend.py': "How much room every always-loaded surface has left and how fast it is going -- headroom, the hand-written/generated split, and the growth rate; its headroom_notice() is what the merge and push gates print",
-    'split_practices.py': "PRACTICES.md ↔ practices/ converter",
-    'summary_text.py': "Turns prose into a summary field: links out first, then the cut — run bare to self-check",
-    'table_fmt.py': "One formatter per quantity kind — the engine",
-    'title_case.py': "Headline (New York Times) capitalization for markdown headings — --check to gate, --write to fix",
-    'todo_migrate.py': "One-time converter from the old TODO.md/gotchas-index format into spec/OPEN_ITEM_AND_GOTCHA_PLAN.md's per-item todo/gotchas files, dry-run by default",
-    'build_todo_index.py': "todo/TODO.md and todo/CLOSED.md, generated from todo/*.md's frontmatter",
-    'build_gotcha_index.py': "gotchas/INDEX.md, generated from gotchas/*.md's frontmatter and Symptom sections -- not loaded by AGENTS.md",
-    'verify_harness.py': "The verification harness — run before trusting any change here",
-    'ci_fleet_audit.py': "Every GitHub Actions workflow on every branch of every reachable repo, asked of GitHub: approval, triggers, schedules, 30 days of runs",
-    'precedent_review_page.py': "The very deep check's session-only page: branches to delete, with a link each, and every active practice by source",
-    'very_deep_check.py': "The very deep check — on-demand whole-repo coherence review, distinct from full-practice-audit",
-    'precedent_engine_freshness.py': "Says whether anything this repo vendors or resolves live has fallen behind its upstream — every source precedent.json declares (the engine, each vendored tree, each live sibling clone), one row each; the one check that looks outward; prints, never refreshes",
-}
+def tool_summary(path):
+    """-> the first line of a tool's own module docstring: what MAP.md's
+    "## The engine" table says about it, or None when it has none.
+
+    Read from the tool itself since 2026-10-03 (spec/GENERATED_FILES_PLAN.md
+    step 1, Morgan: generated files are never hand-edited; a change goes
+    into their sources). It used to be TOOLS_DESCRIPTIONS, a hand-typed
+    table here: a second copy of what each tool already says about itself,
+    edited by hand inside the generator. Each entry moved into its tool as
+    that first line, word for word, so the map did not change. Parsed, never
+    imported: a tool's imports are not this generator's business."""
+    import ast
+    try:
+        doc = ast.get_docstring(ast.parse(pathlib.Path(path).read_text(encoding='utf-8')))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    first = (doc or '').strip().splitlines()
+    return first[0].strip() if first and first[0].strip() else None
 
 
 def render_glossary_md(practices, root=None):
@@ -2387,12 +2908,16 @@ def render_glossary_md(practices, root=None):
         for term in _json_list(raw):
             terms.append((term, fm['slug']))
     terms.sort(key=lambda t: t[0].lower())
+    own = _own_source(root, GLOSSARY_SOURCE)
     lines = [
         *generated_label('tools/build_views.py',
-                         "the defines: field of practices/*.md",
+                         (f"{own_source_label(root, GLOSSARY_SOURCE)} and the defines: field of practices/*.md"
+                          if own is not None else
+                          "the defines: field of practices/*.md"),
                          'python3 tools/build_views.py'),
         '',
-        "# Canonical names",
+        *([own, '', "## Names the practices define"] if own is not None
+          else ["# Canonical names"]),
         '',
         "Built from every practice's `defines:` frontmatter field -- the terms that "
         "practice owns (PRACTICE_ENGINE_PLAN.md, The Practice File). A term with no row "
@@ -2423,8 +2948,9 @@ def render_glossary_md(practices, root=None):
             '',
             "The words the mechanism itself is made of. No single practice "
             "owns these, so they cannot come from a `defines:` field -- they "
-            "are declared in [tools/glossary_terms.json](tools/glossary_terms.json) "
-            "and rendered here. **Everything above is a term some practice "
+            "are declared in "
+            + _travel_link(root, 'tools/glossary_terms.json') +
+            " and rendered here. **Everything above is a term some practice "
             "claimed; everything below is a term the engine needs you to "
             "know before any practice makes sense.**",
             '',
@@ -2456,16 +2982,18 @@ def render_glossary_md(practices, root=None):
 # rather than guessed at, leaving a backticked path that misleads nobody.
 def _stays_home(root, see):
     """True when `see` is a file this repo keeps out of the catalogue copy
-    it ships (tools/checkin.py's VENDORING_RULES), so a relative link to it
+    it ships (tools/checkin.py's in_shipped_copy), so a relative link to it
     from a shipped file is broken in every consumer (2026-10-01)."""
     if (pathlib.Path(root) / 'tools' / 'ENGINE_MANIFEST.json').is_file():
         return False          # a consumer or set receives the copy, ships none
     try:
         import checkin
-        rule = checkin.vendoring_rule(see)
+        # The copy's own rule (2026-10-08): vendoring_rule() still counts
+        # tools/ as shipped, so a GLOSSARY link into tools/ stayed relative
+        # and broke in every consumer.
+        return not checkin.in_shipped_copy(see, root)
     except Exception:                                         # noqa: BLE001
         return False
-    return bool(rule) and rule[1] is False
 
 
 def _travel_link(root, see):
@@ -2551,7 +3079,7 @@ def main():
     check = '--check' in argv
     # --agents-only: regenerate just AGENTS.md's loader block (resident
     # block, occasion index, standing instruction), skip MAP.md and
-    # GLOSSARY.md. render_map_md()'s TOOLS_DESCRIPTIONS table and "this repo
+    # GLOSSARY.md. render_map_md()'s engine table and "this repo
     # is BestPractice itself" prose are specific to this repo; a team or
     # individual source repo vendoring this same engine for its OWN
     # catalogue (practice: layered-practice-packs -- every level needs the
@@ -2560,6 +3088,13 @@ def main():
     # wants only the loader-block mechanism, not BestPractice's own MAP/
     # GLOSSARY conventions.
     agents_only = '--agents-only' in argv
+    # --views-only: MAP.md, GLOSSARY.md and WHERE_THINGS_ARE.md, never
+    # AGENTS.md. In a repository that uses Precedent the loader block is the
+    # view sync's to write (precedent_sync_views.py renders it across every
+    # source); rebuilding the views must not rewrite it from practices/
+    # alone. Found 2026-10-03 migrating a real consumer: a full run here
+    # left AGENTS.md different from a fresh sync.
+    views_only = '--views-only' in argv
     global STRICT_BUDGETS
     STRICT_BUDGETS = '--budgets' in argv
     practices = load_practices(practices_dir)
@@ -2573,8 +3108,11 @@ def main():
     # the set it publishes. Only the loader block covers every declared
     # source, because that block is what a session actually loads.
     try:
-        block_practices, levels = loader_practices(root, practices)
-    except _BlockNotVerifiable:
+        block_practices, levels = loader_practices(
+            root, practices,
+            individual_absent=('ignore' if views_only else
+                               'raise' if check or STRICT_BUDGETS else 'notice'))
+    except _BlockNotVerifiable as e:
         # Exit 0: not verified is not a failure, and not a pass either --
         # the reason is already on stderr, in those words.
         if check:
@@ -2585,13 +3123,21 @@ def main():
         # write refusal below). It says it measured nothing, in words
         # precedent_check.py turns into COULD NOT VERIFY, never a pass.
         if STRICT_BUDGETS:
-            print(BUDGETS_NOT_VERIFIED + ": a declared source is not "
-                  "reachable here, so the loader block's caps were not measured")
+            print(BUDGETS_NOT_VERIFIED + ": " + (
+                e.args[0] if e.args else "a declared source is not reachable "
+                "here") + ", so the loader block's caps were not measured")
             return 0
         sys.exit("build_views FAIL: refusing to WRITE a loader block from an "
                  "incomplete source set -- that would silently drop every "
                  "practice the unreachable sources contribute. Make them "
                  "resolvable, then re-run.")
+    # A practice for code owners only (`visible_to: code-owners`) never goes
+    # in the tracked block: it reads the same for everyone who opens the
+    # repository, so it cannot tell a code owner from anyone else. It reaches
+    # code owners through the untracked session file instead
+    # (precedent_session_practices.py; Morgan, 2026-10-05).
+    # (Code-owners-only practices are left out by build_loader_block itself,
+    # so every renderer of the committed block agrees.)
     # Whatever the tracked block could not carry -- a private source in a
     # public repo, or another repository's catalogue in a practice set --
     # reaches the session only through the untracked file, so the standing
@@ -2619,7 +3165,12 @@ def main():
         print("build_views --budgets OK: the resident block, the occasion "
               "index and this source's occasion share are within their caps")
         return 0
-    targets = [(agents_md, new_agents)]
+    where = _where_source(root)
+    if where is not None:
+        new_agents = splice_quick_index(new_agents, where)
+    targets = [] if views_only else [(agents_md, new_agents)]
+    if where is not None and not agents_only:
+        targets.append((root / WHERE_PAGE, render_where_things_are(where)))
     if not agents_only:
         # Load a SECOND time without the in-force filter: load_practices()
         # drops withdrawn practices by design (that filter is what stopped a
@@ -2628,8 +3179,29 @@ def main():
         _all = load_practices(practices_dir, in_force_only=False)
         _in_force = {id(t) for t in practices}
         withdrawn = [t for t in _all if not is_in_force(t[0])]
-        targets.append((map_md, render_map_md(practices, withdrawn)))
-        targets.append((glossary_md, render_glossary_md(practices, root)))
+        for path, render in ((map_md, lambda: render_map_md(practices, withdrawn, root)),
+                             (glossary_md, lambda: render_glossary_md(practices, root))):
+            # A view whose own source file exists has been migrated: it is
+            # generated from now on, whatever the file on disk says.
+            src = MAP_SOURCE if path.name == 'MAP.md' else GLOSSARY_SOURCE
+            # A views-only rebuild (a consumer's sync, migration or commit
+            # backstop) keeps the views a repository has and never adds one
+            # it lacks: a consumer whose glossary lives in docs/ got a root
+            # GLOSSARY.md, untracked, every time its MAP.source.md changed
+            # (2026-10-03). A consumer's --check judges the same set: one
+            # whose glossary lives in docs/ failed every check on a root
+            # GLOSSARY.md no rebuild of its own would ever write (2026-10-04,
+            # a consumer's Update Vendors). Everywhere else a deleted view is
+            # still drift -- BestPractice and a practice set write both.
+            if (views_only or (check and repo_is_consumer(root))) \
+                    and not path.exists() and not has_own_source(root, src):
+                continue
+            if is_generated_view(path) or has_own_source(root, src):
+                targets.append((path, render()))
+            else:
+                print(f"build_views: {path.name} has no generated_by header, so "
+                      f"it is this repository's own and is left alone.",
+                      file=sys.stderr)
 
     if check:
         drift = []

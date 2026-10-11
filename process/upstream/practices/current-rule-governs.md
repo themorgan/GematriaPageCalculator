@@ -45,7 +45,7 @@ plainly part, the person hears it, with what you would do.
 
 **Finding the rule in force.** Through the loader this is already done for
 you: the occasion index lists every command, and
-[tools/precedent_show.py](../tools/precedent_show.py) prints a
+[tools/precedent_show.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_show.py) prints a
 `NOT IN FORCE HERE` banner on a redundant copy and names the slug to load
 instead. Reading a practice file by hand, look at its `status:` before its
 `## Rule`. Only `active` is a rule. `deduplicated` names where the rule
@@ -80,7 +80,7 @@ again against the current file
 decline whose upstream file has changed since.
 
 **Reconsidering is always open. It just comes after the work.** *"I know
-`Go update` is in effect, but maybe we should reconsider it"* can be said
+`Drop it` is in effect, but maybe we should reconsider it"* can be said
 at any time. How hard to argue depends on the approval's `strength:`
 ([decision-strength](decision-strength.md)): an `assented` rule can be
 argued freely, and a `decided` one gets an open item rather than a debate
@@ -88,7 +88,7 @@ in the thread. Neither one is a reason to leave the command undone.
 
 **What legitimately stops a command.** A step that was actually refused
 (quote the refusal), a check that is red, or a sentence that really could go
-either way ([go-update](go-update.md) says how to say that out loud). An
+either way (say the reading out loud and confirm it first). An
 older rule that said something else is not on that list. Neither is a
 feeling that the person might not have meant it.
 
@@ -167,9 +167,9 @@ was fair. Two of the ways in are checked, though: `precedent_show.py`
 redirects a deduplicated slug, and `practice_audit.py` check 6 fails on a
 decline that the upstream file has moved past.
 
-**Related:** [go-update](go-update.md) (the command this was coined over),
-[decision-strength](decision-strength.md) (how hard a reconsideration may
-push), [docs-are-current-state](docs-are-current-state.md) (a document
-states what is true now) and
+**Related:** [decision-strength](decision-strength.md) (how hard a
+reconsideration may push),
+[docs-are-current-state](docs-are-current-state.md) (a document states
+what is true now) and
 [index-remembers-past](index-remembers-past.md) (lineage lives in the
 index, not in the rule a session acts on).

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""practice_audit.py — audit the practice-export layer
+"""Audits the practice-export layer for a repo that vendors one (this repo does not)
+
+practice_audit.py — audit the practice-export layer
 (practice: practice-export-loop; practice: scrub-gate; practice: layered-practice-packs).
 
 Runs from a dependent repo, from its own vendored engine in tools/ (the
@@ -26,13 +28,19 @@ checks against each manifest's own vendored tree — any FAIL exits non-zero:
      local_sha256 baseline. Changed while status is "synced" → FAIL — the
      local improvement must be exported to the vendored tree and re-baselined
      (--update-baseline), or the entry deliberately flipped to "diverged"
-     (then it is listed as pending export, not failed). This exists because
+     (then it is listed as pending export, not failed). A bare
+     --update-baseline never re-baselines a diverged entry, since its hash
+     mismatch is what lists it as pending; --entry NAME (repeatable, a
+     practice name or local_path) limits the update to the entries named,
+     whatever their status, and fails on a name that matches nothing. This exists because
      "copy changes back" as a prose rule is exactly the kind of convention
      that gets skipped under pressure.
 
   3. INTEGRITY. Manifest and upstream paths exist; "section"-granularity
      entries' section_marker still occurs in local_path (warn-only — section
-     tracking is approximate by design); "local-only" entries carry notes.
+     tracking is approximate by design); "local-only" entries carry notes,
+     and a change to one is never listed as pending export -- nothing
+     upstream receives it.
 
   4. LAYOUT (root hygiene). Upstream-internal docs (INSTALL.md,
      PRACTICES.md, SETUP.md, ...) must not sit at the dependent repo's
@@ -91,7 +99,10 @@ checks against each manifest's own vendored tree — any FAIL exits non-zero:
      migration is finished (spec/MIGRATING_EXISTING_INSTALLS.md step 7).
 
 Run:  python3 tools/practice_audit.py                    # gate (all manifests)
-      python3 tools/practice_audit.py --update-baseline  # re-record hashes
+      python3 tools/practice_audit.py --update-baseline  # re-record hashes (diverged entries left alone);
+                                                    # exits on the re-baseline alone, and prints
+                                                    # what the audit still fails on
+      python3 tools/practice_audit.py --update-baseline --entry NAME  # only the entries named
       python3 tools/practice_audit.py --manifest process/manifest.json  # one manifest
       python3 tools/practice_audit.py --loader-notice    # check 5 only, never fails
                                                     # (what tools/bootstrap.sh prints at session start)
@@ -161,7 +172,11 @@ def scrub(tree, blocklist_path, fails, label):
     if reason == 'missing':
         fails.append(f"SCRUB: [{label}] blocklist configured at "
                      f"{blocklist_path.relative_to(ROOT)} but the file does not "
-                     f"exist — the scrub did not run, which is not a pass")
+                     f"exist — the scrub did not run, which is not a pass. "
+                     f"Write this repo's private words there, or, if it has "
+                     f"none, set \"scrub_blocklist\": null under \"upstream\" "
+                     f"in the manifest with a note saying why (an absent key "
+                     f"means this default file)")
         print(f"scrub [{label}]: FAIL — configured blocklist "
               f"{blocklist_path.relative_to(ROOT)} is missing.")
         return
@@ -243,20 +258,19 @@ def stale_declines(manifest_path):
     # source, and every consumer's declines read as gone (2026-09-30, a
     # real consumer whose three declined files were all there, hashes
     # matching).
-    tree = manifest_path.resolve().parents[1] / manifest.get('upstream', {}).get(
-        'vendored_at', 'process/upstream')
+    repo, tree = _manifest_tree(manifest_path, manifest)
     out = []
     for e in manifest.get('entries', []):
         if e.get('status') != 'declined':
             continue
         name = f"{label}:{e.get('practice', '?')}"
         rel = e.get('upstream_path') or ''
-        upstream = _upstream_file(tree, rel)
         if not rel:
             out.append((name, 'declined with no upstream_path, so nothing can tell '
                               'when the practice it declined has moved on'))
             continue
-        if not upstream.is_file():
+        current, upstream = decline_basis(repo, tree, rel)
+        if current is None:
             out.append((name, f'declined {rel}, which is no longer in the vendored tree '
                               f'(renamed, merged or removed upstream) -- find what carries '
                               f'that rule now and decide again'))
@@ -268,9 +282,9 @@ def stale_declines(manifest_path):
                               f'decide again against the current file, then --redecide '
                               f'{e.get("practice", "?")}'))
             continue
-        if sha256(upstream) == recorded:
+        if current == recorded:
             continue
-        fm = _frontmatter(upstream)
+        fm = _frontmatter(upstream) if upstream is not None else {}
         now = []
         status = fm.get('status', '')
         if status and status != 'active':
@@ -296,17 +310,17 @@ def redecide(manifest_paths, practice):
     hits = 0
     for mp in manifest_paths:
         manifest = json.loads(mp.read_text(encoding='utf-8'))
-        tree = ROOT / manifest.get('upstream', {}).get('vendored_at', 'process/upstream')
+        repo, tree = _manifest_tree(mp, manifest)
         for e in manifest.get('entries', []):
             if e.get('practice') != practice or e.get('status') != 'declined':
                 continue
-            upstream = _upstream_file(tree, e.get('upstream_path') or '')
-            if not upstream.is_file():
+            current, _ = decline_basis(repo, tree, e.get('upstream_path') or '')
+            if current is None:
                 print(f"practice_audit --redecide: {practice}'s upstream_path "
                       f"{e.get('upstream_path')!r} is not in the vendored tree; point "
                       f"the entry at what carries the rule now first.")
                 return 1
-            e['declined_upstream_sha256'] = sha256(upstream)
+            e['declined_upstream_sha256'] = current
             mp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n',
                           encoding='utf-8')
             print(f"practice_audit --redecide: recorded the current hash of "
@@ -318,6 +332,72 @@ def redecide(manifest_paths, practice):
               f"status 'declined'.")
         return 1
     return 0
+
+
+def _manifest_tree(manifest_path, manifest):
+    """-> (repo, vendored tree) for one process/manifest*.json: the repo that
+    owns the manifest (<repo>/process/manifest*.json), never this module's
+    own ROOT, which is the source clone when precedent_update.py runs this
+    through checkin.py --repo."""
+    repo = manifest_path.resolve().parents[1]
+    return repo, repo / manifest.get('upstream', {}).get('vendored_at', 'process/upstream')
+
+
+def decline_basis(repo, tree, rel):
+    """-> (sha256, path or None): THE hash a decline of upstream file `rel`
+    is judged against, or (None, None) when this repo receives no copy of it.
+    --redecide records it and stale_declines() compares with it, so the two
+    can never disagree (practice: current-rule-governs).
+
+    It is upstream's text at the commit this repo takes, read from what the
+    repo itself holds -- never from a source clone, whose working tree may
+    sit on any branch, and which the consumer's own audit does not have:
+      - a file in the vendored tree: that copy, which the catalogue mirror
+        writes byte for byte from the commit being taken;
+      - a tools/ file the copy leaves out (this repo vendors its own engine,
+        checkin.py _copy_carries_tools): the hash tools/ENGINE_MANIFEST.json
+        records for it, which is upstream's text as the engine refresh wrote
+        it -- the same after a local edit to the file, which the manifest
+        reads as drift against that hash.
+    Until 2026-10-08 the second case hashed `ROOT/tools/...`, and ROOT is
+    this module's repository: the consumer when --redecide ran there, the
+    source clone's working tree when the update ran the check. The update
+    missed a moved decline on its first run and asked about it again on
+    every run after --redecide; a second --redecide undid a hand correction.
+    A tools/ file the engine does not vendor reaches this repo by neither
+    route, so there is no upstream text here to judge a decline by.
+
+    The engine manifest answers for a tools/ file FIRST once the repo
+    vendors its engine, even when the tree still holds a copy: that copy is
+    a leftover the mirror no longer writes (2026-10-08, a consuming
+    repository carried 99 of them under process/upstream/tools/), so a
+    decline judged by it would never see upstream move."""
+    if not rel:
+        return None, None
+    up = tree / rel
+    if up.is_file() and not (rel.startswith('tools/') and _vendors_engine(repo)):
+        return sha256(up), up
+    if rel.startswith('tools/'):
+        try:
+            recorded = (json.loads((repo / 'tools' / 'ENGINE_MANIFEST.json').read_text(
+                encoding='utf-8')).get('sha256') or {}).get(rel[len('tools/'):])
+        except (OSError, ValueError, AttributeError):
+            recorded = None
+        if recorded:
+            here = repo / rel
+            return recorded, here if here.is_file() else None
+    return None, None
+
+
+def _vendors_engine(repo):
+    """True when the catalogue copy leaves tools/ out of `repo` because its
+    own tools/ holds the vendored engine: checkin._copy_carries_tools, the
+    one answer, asked here rather than restated."""
+    try:
+        import checkin
+    except Exception:  # noqa: BLE001 -- an install with no checkin.py beside this
+        return False
+    return not checkin._copy_carries_tools(repo)
 
 
 def _upstream_file(tree, rel):
@@ -338,7 +418,7 @@ def _upstream_file(tree, rel):
     return up
 
 
-def audit_manifest(manifest_path, update, fails, warns, pending):
+def audit_manifest(manifest_path, update, fails, warns, pending, entries=None, matched=None):
     label = manifest_path.stem.replace('manifest_', '').replace('manifest', 'upstream') or 'upstream'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     up = manifest.get('upstream', {})
@@ -383,7 +463,24 @@ def audit_manifest(manifest_path, update, fails, warns, pending):
         gran = e.get('granularity', 'file')
         if gran == 'file':
             cur = sha256(local)
-            if update:
+            # What --update-baseline accepts: with --entry, only the named
+            # entries (any status); without, every entry except a diverged
+            # one. A diverged entry is listed as pending export only while
+            # its file differs from its baseline, so re-baselining it erases
+            # the one signal that it still waits on an export. Found
+            # 2026-10-07: a consuming repo accepted one shim with a bare run,
+            # and five pending exports went silently to zero.
+            named = entries is not None and (e.get('practice') in entries
+                                              or e.get('local_path') in entries)
+            if named and matched is not None:
+                matched.update({e.get('practice'), e.get('local_path')} & set(entries))
+            accept = update and (named or (entries is None and (status != 'diverged'
+                                                            or not e.get('local_sha256'))))
+            if update and entries is None and status == 'diverged' \
+                    and e.get('local_sha256') and e.get('local_sha256') != cur:
+                print(f"  left [{name}] {e['local_path']}: 'diverged', still pending "
+                      f"export -- name it with --entry to re-baseline it")
+            if accept:
                 if e.get('local_sha256') != cur:
                     # Name every re-baselined entry: a 'synced' entry re-baselining
                     # here means its drift was never exported — silent absorption
@@ -409,12 +506,33 @@ def audit_manifest(manifest_path, update, fails, warns, pending):
                     fails.append(f"DRIFT: [{name}] {e['local_path']} changed since baseline while "
                                  f"status='synced' — export the change to {up.get('vendored_at', 'the vendored tree')} "
                                  f"and --update-baseline, or flip the entry to 'diverged'")
-                else:
+                elif status != 'local-only':
+                    # A local-only file has nothing upstream to receive it,
+                    # so its changes are never "pending export" -- reporting
+                    # them so listed host configuration (a shim's registry,
+                    # a settings file's additions) as owed upstream on every
+                    # run, which is how a consuming repo came to carry five
+                    # permanent false entries (found 2026-10-07).
                     pending.append(f"[{name}] {e['local_path']} (status={status}) — pending export")
         elif gran == 'section':
             marker = e.get('section_marker', '')
             if marker and marker not in local.read_text(encoding='utf-8', errors='ignore'):
-                warns.append(f"[{name}] section_marker not found in {e['local_path']}: '{marker}'")
+                # A repo's own session-start steps moved out of the engine's
+                # tools/bootstrap.sh into tools/bootstrap.local.sh
+                # (2026-10-01), and an entry that still names bootstrap.sh
+                # warned on every run with no hint where its section went
+                # (2026-10-10, a consumer). Say where, when it is there.
+                moved = ''
+                # joinpath, not the slash spelling: a repo need not have the
+                # file, and vendored-engine-file-refs-resolve reads that
+                # spelling as a companion the engine must ship.
+                local_sh = (ROOT / 'tools').joinpath('bootstrap.local.sh')
+                if (e['local_path'] == 'tools/bootstrap.sh' and local_sh.is_file()
+                        and marker in local_sh.read_text(encoding='utf-8', errors='ignore')):
+                    moved = (" -- it is in tools/bootstrap.local.sh, where a repo's "
+                             "own session-start steps live: set this entry's "
+                             "local_path to tools/bootstrap.local.sh")
+                warns.append(f"[{name}] section_marker not found in {e['local_path']}: '{marker}'{moved}")
 
     if update and changed:
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
@@ -477,8 +595,15 @@ def loader_gaps(root):
     sources = cfg.get('sources', {}) if isinstance(cfg, dict) else {}
     if isinstance(sources, dict):
         sources = list(sources.values())
-    if not any(isinstance(s, dict) and s.get('level') == 'universal'
-               for s in sources or []):
+    try:
+        import precedent_resolve as _pr
+        declared_level = _pr.declared_level
+    except Exception:                                           # noqa: BLE001
+        # No resolver beside this copy: `universal` has no older spelling,
+        # so the raw field answers this one question exactly.
+        def declared_level(s):
+            return s.get('level') if isinstance(s, dict) else None
+    if not any(declared_level(s) == 'universal' for s in sources or []):
         gaps.append('precedent.json declares no `level: "universal"` source, so '
                     'nothing resolves process/upstream/practices/')
     if not any(LOADER_MARKER in (root / n).read_text(encoding='utf-8', errors='replace')
@@ -523,8 +648,9 @@ def loader(fails):
         "loader, whole, in one change: " + MIGRATION_DOC)
 
 
-def audit(update=False, only=None):
+def audit(update=False, only=None, entries=None):
     fails, warns, pending = [], [], []
+    matched = set()
     if only:
         manifests = [ROOT / only]
     else:
@@ -551,9 +677,15 @@ def audit(update=False, only=None):
         if not m.exists():
             print(f"practice_audit FAIL: no manifest at {m}")
             return 1
-        n += audit_manifest(m, update, fails, warns, pending)
+        n += audit_manifest(m, update, fails, warns, pending, entries, matched)
         claimed |= {e.get('local_path')
                     for e in json.loads(m.read_text(encoding='utf-8')).get('entries', [])}
+    if entries is not None:
+        unknown = sorted(set(entries) - matched)
+        if unknown:
+            # A mistyped name must not read as accepted: nothing was, for it.
+            fails.append("UPDATE: --entry matched no manifest entry (by practice name or "
+                         "local_path), so nothing was re-baselined for: " + ", ".join(unknown))
     layout(fails, claimed)  # check 4 — root hygiene, once per audit
     loader(fails)           # check 5 — the catalogue is actually in force
     gap = engine_gap(ROOT)  # check 8 — a refresh can reach the engine
@@ -570,6 +702,29 @@ def audit(update=False, only=None):
         print(f"pending: {p}")
     for w in warns:
         print(f"WARN: {w}")
+    if update:
+        # --update-baseline answers for the baselines alone. Until
+        # 2026-10-08 it ended on the whole gate's verdict, so a stale decline
+        # elsewhere in the manifest closed a re-baseline that had just been
+        # written with "FAIL -- 2 error(s)", read in a consuming repository
+        # as a refusal: two independent fixes, coupled. What the gate finds
+        # is still printed, every line, and the audit run bare still fails
+        # on it; only a failure of the re-baseline itself fails this run.
+        own = [f for f in fails if f.startswith('UPDATE:')]
+        rest = [f for f in fails if f not in own]
+        for f in rest:
+            print(f"STILL FAILING THE AUDIT: {f}")
+        for f in own:
+            print(f"FAIL: {f}")
+        if own:
+            print(f"\npractice_audit --update-baseline FAIL — {len(own)} error(s).")
+            return 1
+        print(f"practice_audit --update-baseline OK: {len(manifests)} manifest(s), "
+              f"{n} entries"
+              + (f"; the audit itself still fails on the {len(rest)} finding(s) "
+                 f"above -- run it bare once they are fixed"
+                 if rest else "") + ".")
+        return 0
     for f in fails:
         print(f"FAIL: {f}")
     if fails:
@@ -614,4 +769,9 @@ if __name__ == '__main__':
             sys.exit('practice_audit: --redecide needs the entry\'s practice name')
         paths = [ROOT / only] if only else sorted((ROOT / 'process').glob('manifest*.json'))
         sys.exit(redecide(paths, args[i + 1]))
-    sys.exit(audit(update='--update-baseline' in args, only=only))
+    entries = None
+    if '--entry' in args:
+        entries = [args[i + 1] for i, a in enumerate(args) if a == '--entry' and i + 1 < len(args)]
+        if '--update-baseline' not in args or len(entries) != args.count('--entry'):
+            sys.exit('practice_audit: --entry NAME goes with --update-baseline, once per entry')
+    sys.exit(audit(update='--update-baseline' in args, only=only, entries=entries))

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""title_case.py — headline capitalization for markdown headings.
+"""Headline (New York Times) capitalization for markdown headings — --check to gate, --write to fix
+
+title_case.py — headline capitalization for markdown headings.
 
 Checks (bare, the default) or applies (--write) New York Times headline
 capitalization on every ATX heading in the files given, or, when none are
@@ -50,6 +52,10 @@ INTERNAL_DIRS = (
     ".claude", ".github", ".precedent", "candidates", "decisions", "deck",
     "evals", "examples", "gotchas", "local", "practices", "process",
     "record", "spec", "templates", "todo", "tools",
+    # The directory form of MAP.source.md and GLOSSARY.source.md (2026-10-04,
+    # build_views.py THE SOURCE AS A DIRECTORY): the same text, one file per
+    # entry, so it keeps the classification the file had.
+    "MAP.source", "GLOSSARY.source",
 )
 # `todo` and `gotchas` joined 2026-09-21, and it is the THIRD instance of the
 # cause the note below already names. Both directories were created by the
@@ -115,6 +121,13 @@ INTERNAL_FILES = (
     # decided -- the same accident that left record/ out of INTERNAL_DIRS
     # above until somebody noticed the twin.
     "WHERE_THINGS_ARE.md",
+    # MAP.source.md and GLOSSARY.source.md joined on 2026-10-03, the day a
+    # consumer's hand-written map moved into one (spec/GENERATED_FILES_PLAN.md
+    # step 5): they are the hand-written half of MAP.md and GLOSSARY.md, so
+    # the same text kept its classification when it changed files, and the
+    # first push after the migration stopped refusing headings it had
+    # always had.
+    "MAP.source.md", "GLOSSARY.source.md",
 )
 
 
@@ -211,6 +224,14 @@ def _paths_config(root):
 def _extra_internal(root):
     """Back-compat shim: the internal half alone."""
     return _paths_config(root)[0]
+
+
+def output_paths_declared(root="."):
+    """Has this repo said, in precedent.json's `output_paths`, which documents
+    it publishes? Other checks that judge "reader-facing documents" ask this
+    first, so a repo that answered the question once is not second-guessed by
+    each of them separately."""
+    return _paths_config(root)[1] is not None
 
 
 def is_outward(rel_path, root="."):
