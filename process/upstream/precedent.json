@@ -32,7 +32,19 @@
     "",
     "Renamed from precedent-beta-v01 to staging on 2026-09-25 (spec/BRANCH_TIERS_PLAN.md; Morgan: \"we should always call the staging one staging including renaming that branch to staging in precedent\", strength: decided; Alex approving, relayed by Morgan). precedent-beta-v01 is kept, fast-forwarded to staging by every Promote, so an install still pinned to it updates onto the engine that names staging."
   ],
+  "trunk": "main",
+  "_trunk_comment": [
+    "The branch everything here ends up on, whatever a repository calls it",
+    "(practice: default-branch). Declared because this repository's work lands",
+    "on `staging` (base_branch) and is promoted to `main`, so the two differ and",
+    "the check cannot tell which is the trunk on its own (2026-10-05)."
+  ],
   "visibility": "public",
+  "_maintainers_comment": "Who runs this repository. With no owned_paths, build_codeowners.py generates no CODEOWNERS from it, so GitHub requests no reviews; tools/precedent_audience.py reads it to decide who sees the practices marked visible_to: code-owners (2026-10-05).",
+  "maintainers": [
+    {"name": "Alex", "github": "alex137"},
+    {"name": "Morgan F", "github": "themorgan"}
+  ],
   "branch_stale_days": 30,
   "_branch_stale_days_comment": [
     "How old a MERGED, undeleted branch has to be before the very deep",
@@ -273,8 +285,9 @@
   "_grandfathered_commit_shas_comment": [
     "Commits exempted from the shared check_session_trailer.py, which",
     "the very deep check runs against this repository from the",
-    "precedent-shared-repo-maintenance source (its CHECK COVERAGE",
-    "section, 'other sources' checks'). Each carries its own note.",
+    "precedent-shared-repo-maintenance source until 2026-10-06, when the",
+    "check moved into tools/checks/ and this repo stopped declaring the",
+    "set. Each carries its own note.",
     "They are published history, and rewriting it to quiet a check is",
     "what no-rewrite-for-warnings forbids; the check's own Install",
     "names this list as the remedy. Every commit made after them is",
@@ -285,8 +298,8 @@
     "practice's explicit opt-out (or PRECEDENT_SESSION_URL when a",
     "session hands one over). The rest are sessions that forgot.",
     "",
-    "THE SAME KEY IS READ BY tools/checks/check_commit_author.py,",
-    "check_buenos_aires_dates.py and very_deep_check.py's commit-",
+    "THE SAME KEY IS READ BY tools/check_commit_author.py,",
+    "tools/check_commit_dates.py and very_deep_check.py's commit-",
     "identity window, so an entry here exempts that commit from those",
     "too. Measured before adding these: check_commit_author.py passed",
     "on this history, so none of its findings is hidden. Two of them",
@@ -297,19 +310,19 @@
   "grandfathered_commit_shas": [
     {
       "sha": "8f86c439a598a4e223fde04831967cb9c09e3a06",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "79102c386b507961a498d5acb5f6d8e1f0c337b0",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "8863356280b816e771b92a2970a3d351a61abbed",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "4c4b020aff145f0a4d994729ffb546c16dcd1ced",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "3f0a8f23dc2e7b52c1636ea0744818bddc253029",
@@ -321,19 +334,19 @@
     },
     {
       "sha": "3a59555aa515e5b1a6da4a76c68b9d5211c538e9",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "ebe368a1d609b38d62fe2214a1e10bbf27b143a9",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "081b442eafdb45740a53f7de44a73e303a0f5cb0",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "b45f6fd706dd460fbd0f6b6400ac945941a9ca7e",
-      "note": "Written by tools/precedent_beta_watermark_check.py, which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
+      "note": "Written by the beta-branch watermark check (retired 2026-10-08), which put no session trailer on its commits until 2026-09-28; published history, not rewritten (practice: no-rewrite-for-warnings)"
     },
     {
       "sha": "7e6c61f485479a2d910b7f3e51d362c39f1fbfcb",
@@ -719,18 +732,8 @@
     },
     {
       "level": "shared",
-      "name": "precedent-shared-repo-maintenance",
-      "path": "../precedent-shared-repo-maintenance"
-    },
-    {
-      "level": "shared",
       "name": "precedent-shared-writing",
       "path": "../precedent-shared-writing"
-    },
-    {
-      "level": "shared",
-      "name": "precedent-shared-working-style",
-      "path": "../precedent-shared-working-style"
     },
     {
       "level": "repo-local",
@@ -805,5 +808,24 @@
       "from": "templates/harness/claude-code/hooks/stop-reply-check.sh",
       "to": ".claude/hooks/stop-reply-check.sh"
     }
+  ],
+  "_github_ci_approved_comment": "The person's approval of a workflow edit, pinned to the file's content (practice: ci-workflow-approved). In this repo the check judges only growth, and a failure-only step is not growth; recorded anyway, so the words behind the step that opens an issue when main's test fails sit beside the file they approved.",
+  "github_ci_approved": {
+    ".github/workflows/deep-check.yml": {
+      "sha256": "006809934c923d560d33ea9281c78eefea6a0304fabd22164c07a689719c0684",
+      "approved_by": "Morgan, 2026-10-09: \"Act on the ... plan\" (the plan's piece B, layer 2: a failed test on main opens a GitHub issue); Morgan, 2026-10-10: \"yes, build it and take it to main\" (a passed test pushes a git marker, refs/precedent/passed/<tree>, with contents: write on the job); Morgan, 2026-10-11: \"Both yml are fine and approved.\" (a passing run on main's head closes the main-test-failed issue, from both jobs, with issues: write on the already-tested job)"
+    },
+    ".github/workflows/leak-gate.yml": {
+      "sha256": "e74122363b355f06ed0a73ab15b48111407cebab3a372bfef0d41e27b0b1f041",
+      "approved_by": "Morgan, 2026-10-11: \"Both yml are fine and approved.\" (the structural leak gate on each push to main, and by hand; a merge made on GitHub never passes the session's own push gate)"
+    }
+  },
+  "landing_branch": "staging",
+  "_landing_branch_comment": [
+    "Where Booked lands for anyone on the ladder whose own identity.json names",
+    "no landing_branch: straight on staging, with the quick checks; Produce moves",
+    "staging into main fast, and GitHub's test runs after the merge. Anyone off",
+    "the ladder lands on main, as before. Set 2026-10-09 (Morgan: \"Please update",
+    "BP so it uses the new system\"); pre-staging was the landing branch until then."
   ]
 }

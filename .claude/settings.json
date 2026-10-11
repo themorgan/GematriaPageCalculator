@@ -41,6 +41,11 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-identity.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh SessionStart",
+            "timeout": 900
           }
         ]
       }
@@ -51,6 +56,11 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/reply-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh UserPromptSubmit",
+            "timeout": 900
           }
         ]
       },
@@ -136,6 +146,24 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/freshness-guard.sh pre-write main"
           }
         ]
+      },
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/artifact-publish-gate.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh PreToolUse",
+            "timeout": 900
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -145,6 +173,15 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/merge-check-gate.sh",
+            "timeout": 900
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh PostToolUse",
             "timeout": 900
           }
         ]
@@ -160,6 +197,11 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-reply-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh Stop",
+            "timeout": 900
           }
         ]
       }

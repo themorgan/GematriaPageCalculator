@@ -77,7 +77,7 @@ the one it already made, or the one it is about to make.
    someone has to remember to update. Remove that. Add a check only for the
    part that cannot be removed, and say which part that is. Example: new
    practices kept arriving without an entry in a second routing file, and a
-   test caught it at staging; the fix was to move the reason into the
+   full check caught it later; the fix was to move the reason into the
    practice file itself, so there is no second file to forget.
 6. **Any new exemption is a sign the root fix has not been made.** Before
    adding an exemption, allowlist or waiver entry to any check, ask why the
@@ -103,12 +103,36 @@ the one it already made, or the one it is about to make.
    it as the fix, and record the durable fix as an open item naming what it
    is blocked on.
 
+   **When it cannot wait, fix it here, and save the upstream fix as a
+   [Prompt Please](prompt-please.md).** A local workaround to a file this
+   repo receives (an engine file, a vendored copy) is allowed when the fix
+   is urgent. In the same turn, write the upstream fix as a Prompt Please,
+   save it in an open item under `todo/` that names the file (a
+   `## Prompt Please` section, the block in a fence), and give it in the
+   reply, so the person takes it upstream when it suits them.
+   `precedent_check.py --only upstream-fix` refuses an edited engine file
+   with neither that item nor one linking the upstream pull request.
+   **The quick fix ends when upstream has its own**: from then on
+   upstream's version replaces it, unless it does something different and
+   important ([vendor-update-runbook](vendor-update-runbook.md), "Upstream's
+   version is the default").
+
+   **A check never skips a vendored file silently.** What it finds there is
+   upstream's to fix and never fails this repo, and it is still reported,
+   as upstream's: a skip nobody sees is how a broken copy ships to every
+   repository with nobody noticing.
+
 **The origin and every copy:**
 
 8. **Who else has a copy?** Every other place the same file, or the same
    mistake, went. **Fix the origin first, then the copies, and name all of
-   them in the reply.** An origin this session cannot reach is a
-   `blocked-on` item naming the repository, never a silent omission.
+   them in the reply.** An origin in another repository is fixed there in
+   the same turn: request access if it is needed and open the pull request
+   (`python3 tools/upstream_fix.py PATH` sets it up). Another repository,
+   or access the session can request, is never a `blocked-on` reason
+   ([todo-is-a-handoff](todo-is-a-handoff.md)); an open item about it only
+   waits on that pull request, and links it -- or, for a fix that could not
+   wait, holds the saved Prompt Please (point 7).
 9. **What should have caught it earlier, and why didn't it?** When one gate
    passed what a later one failed (local green but GitHub red, one
    checkout's gate green and another's red), **that difference is its own
@@ -132,7 +156,7 @@ their next `Update Vendors` will actually carry it.
 survive a fresh container?* and *does a person who was not here get it
 without being told?* A fix that fails either is on rung 3 or below. A
 durable fix can be genuinely out of reach (it needs someone else's
-approval, a repository this session cannot push to, a decision nobody has
+approval, access that was requested and refused, a decision nobody has
 made); that is a legitimate reason for a band-aid, and exactly the case
 where saying which one you applied matters most.
 
@@ -156,7 +180,7 @@ fix that does get made.
 
 **Doing the root fix follows the authorization already in force.** This
 rule licenses making the root fix. It does not add a push or a merge
-authorization of its own. When Booked (`Go update`) or an equivalent covers the
+authorization of its own. When the person's go-ahead to land it covers the
 work, the root fix lands with it. When nothing does, commit it and say it
 is ready to land.
 
@@ -231,6 +255,16 @@ did not know two names were fixed by engine tools. *"Maybe whenever we need
 to add an 'exemption' of any sort anywhere, we always use that as an
 example of a root fix opportunity."* Both root fixes shipped with the rule.
 
+**Point 8's unreachable origin, 2026-10-06.** It used to end "an origin
+this session cannot reach is a `blocked-on` item naming the repository",
+and sessions read "cannot reach" as "has no push access yet": in one
+consumer four such items sat for one to two weeks, each an hour's fix. S.
+Alexander Jacobson: *"Then let's figure out how to make sure fixes are made
+at commit time."* Point 8 now says to request the access and open the pull
+request in the same turn, and doc_lint.py refuses an open item about an
+upstream fix that links none ([todo-is-a-handoff](todo-is-a-handoff.md)).
+Strength: decided.
+
 **Retired as a command, 2026-10-01.** Morgan had stopped saying "Upstream
 fix": he wanted the root fixed every time, and asking for it one fix at a
 time had become the wrong shape. What he did keep asking, by pasting the
@@ -238,6 +272,20 @@ same paragraph into session after session, was whether anything the
 session had run into should go back upstream; that became
 [root-issues](root-issues.md). Points 1 to 4 became standing rules here the
 same day. Strength: decided.
+
+**Silent skips and saved prompts, 2026-10-08.** 320 links in the catalogue
+copy every consumer receives pointed at files the copy leaves out. Nothing
+reported them: BestPractice's own check judged the copy by a stale rule,
+and every consumer's link check skipped vendored files on purpose, so the
+one place the breakage showed was a consumer's hand-written light check.
+Asked how to enforce root fixes more strongly, Morgan took the first half
+of the proposal and replaced the second: *"(a) yes let's do it and (b) no
+because sometimes it's urgent and you need to do how about this idea: what
+if they can fix it BUT they also must do a prompt please so the user can
+easily bring it upstream at his convenience later."* So a vendored file's
+findings are reported, never failed and never hidden, and a local
+workaround to an engine file is allowed with a saved Prompt Please beside
+it. Strength: decided.
 
 ## Install
 **Where the answer goes: [The Boildown](the-boildown.md)'s fix line**,

@@ -66,11 +66,11 @@ mechanism.** A separate session fixing
 [gotcha-2026-09-18-verify-harnesss-stress-checks-can-oom-kill-the-bash-tools.md](gotcha-2026-09-18-verify-harnesss-stress-checks-can-oom-kill-the-bash-tools.md)
 found that `check_leak_gate_refuses_a_fresh_container` — the exact check
 this file is about — was fanning out into an unbounded recursive chain of
-[precedent_session_practices.py](../tools/precedent_session_practices.py)
+[precedent_session_practices.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_session_practices.py)
 subprocesses, all writing inside the same kind of fixture tree this check
 tears down, and measured that check dropping from 241.8s to 1.72s once the
 recursion was fixed (an env-var reentrancy guard in
-[precedent_resolve.py](../tools/precedent_resolve.py)'s
+[precedent_resolve.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_resolve.py)'s
 `_self_heal_stale_render()`).
 241.8s is within a second of the 243.3s this check took in the very run
 that hit the `ENOTEMPTY` documented above — the "transient filesystem race"
@@ -82,3 +82,17 @@ contending for the same directory tree, not a git filesystem-monitor daemon.
 caused the one directory it has actually seen fail to be transiently
 non-empty. But the specific hypothesis in the Story above is superseded by
 this dated, measured finding, not merely unconfirmed.
+
+## Recurrence (2026-10-05): the retry is shared now
+
+It came back on a different check, as this file said would argue for
+sharing the retry: `check_session_check_adopts_a_detached_start` crashed
+the "everything else" job of a Produce's GitHub test with `Directory not
+empty: '/tmp/tmp…/.git'`, on a tree whose full check had passed locally.
+That check runs plain synchronous `git` commands and starts nothing in the
+background, so the writer was again something outside the check -- still
+unmeasured. `_install_retrying_tempdir_cleanup()` now routes every
+`tempfile.TemporaryDirectory()` cleanup in the harness through
+`_rmtree_retrying()`; a directory that never empties still raises, with
+its contents, so the next occurrence brings the evidence this one lacked.
+

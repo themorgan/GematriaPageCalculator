@@ -10,10 +10,11 @@
     "require_first_item_under_heading": {
       "heading": "boildown",
       "matching": "^\\s*the work of this session is now on\\s*:",
-      "why": "The Boildown opens with where the work is and which of the five stages it finished -- \"The work of this session is now on: <branch> (you have finished step N of 5, <Stage>)\" -- in every reply, a plan-only one included (no branch yet, step 1 of 5, Consider)."
+      "why": "The Boildown opens with where the work is -- \"The work of this session is now on: <branch>\" -- in every reply, a plan-only one included (\"no branch yet\")."
     },
-    "why": "Morgan, 2026-09-29 (strength: decided): the first bullet after the Boildown heading names the branch this session's work is on and the stage it has finished, with no exception. Blocking, like the heading beside it, because it is structural: the line is either first under the heading or it is not, and a line meant for every reply is the kind a session drops when the rest of the reply feels finished.",
-    "checks_practice_at": "practices/the-boildown.md"
+    "why": "Morgan, 2026-09-29 (strength: decided): the first bullet after the Boildown heading names the branch this session's work is on, with no exception. Blocking, like the heading beside it, because it is structural: the line is either first under the heading or it is not, and a line meant for every reply is the kind a session drops when the rest of the reply feels finished. A set a person brings may restate it with the same id (tools/precedent_reply_check.py _settle).",
+    "checks_practice_at": "practices/the-boildown.md",
+    "id": "boildown-first-bullet"
   },
   {
     "practice": "the-boildown",
@@ -68,6 +69,51 @@
       ],
       "why": "2026-09-23: the rule's own `why` above has always carried Morgan's parenthesis -- \"(unless the work is intended to be lost!)\" -- and the code never implemented it. The refusal even told the reader to \"say in the reply that it is meant to be lost\" and then ignored them doing so. A session said exactly that in three consecutive replies about 34 superseded watermark commits in a clone 74 behind its origin, on an owner the git proxy refuses pushes to; all three were refused, so all three closed by telling Morgan not to archive a session he could safely archive. A gate that forces a false statement is no longer a safety mechanism. The escape is not a password: _declares_loss also requires the reply to NAME every unsafe checkout, so the 2026-09-22 case that built this rule -- a session that had never looked at the clone holding six unpushed commits -- is still caught, because it could not have named it.\n\n2026-09-23, later the same day: the phrase list itself turned out to be the next version of the same bug. A different session had ALREADY said the substance plainly -- 'safe to let the container reclaim them', 'confirmed superseded... busywork' -- across two replies about the same kind of dead watermark commits, and both were refused for matching none of the four fixed strings, so a session that had done the work of establishing loss was safe still could not say so without guessing the exact incantation. Morgan: \"That rule, as you read it, it makes no sense... if there's some way to force it to fire, that would be great.\" A phrase LIST was never going to close this gap; the fix is a structured marker (`**Checkout disposition:** NAME -- discard (reason)`) checked per unsafe checkout by name, same shape as park-it's own `**Disposition:**` line, so the escape is legible and greppable rather than a password to guess. The phrase list stays as a fallback for prose that already reads correctly under the old rule; the marker is what a reply should reach for going forward."
     }
+  },
+  {
+    "practice": "the-boildown",
+    "id": "boildown-not-repeated",
+    "require_section_not_repeated": {
+      "heading": "boildown",
+      "one_line": "- The work of this session is now on: <where it is>, unchanged since the last update.",
+      "same_when_both_say": [
+        "Don't archive this session",
+        "You can archive this session"
+      ],
+      "why": "a section that says again what the last one said, reworded, costs the person a read and tells them nothing"
+    },
+    "why": "Morgan, 2026-10-05 (strength: decided): three Boildowns in a row said the same three things around one new fact -- 'a boildown with nothing should be one line.' Blocking: the refusal asks for nothing further, since the repeat is already on screen; the turn-start gate shows the last Boildown so the repeat is not written at all.",
+    "checks_practice_at": "practices/the-boildown.md"
+  },
+  {
+    "practice": "the-boildown",
+    "id": "quiet-while-a-batch-runs",
+    "require_quiet_while_background_runs": {
+      "why": "a batch reports once, when it is done or something fails"
+    },
+    "why": "Morgan, 2026-10-05 (strength: decided): four Debuts run one after another reported themselves one at a time, each reply with its own Boildown -- 'Note that you have sent me 4 boildowns in this session.' Agreed the same day: a reply to a job finishing carries no Boildown unless the job is done, and a batch reports once ('#1 and #2 are GREAT'). Blocking, and the refusal asks for one waiting line, never nothing (2026-10-06: an empty turn makes the harness ask for visible output): the reply is already on screen, and what the refusal buys is the next wake handled right. tools/precedent_reply_check.py's turn_wake() reads what woke the turn and which background commands are still running from the transcript.",
+    "checks_practice_at": "practices/the-boildown.md"
+  },
+  {
+    "practice": "the-boildown",
+    "id": "landed-branch-gets-its-delete-link",
+    "require_delete_link_when_landed": true,
+    "why": "the-boildown item 6 and branch-delete-links: a branch that lands during the turn is used up, and the reply hands over its one-click delete link. Found 2026-10-06: a session merged its branch and gave none, because only the not-landed half was enforced.",
+    "checks_practice_at": "practices/the-boildown.md"
+  },
+  {
+    "practice": "the-boildown",
+    "id": "practice-ideas-only-at-the-close",
+    "require_paired_with": [
+      {
+        "if_matches": "^\\s*(?:[-*+]\\s+)?(?:\\*\\*)?(?:practice|process|content) ideas?(?:\\*\\*)?\\s*:",
+        "must_also_match": "You can archive this session",
+        "why": "practice ideas are offered only at the natural end of the conversation, in the reply that says the session can be archived",
+        "repair": "It offered practice ideas (a Process idea or a Content idea), and this is not the reply that closes the session (it does not say \"You can archive this session\"). Output ONE line withdrawing them -- \"(Practice ideas withdrawn: they belong in the closing reply.)\" -- and end the turn; an empty reply is not accepted by the harness. Do NOT add the archive line to satisfy this unless the session really is ready to archive; offer practice ideas only in the reply that is."
+      }
+    ],
+    "why": "Morgan, 2026-10-05 (strength: decided): practice ideas belong at the natural end of a conversation, not after every message. The closing list was already gated on the session being ready to archive, in prose only; this makes the gate mechanical for the one item he asked about.",
+    "checks_practice_at": "practices/the-boildown.md"
   },
   {
     "practice": "rule-links",
@@ -127,12 +173,46 @@
     "practice": "prompt-please",
     "require_in_fence_paired_with": [
       {
-        "if_matches": "^(?![^\\n]*\\b(?:do not|don't|never|not|no|nothing|without)\\b)[^\\n]*\\b(?:land|merge|promote|push|pull request|PR)\\w*\\b[^\\n]{0,80}?\\b(?:into|onto|on|to)\\s+[`\\\"']?(?:pre-staging|staging|main)\\b",
-        "must_also_match": "[\\\"“'‘]\\s*(?:Booked|Approved|Go update|Book it)\\b|^>\\s[^\\n]*\\b(?:Booked|Approved|Go update|Book it)\\b",
-        "why": "a paste block that tells another session to land, merge, push or open a pull request onto pre-staging, staging or main carries landing authority, and only the person's own Booked (or Approved, Go update) for this handoff gives it -- quoted in the block, so the receiving session can check it. Without that word, the prompt ends at Act: build on the feature branch, push it there, and stop"
+        "if_matches": "\\b(?:(?:land|merg|promot|push)\\w*|pull requests?|PRs?)\\b[^\\n]{0,80}?\\b(?:into|onto|on|to|against)\\s+[`\\\"']?(?:main|master|the main branch|the base branch)\\b",
+        "also_if_matches": [
+          "\\b(?:make|put|take|push|send)\\s+(?:\\S+\\s+){0,2}?live\\b",
+          "\\bgo(?:es|ing)?\\s+live\\b",
+          "\\b(?:ship|deploy|release|publish|roll\\s+out)\\w*\\b[^\\n]{0,60}?\\b(?:to|into|on|in)\\s+(?:production|prod)\\b",
+          "\\bship\\s+(?:it|this|them|the\\s+(?:work|fix|change|branch)\\w*)\\b",
+          "\\bfast[- ]forward\\w*\\s+(?:origin/)?[`\\\"']?(?:main|master)\\b[`\\\"']?\\s+(?:to|onto)\\b",
+          "\\bfast[- ]forward\\w*\\b[^\\n]{0,60}?\\b(?:into|onto)\\s+[`\\\"']?(?:origin/)?(?:main|master)\\b",
+          "\\bmerg\\w*\\s+(?:(?:the|this|that|your|its|their|both|all)\\s+)?(?:\\S+\\s+){0,2}?(?:PRs?|pull requests?)\\b",
+          "\\bgh\\s+pr\\s+merge\\b",
+          "--base[\\s=]+[`\\\"']?(?:main|master)\\b",
+          "\\bgit\\s+push\\b[^\\n]*?\\s(?:\\S+:)?(?:refs/heads/)?(?:main|master)\\b(?![\\w/.-])"
+        ],
+        "must_also_match": "^>\\s.+|(?<!\\w)[\"“'‘][^\"”’']*\\b(?:[Aa]pproved?|[Mm]erge|[Pp]ush|[Ll]and|[Gg]o ahead)\\w*\\b",
+        "why": "a paste block that tells another session to land, merge, push or open a pull request onto the main branch, or says the same in other words (make it live, ship it, gh pr merge, git push origin main) carries landing authority, and only the person's own words for this handoff give it -- quoted in the block, so the receiving session can check them. Without them, the prompt ends with the work built on a feature branch, pushed there, and stopped",
+        "narration_exempt": true,
+        "narration_exempt_if_block_matches": "\\bfeature branch\\b[^\\n]{0,80}?\\bstop\\b",
+        "negation_exempt_if_clause_negates": {
+          "before": "\\b(?:do not|does not|did not|not|never|no|nothing|none|neither|nor|\\w+n['’]t)\\b(?!\\s+(?:hesitate|forget|fail|wait|delay|bother|need|only|just|matter|later|longer|questions?|problem|stop)\\b)|\\bwithout\\b(?!\\s+(?!(?:land|merg|push|promot|open|ship|deploy|releas|mak|fast)\\w*)\\w+ing\\b)",
+          "object": "\\b(?:nothing|none|no)\\b(?!\\s+(?:but|except|questions?|matter|later|longer|problem)\\b)"
+        },
+        "description_exempt_if_clause_preceded_by": "\\b(?:on|after|before|for|by|from|in|at|during|upon|per|whenever|when|once)\\s+(?:a|an|the|every|each|any|one|another)\\s+",
+        "quoted_output_exempt_if_preceded_by": "\\b(?:prints?|printed|printing|outputs?|output|shows?|showed|displays?|displayed|logs?|logged|warns?|warned|the (?:message|line|output))\\b(?:\\s+\\S+){0,3}?\\s*:?"
       }
     ],
-    "why": "2026-10-01: two prompts a session wrote ended 'Land it on staging per this repo's conventions'. Morgan had not said Booked, and routine work lands on pre-staging, never staging. fence-block-for-paste passed both, because it checks that a block says where it goes, not what it authorizes. Morgan: 'No, we always want to do it in the local container (\"Act\") and then I'll authorize it to go to pre-staging via \"Promote\" etc.'",
-    "checks_practice_at": "practices/prompt-please.md"
+    "why": "2026-10-01: two prompts a session wrote told another session to land work, though the person had not said to. fence-block-for-paste passed both, because it checks that a block says where it goes, not what it authorizes. 2026-10-08: it refused a block that ended at the feature branch, because the block's situation paragraph reported that a tool had told an earlier session to open a pull request to main; in a block that says it stops at the feature branch, a clause narrating what a session or tool did or was told is not an instruction, and every other clause is still judged. Later on 2026-10-08: the rule skipped any line with 'no' or 'without' in it, so 'Merge it into main, no questions asked' passed; a negator now exempts a clause only when it governs the landing verb, and the rule reads the other ways a block says land (make it live, ship it, merge the PR, gh pr merge, git push origin main). Morgan: 'shouldn't it understand the intent behind commands not just the literal words?' (practice: read-for-intent).",
+    "checks_practice_at": "practices/prompt-please.md",
+    "id": "prompt-please-landing-authority"
+  },
+  {
+    "practice": "seeded-prompt-names-its-origin",
+    "require_prompt_block_header": {
+      "prompt_block_if_matches": "Sent automatically by the session|Nobody typed this|^\\s*Seed root:|^\\s*For:\\s+(?:the session|a new session)|^\\s*From:?\\s+(?:the )?(?:session\\s+)?[\"“`]|intended for the session",
+      "from_line": "^(?:Sent automatically by the session|From:?\\s)[^\\n]*https://claude\\.ai/code/session_\\w+",
+      "for_line": "^For:\\s+(?:the session\\b[^\\n]*https://claude\\.ai/code/session_\\w+|a new session rooted in\\s+\\S+)",
+      "sender_in_prompt": "(?:Sent automatically by the session|\\bFrom:?\\s+(?:the )?(?:session\\s+)?[\"“`])[^\\n]{0,300}?(https://claude\\.ai/code/session_\\w+)",
+      "exempt_if_reply_says": "\\bOpen a new session\\b"
+    },
+    "why": "Morgan, 2026-10-10 (strength: decided): \"Every prompt you give me should have BOTH at the top: the session sending it, and what session it is for.\" With many sessions open, the For line is what tells him which window a block goes to. A reply to another session's message goes back to that session; a reply whose plain text says \"Open a new session\" says so in its For line instead. It replaced reply-block-names-its-session (2026-10-08), which recognized a sender only as From \"...\" (link) and missed one opening \"Sent automatically by the session\".",
+    "checks_practice_at": "practices/seeded-prompt-names-its-origin.md",
+    "id": "prompt-block-names-both-ends"
   }
 ]

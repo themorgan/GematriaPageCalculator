@@ -1,6 +1,6 @@
 ---
 slug:        answer-first-ask-before-long-work
-title:       Answer the easy questions first; propose a long task before starting it
+title:       Answer the easy questions first; propose a long task before starting it; an open question never pauses the work
 tier:        resident
 severity:    default
 applies_to:  ["**"]
@@ -9,26 +9,37 @@ gates:       []
 index_clause: "easy answers first; a long run is proposed with its cost -- never just started"
 checked_by:  null
 defines:     ["long task"]
-status:      deduplicated
-in_force_at: answer-first-ask-before-long-work
+status:      active
+in_force_at: null
 supersedes:  []
 overrides:   null
-added:       "2026-09-17"
-approved_by: "S. Alexander Jacobson, 2026-09-17 -- his own direction in dependent repo #1, adopted verbatim as the rule: \"As a general practice, we should not start long tasks without checking with the user about doing so and without answering easy questions first.\" Checked in from that repo the same day."
+added:       "2026-10-05"
+approved_by: "Morgan F, drafted 2026-10-05, moved from the shared set precedent-shared-working-style; merged in PR #879 on 2026-10-05; part 2's exception narrowed to the quick checks by Morgan F, 2026-10-07; the clock-time sentence added by S. Alexander Jacobson, 2026-10-07; tightened back under 150 words, Morgan F, 2026-10-07"
 strength:    decided
 ---
 ## Rule
-Three parts. **(1) Answer the easy questions in a message before starting
-anything long** — in the same turn; the long run never gates the answer.
-**(2) A task that will run longer than a few minutes is proposed, not
-started:** what it is, how long from the tool's own cost line, what it
-blocks and what it does not, then the go-ahead. The exceptions are the
-checks a commit needs on the files the turn touched, and a run already
-asked for by name. **(3) When idle on a wait, say what the wait is for,
-what it will change, and how to stop it** — never a bare "still running".
-A background task nobody asked for is stopped, not waited on.
+**(1) Answer the easy questions first**, in the same message; the long run
+never gates the answer. **(2) A task longer than a few minutes is proposed,
+not started:** what it is, how long by the tool's own cost line, what it
+blocks and doesn't, then the go-ahead, except a commit's quick checks on
+the files the turn touched (never a whole suite) and a run asked for by name.
+**(3) Idle on a wait, say what it is for, what it will change, and how to
+stop it**, never a bare "still running"; a background task nobody asked for
+is stopped, not waited on. **(4) An open question is not a stopping point:**
+ask it early, and keep working on whatever its answer doesn't touch. **Every
+"how long" carries the clock time it lands, in the person's zone, named:**
+"about 15 minutes, done around 15:35 New York time".
 
 ## Detail
+**Why a clock time, and whose.** A duration says nothing once the reader
+has lost track of when it was said, and chat surfaces show no timestamps,
+so "15 minutes" leaves the person no way to know when to look back. The
+zone is the person's declared timezone, else the one their own commits
+carry; never the container's unless it is theirs, and always written out,
+since the person, a colleague and the machine are often in three. S.
+Alexander Jacobson, 2026-10-07 (strength: decided): "let's also make a
+practice of reporting a future time not just a duration estimate".
+
 **What part 1 means by an easy question:** one answered from what is already
 known, without waiting on a run. **What part 2 means by a long task:** a
 cold solve, a search family, a re-solve cascade, a whole-tree gate. Both
@@ -42,11 +53,26 @@ message: the task, its estimated duration from a measured cost line
 question. A run that was authorized once is not authorized again after
 its inputs change — a merge that re-keys a cache is a new proposal.
 
+**What part 4 means by a question that may stop the work:** sort pending
+questions into blockers and everything else. A blocker is one where
+proceeding under any assumption would be unsafe, spend real money or touch
+production the wrong way, or make the delivered work useless if the guess is
+wrong -- only those justify stopping with nothing delivered. Everything else
+is non-blocking: do the work that doesn't depend on the answer and the work
+that comes out the same either way, then ask, then carry on with whatever's
+still independent. Ask as soon as the question is formed rather than saving
+it for a summary, since the person is often away when the answer would be
+most useful; where the answer would change work already done, say so when
+asking, so the cost of each option is visible.
+
 ## Why
 A long run started unasked costs twice: the person waits for something
 they did not choose, and the easy answers they did ask for wait behind
 it. And a wait nobody explained is indistinguishable from a hang, so the
 person either interrupts healthy work or sits through dead work.
+Part 4 is the same cost from the other side: the answer to an open question
+should arrive while work is still in flight, and a question asked only at the
+end of a session has nowhere useful to land.
 
 ## Story
 A session launched an hours-long re-solve while four conceptual
@@ -79,16 +105,46 @@ move refuses exactly this direction (`--from universal`) for exactly this
 reason, which this incident confirms rather than merely asserts. Reverted
 the same day, Morgan F: stays universal, `tier: resident`, as before.
 
-Also landed in the shared set `precedent-shared-working-style` on 2026-09-23, approved there by Morgan F. Kept ACTIVE here, not deduplicated: universal is the one level every Precedent consumer resolves, and a plain universal-only consumer never resolves a pointer into `precedent-shared-working-style` -- deduplicating this copy would leave the rule in force nowhere for them (the failure `verify_harness.py --as-ci`'s consumer-fixture check exists to catch, and did, 2026-09-23). Both copies are genuinely in force; review both when editing either. Withdraw this copy later, deliberately, with `--dedupe-only --accept-reach-loss` once the audience that matters has taken `precedent-shared-working-style`.
+Later on 2026-09-23 (commit `73ad9f14`) this universal copy was withdrawn
+after all and pointed at the working-style set's copy, which was the one in
+force from then. **2026-10-05: this file is the live copy again**, moved
+back as the working-style set folded away (Morgan F, strength: decided).
 
-Withdrawn from universal on 2026-09-23, deliberately, with --accept-reach-loss: deduplicated here; the rule is in force only from the shared set `precedent-shared-working-style` now. A consumer resolving only universal no longer gets it.
+**2026-10-01, part (4) absorbed from `nonblocking-questions`**, in the
+reduction pass recorded in BestPractice's
+[todo-2026-09-30-session-file-cut-to-4000.md](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)
+("Reduction pass review, 2026-10-01"). The two resident rules were one
+subject -- what a session does with its time while a person has not yet
+answered -- and loading both on every turn paid for two headers and two
+framings of it. Its Rule became part (4) and its blocker test moved into
+`## Detail` whole; its file is `status: deduplicated` and points here.
+Approved by Morgan F, 2026-10-01: *"Question 3 - all are great, approved"*
+(strength: decided).
+
+**2026-10-07, part (2)'s exception narrowed to the quick checks.** A
+session started BestPractice's whole test suite by hand to double-check
+work bound only for pre-staging, whose own push check takes seconds. It
+quoted fifteen to twenty-five minutes from memory; a third of the way in,
+twenty-five minutes had gone, and the one-process run takes about forty.
+It had read "the checks a commit needs" as covering the whole suite. Morgan
+asked how to stop it happening again, and approved all three answers
+(*"Yes, make those changes"*, strength: decided): the suite now prints what
+it costs before it starts, a full run started by hand refuses without
+`--because` quoting the person's go-ahead, and this exception names the
+quick checks.
+
+**2026-10-07, back under 150 words.** The clock-time clause added that
+afternoon took the Rule to 171 words, and with it this resident rule pushed
+a session file one consumer had capped at 4,000 tokens past its target. Tightened
+in a reduction pass, all four parts and the clause kept, nothing moved out
+(Morgan F, "take all the reduction proposals", strength: decided).
 
 ## Install
 Adopt the rule in the working-conventions file and name the cost-line
 convention it depends on (every heavy tool prints its estimated duration
 before it runs; see
-[slow-steps-report-and-cache](slow-steps-report-and-cache.md) for the
+[slow-steps-report-and-cache](https://github.com/alex137/BestPractice/blob/staging/practices/slow-steps-report-and-cache.md) for the
 progress line and the memo, and
-[scripts-assert-properties](scripts-assert-properties.md) for the
+[scripts-assert-properties](https://github.com/alex137/BestPractice/blob/staging/practices/scripts-assert-properties.md) for the
 model-side discipline). A wait longer than a minute reports elapsed and
 remaining time on its own.

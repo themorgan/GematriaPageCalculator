@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""ci_fleet_audit.py -- every GitHub Actions workflow on every branch of
+"""Every GitHub Actions workflow on every branch of every reachable repo, asked of GitHub: approval, triggers, schedules, 30 days of runs
+
+ci_fleet_audit.py -- every GitHub Actions workflow on every branch of
 every repository this run can reach, asked of GITHUB rather than of a clone
 (practice: ci-workflow-approved; run by very_deep_check.py's CI FLEET AUDIT
 section).
@@ -510,6 +512,15 @@ def discover(root=None):
     except (OSError, ValueError, AttributeError):
         pass
     slugs = {s for s in (_origin_slug(d) for d in dirs) if s}
+    # A clone of a DELETED set can still sit beside this checkout (a session
+    # attached it before it was deleted). Its workflows run nowhere, and
+    # asking GitHub about it spent a refused call per question on 2026-10-11.
+    try:
+        import precedent_resolve as _pr
+        gone = {n.lower() for n in _pr.deleted_sets()}
+    except Exception:                                            # noqa: BLE001
+        gone = set()
+    slugs = {s for s in slugs if s.split('/', 1)[-1].lower() not in gone}
     return sorted(slugs, key=str.lower)
 
 

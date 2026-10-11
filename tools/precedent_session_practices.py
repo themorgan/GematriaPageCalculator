@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_session_practices.py — write the practices in force from EVERY
+"""Writes the shared/individual/repo-local practices in force into an untracked .precedent/ file at session start, since this repo is public and their text may not be committed
+
+precedent_session_practices.py — write the practices in force from EVERY
 declared source into an untracked file a session reads at start.
 
 THE PROBLEM (measured, spec/PRELAUNCH_AUDIT.md, 2026-09-06). This repo's
@@ -39,12 +41,44 @@ omitted -- "this source was unreachable" and "this source has no practices"
 must not look the same, which is the failure mode this repo's own
 environment-gotchas section already records twice.
 
+PRINTED AS WELL AS WRITTEN (2026-10-04). A file on disk is not in a
+session's context (gotcha-2026-09-20-a-sessionstart-hook-writing-a-file-is-
+not-the-session-loadi). A practice set's own hook,
+precedent-universal-catalogue.sh, hands the file back as context, but a
+consumer's session-start hook only ran this tool, so a set the person brings
+-- the ladder's stage words, among them -- reached a consumer's session as an
+unread file, and "Debut" had to be searched for. So the write also prints
+the file on stdout, where a SessionStart hook's output becomes context.
+`--quiet` prints none of it, for a hook that emits the file itself.
+
+SPOKEN COMMANDS FIRST, AND SMALL (2026-10-04, the review of the above). A
+session opened above several repos gets every repo's start-up output joined
+and cut at a cap, and with five sets attached the ladder lines came after
+the cut. So the file OPENS with one line per practice here that defines a
+spoken command: its words, its slug and its one-line clause, under
+SPOKEN_HEAD. A session-start runner lifts those blocks to the front of
+everything it hands over (precedent_run_session_hooks.py).
+
+AND ONLY THERE (2026-10-08, a reduction pass). Until then the block was
+printed ahead of the file, and the file's occasion index listed every one
+of those practices again, so a session paid for each command twice. A
+consuming repository's session file went over its ceiling on exactly that.
+Now the block is the file's first section, the file's occasion index leaves
+those practices out (build_views.build_loader_block's omit_commands), and
+the file is printed once. The tracked AGENTS.md has no such list, so its
+own index still carries them. Because the block is part of the file, the
+share of it a brought set accounts for is charged to the person's brought
+budget, like the rest of that set (brought_share renders through render()).
+
 Run:
-  python3 tools/precedent_session_practices.py            # write the file
+  python3 tools/precedent_session_practices.py            # write the file and print it
+  python3 tools/precedent_session_practices.py --quiet    # write it, print nothing
   python3 tools/precedent_session_practices.py --check    # report, write nothing
   python3 tools/precedent_session_practices.py --repo DIR
 """
+import collections
 import json
+import os
 import pathlib
 import sys
 
@@ -55,6 +89,10 @@ import precedent_resolve as pr      # noqa: E402
 
 OUT_DIR = '.precedent'
 OUT_NAME = 'SESSION_PRACTICES.md'
+# The first line of the spoken-commands block, which is this line and the
+# `- ` lines right after it. precedent_run_session_hooks.py finds it by this.
+SPOKEN_HEAD = ('Spoken commands in force here that AGENTS.md does not carry '
+               '(load one with: python3 tools/precedent_show.py SLUG):')
 
 # WHICH LEVELS THIS FILE CARRIES: exactly the ones a public repo's tracked
 # loader block leaves out, which is build_views.PRIVATE_LEVELS -- imported
@@ -64,8 +102,10 @@ OUT_NAME = 'SESSION_PRACTICES.md'
 # and this file would have duplicated it into every session.
 
 
-def collect(repo):
-    """-> (extra_practices, levels, notes). `extra_practices` is in
+def collect(repo, skip_brought=False):
+    """-> (extra_practices, levels, notes). `skip_brought` leaves out the
+    sets the person brings, for measuring what bringing them costs
+    (brought_share). `extra_practices` is in
     build_views.load_practices()' (fm, sections, file) shape so the loader
     block is rendered by the SAME code that renders AGENTS.md -- a second
     renderer here would drift from that one, which is the whole reason
@@ -83,6 +123,8 @@ def collect(repo):
         sources = pr.load_config(repo)
     except Exception as e:                                   # noqa: BLE001
         return [], {}, [('unresolved', f'no source set could be read: {e}')]
+    if skip_brought:
+        sources = [s for s in sources if not s.get('brought')]
 
     try:
         res = pr.resolve(sources)
@@ -111,7 +153,22 @@ def collect(repo):
         pathlib.Path(repo), sources)
     notes += [('deferred', n) for n in split_notes]
     deferred_paths = {str(pathlib.Path(s['path']).resolve()) for s in deferred}
-    if not deferred:
+
+    # CODE OWNERS ONLY (Morgan, 2026-10-05). The tracked block never carries
+    # a practice marked `visible_to: code-owners`, since it reads the same for
+    # everyone; this file is per session, so it carries them to a code owner
+    # from EVERY source, and leaves them out for anyone else, saying why.
+    try:
+        import precedent_audience as pa
+        _owner_only = {slug for slug, p in res['practices'].items()
+                       if pa.for_code_owners(p['fm'])}
+        _is_owner, _ = pa.is_code_owner(repo)
+    except Exception:                                        # noqa: BLE001
+        pa, _owner_only, _is_owner = None, set(), False
+    if _owner_only and not _is_owner:
+        notes.append(('hidden', pa.hidden_notice(repo, sorted(_owner_only))))
+
+    if not deferred and not (_owner_only and _is_owner):
         notes.append((
             'deferred',
             'every source this repo declares is already carried by its '
@@ -120,7 +177,10 @@ def collect(repo):
 
     extra, levels = [], {}
     for slug, p in sorted(res['practices'].items()):
-        if not _from_deferred_source(p, deferred_paths):
+        if slug in _owner_only:
+            if not _is_owner:
+                continue
+        elif not _from_deferred_source(p, deferred_paths):
             continue
         extra.append((p['fm'], p['sections'], pathlib.Path(p['file'])))
         levels[slug] = p['level']
@@ -210,11 +270,22 @@ def render(extra, levels, notes, repo=None):
         '',
         title,
         '',
-        intro,
-        '',
     ]
+    # THE SPOKEN COMMANDS ARE THE FIRST SECTION, ahead of the intro, so
+    # whatever cuts the start-up output short, they come before the cut;
+    # and the occasion index below leaves those practices out
+    # (omit_commands), so each command is paid for once (AND ONLY THERE,
+    # in the module docstring).
+    spoken = spoken_block(extra)
+    if spoken:
+        head += [spoken.rstrip('\n'), '']
+    head += [intro, '']
     unresolved = [n for kind, n in notes if kind == 'unresolved']
     deferred_notes = [n for kind, n in notes if kind == 'deferred']
+    # One line, kept short: every session pays for it.
+    head += [n for kind, n in notes if kind == 'hidden' and n]
+    if any(kind == 'hidden' and n for kind, n in notes):
+        head += ['']
     if unresolved:
         head += ['## Sources that did not resolve this session', '',
                  'These are missing, and their practices are NOT below.', '']
@@ -254,6 +325,14 @@ def render(extra, levels, notes, repo=None):
     # SessionStart hook and no practices at all. The registry already had the
     # right row; nothing read it.
     budget = bv.surface_budget(f'{OUT_DIR}/{OUT_NAME}', 4000)
+    # ...plus the person's own budget for the sets they bring, when they
+    # bring any (BROUGHT_BUDGET_KEY): their share is not the repo's to pay.
+    if repo:
+        try:
+            if any(s.get('brought') for s in pr.load_config(str(repo))):
+                budget += brought_budget(repo)[0] or 0
+        except Exception:                                    # noqa: BLE001
+            pass
     # The tracked AGENTS.md is loaded every session alongside this file, so a
     # standing-instruction sentence or index note it already carries word for
     # word is left out of this one (build_loader_block's `carried`).
@@ -263,9 +342,10 @@ def render(extra, levels, notes, repo=None):
         carried = None
     try:
         block, _tokens, _count = bv.build_loader_block(
-            extra, source_levels=levels,
+            extra, include_code_owners=True, source_levels=levels,
             block_dir=_repo / OUT_DIR, repo_root=_repo,
-            budget_tokens=budget, carried=carried, regen_comment=False)
+            budget_tokens=budget, carried=carried, regen_comment=False,
+            omit_commands=True)
     except bv.ResidentBudgetExceeded as e:
         # OVER BUDGET STILL WRITES, loudly. This runs from a session-start
         # hook: refusing means the session is bound by practices it was never
@@ -274,9 +354,10 @@ def render(extra, levels, notes, repo=None):
         # that refuses is build_views' own CLI, on the tracked block
         # (practice: fail-gracefully -- keep going, never look complete).
         block, _tokens, _count = bv.build_loader_block(
-            extra, source_levels=levels,
+            extra, include_code_owners=True, source_levels=levels,
             block_dir=_repo / OUT_DIR, repo_root=_repo,
-            budget_tokens=e.tokens, carried=carried, regen_comment=False)
+            budget_tokens=e.tokens, carried=carried, regen_comment=False,
+            omit_commands=True)
         head += [
             f'> **Over budget: this block is ~{e.tokens} tokens against a '
             f'declared ceiling of {e.budget}.** It is written anyway, because '
@@ -316,7 +397,7 @@ def without_target_warning(text):
     return text
 
 
-def _with_target_warning(repo, text):
+def _with_target_warning(repo, text, brought=0):
     """-> `text` with a warning under its title when the file is over the
     `target` its registry entry declares, else `text` unchanged.
 
@@ -334,7 +415,10 @@ def _with_target_warning(repo, text):
         return text
     if not isinstance(target, int):
         return text
-    n = bv._approx_tokens(text)
+    # The repo's part only: `brought`, the share of `text` the sets the
+    # person brings account for, has its own budget (brought_share; main
+    # measures it once for the file it writes).
+    n = bv._approx_tokens(text) - brought
     lines = text.split('\n')
     at = next((i for i, l in enumerate(lines) if l.startswith('# ')), None)
     if n <= target or at is None:
@@ -347,8 +431,135 @@ def _with_target_warning(repo, text):
     return '\n'.join(lines[:at + 1] + ['', warning] + lines[at + 1:])
 
 
-def main():
-    args = sys.argv[1:]
+# THE SETS A PERSON BRINGS HAVE A BUDGET OF THEIR OWN (Morgan, 2026-10-03,
+# strength: assented). Bringing the ladder is one person's choice, so its
+# cost is charged to a budget in that person's individual set
+# (`brought_sets_tokens` in its precedent-source.json), not to the ceiling a
+# repository declared for everyone who works in it. A consumer rehearsal
+# found the ladder put two repositories' session files over their ceilings,
+# which refused every push there.
+BROUGHT_BUDGET_KEY = 'brought_sets_tokens'
+
+
+def brought_budget(repo=None):
+    """-> (tokens or None, individual set path or None): the budget the
+    person's individual set declares for the sets it brings."""
+    try:
+        sources = pr.load_config(repo or str(_ENGINE_DIR.parent))
+    except Exception:                                        # noqa: BLE001
+        return None, None
+    ind = next((s for s in sources if pr.declared_level(s) == 'individual'), None)
+    if not ind:
+        return None, None
+    try:
+        man = json.loads((pathlib.Path(ind['path']) / pr.SOURCE_MANIFEST)
+                         .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None, ind['path']
+    v = man.get(BROUGHT_BUDGET_KEY) if isinstance(man, dict) else None
+    return (v if isinstance(v, int) else None), ind['path']
+
+
+def _brought_renders(repo):
+    """-> (full tokens, bare tokens, [names]): this file rendered now by this
+    engine, with and without the sets the person brings. (None, None, names)
+    when nothing is brought or either rendering fails."""
+    try:
+        names = [s['name'] for s in pr.load_config(repo) if s.get('brought')]
+    except Exception:                                        # noqa: BLE001
+        return None, None, []
+    if not names:
+        return None, None, []
+    import contextlib, io
+    try:
+        # The renders' own notes were already printed by the real run.
+        with contextlib.redirect_stderr(io.StringIO()):
+            full = render(*collect(repo), repo=repo)
+            bare = render(*collect(repo, skip_brought=True), repo=repo)
+    except Exception:                                        # noqa: BLE001
+        return None, None, names
+    return bv._approx_tokens(full), bv._approx_tokens(bare), names
+
+
+def brought_share(repo=None):
+    """-> (tokens, [names]): how much of this file the sets the person
+    brings account for, measured as the file rendered with them minus the
+    file rendered without them -- so a rule of the person's own that needs
+    the ladder counts as part of bringing it. (0, []) when nothing is
+    brought or either rendering fails."""
+    full, bare, names = _brought_renders(str(repo or _ENGINE_DIR.parent))
+    if full is None:
+        return 0, names
+    return max(0, full - bare), names
+
+
+def charged_to_repo(repo, n):
+    """-> (tokens charged to the repository's ceiling, brought share, [names],
+    the person's budget or None) for a session file measuring `n`.
+
+    THE ONE DEFINITION of what the repository's ceiling for this file pays:
+    the file less the share of the sets the person brings, which their own
+    `brought_sets_tokens` holds (BROUGHT_BUDGET_KEY). Every reader of that
+    ceiling -- the full check, the session check, the headroom and target
+    notices, and the seed that writes the ceiling -- takes it from here, so
+    a repository's ceiling never moves because of who works in it.
+    2026-10-08, a consuming repository: the headroom notice and the target
+    line charged the brought sets to the repository while the check did
+    not, and the person re-measured the ceiling by hand.
+
+    With no budget declared the share stays charged to the repository, as
+    it was before the budget existed (Morgan, 2026-10-03, strength:
+    assented), and the share is returned so a caller can say so.
+
+    The charge is the file rendered NOW without the brought sets, never `n`
+    less the share. `n` is read off the file on disk, which the last session
+    start wrote -- with whatever engine was vendored then -- while the share
+    is rendered by this one, so subtracting one from the other charged the
+    repository for the difference between two engines. 2026-10-09, a
+    consuming repository's Update Vendors: the file on disk measured 1,366
+    and this engine's render 1,176, so a repository whose own part was 312
+    was charged 502 against a ceiling of 400, and the update warned that the
+    next Debut would refuse it."""
+    try:
+        full, bare, names = _brought_renders(str(repo))
+        share = max(0, full - bare) if full is not None else 0
+        budget = brought_budget(repo)[0] if share else None
+    except Exception:                                        # noqa: BLE001
+        return n, 0, [], None
+    if not share or budget is None:
+        return n, share, names, budget
+    return bare, share, names, budget
+
+
+def spoken_block(extra):
+    """-> the spoken-commands block for `extra`, or '' when none of them
+    defines a command: SPOKEN_HEAD, then one line per practice --
+    `"Debut" -> debut: stage 4: pre-staging into staging, full checks`."""
+    lines = []
+    # An addition (`adds_to:`) loads with its base through precedent_show.py,
+    # so the base's line only says how many there are here, never a line
+    # each (Morgan, 2026-10-09).
+    n_added = collections.Counter(bv.adds_to(fm) for fm, _s, _f in extra
+                                  if bv.adds_to(fm))
+    for fm, sections, f in extra:
+        # The same test build_loader_block(omit_commands=True) uses to leave
+        # a practice out of the index, so nothing falls out of both.
+        words = bv.command_phrases(fm)
+        if not words:
+            continue
+        slug = bv._json_str(fm.get('slug', '')) or f.stem
+        clause = bv._index_clause(fm, sections)
+        n = n_added.get(slug, 0)
+        marker = f' (+ {n} addition{"s" if n != 1 else ""} here)' if n else ''
+        lines.append(', '.join(f'"{w}"' for w in words)
+                     + f' -> {slug}: {clause}{marker}')
+    if not lines:
+        return ''
+    return '\n'.join([SPOKEN_HEAD] + [f'- {l}' for l in sorted(lines)]) + '\n'
+
+
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else list(argv)
     if any(a in ('--help', '-h') for a in args):
         print((__doc__ or '').strip())
         return 0
@@ -360,8 +571,12 @@ def main():
             return 0
         repo = args[i + 1]
     check_only = '--check' in args
+    quiet = '--quiet' in args
 
     extra, levels, notes = collect(repo)
+    # Nothing is printed ahead of the file any more: it opens with the spoken
+    # commands, and its head carries the code-owners note, so printing either
+    # separately put it in front of the session twice (AND ONLY THERE above).
     try:
         text = render(extra, levels, notes, repo=repo)
     except Exception as e:                                   # noqa: BLE001
@@ -388,19 +603,33 @@ def main():
               f'written; {n_bad} source(s) unresolved.')
         return 0
 
-    text = _with_target_warning(repo, text)
+    text = _with_target_warning(repo, text, brought=brought_share(repo)[0])
     out_dir = pathlib.Path(repo) / OUT_DIR
     try:
         out_dir.mkdir(exist_ok=True)
-        (out_dir / OUT_NAME).write_text(text, encoding='utf-8')
+        # Written whole, then renamed into place: a hook that reads the file
+        # while another hook rewrites it never reads half of it.
+        tmp = out_dir / f'.{OUT_NAME}.{os.getpid()}.tmp'
+        tmp.write_text(text, encoding='utf-8')
+        os.replace(tmp, out_dir / OUT_NAME)
     except OSError as e:
         # Never fatal: a session-start hook that fails takes the session
         # with it, and not having the extra practices is a degraded session,
         # not a broken one.
         print(f'precedent session practices: could not write '
               f'{out_dir / OUT_NAME}: {e}', file=sys.stderr)
+        # Still printed: the file could not be kept, and the session can
+        # still be shown what it would have said.
+        if extra and not quiet:
+            print(text)
         return 0
 
+    if not extra and not quiet:
+        # Nothing else to print, and a code owner's practices were left out:
+        # say why once, at session start (Morgan, 2026-10-05).
+        for _kind, _n in notes:
+            if _kind == 'hidden' and _n:
+                print(_n)
     if extra:
         by_level = {}
         for slug, lvl in levels.items():
@@ -409,6 +638,12 @@ def main():
         print(f'precedent session practices: {OUT_DIR}/{OUT_NAME} written '
               f'({len(extra)} practice(s): {detail}). Read it -- these bind '
               f'work here and are not in AGENTS.md.', file=sys.stderr)
+        if not quiet:
+            # On stdout, so it is in the session's context, not just on disk.
+            # Once, whole: it opens with the spoken commands. --quiet is for
+            # a hook that emits the file itself (precedent-universal-
+            # catalogue.sh), where printing them too would say them twice.
+            print(text)
     return 0
 
 

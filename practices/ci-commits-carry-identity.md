@@ -12,6 +12,7 @@ checked_by:  "tools/precedent_check.py"
 defines:     []
 status:      active
 in_force_at: null
+visible_to:  code-owners
 supersedes:  []
 overrides:   null
 added:       "2026-09-10"
@@ -64,7 +65,7 @@ says so by name with `PRECEDENT_ALLOW_ANY_AUTHOR`. Anything a workflow pushes
 to a real branch is somebody's.
 
 **What the check reads, and what it cannot.** `ci-commits-carry-identity` in
-[tools/precedent_check.py](../tools/precedent_check.py) looks at every
+[tools/precedent_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_check.py) looks at every
 `.github/workflows/*.yml` that commits, and fires when one names a bot
 account or configures a git identity without reading a declared one. It
 cannot tell whether the identity a workflow *does* read is the right person,

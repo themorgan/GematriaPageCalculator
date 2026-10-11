@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_decommission.py — the double-check that has to pass before a
+"""Audits a deprecated file or directory before it is deleted -- refuses while anything still references it, or a workflow it names is still live -- then deletes and records it
+
+precedent_decommission.py — the double-check that has to pass before a
 deprecated file or directory is deleted, and the deletion itself.
 
 (practice: decommission-deletes-files)
@@ -358,6 +360,16 @@ def _mentions(needle, line):
         start = i + 1
 
 
+_MD_LINK = re.compile(r'\]\(([^)\s]+)\)')
+
+
+def _read_lines(path):
+    try:
+        return path.read_text(encoding='utf-8', errors='ignore').splitlines()
+    except OSError:
+        return []
+
+
 def find_references(paths, exempt):
     """Tracked files still mentioning any of `paths` (or a distinctive
     basename), excluding the paths themselves and everything declared
@@ -375,7 +387,23 @@ def find_references(paths, exempt):
     for rel in tracked:
         if rel in removed or rel == REGISTRY:
             continue
-        if rel.startswith(SCAN_SKIP_PREFIXES) or _exempt(rel, exempt):
+        if rel.startswith(SCAN_SKIP_PREFIXES):
+            continue
+        if _exempt(rel, exempt):
+            # An exempt historical record may go on NAMING the path, but a
+            # markdown LINK to it breaks the moment it is deleted, and the
+            # link check fails the next push. Found 2026-10-07: two closed
+            # items declared exempt here, and a third exempt from an older
+            # decommission, passed this audit and then failed a landing.
+            for i, line in enumerate(_read_lines(ROOT / rel), 1):
+                for target in _MD_LINK.findall(line):
+                    resolved = os.path.normpath(
+                        os.path.join(os.path.dirname(rel), target.split('#')[0]))
+                    if resolved in removed or any(
+                            resolved.startswith(r.rstrip('/') + '/') for r in removed):
+                        hits.append((rel, i, resolved, 'a link in an exempt record',
+                                     line.strip()[:110]))
+                        break
             continue
         if rel in generated:
             try:
@@ -487,6 +515,12 @@ def audit(path, exempt, siblings=()):
     hits, skipped, (gen_hits, n_gen) = find_references(
         [rel] + [s.rstrip('/') for s in siblings], exempt)
     for h in hits:
+        if h[3] == 'a link in an exempt record':
+            blockers.append(
+                f'{h[0]}:{h[1]} links to {h[2]!r}, and the link breaks when it '
+                f'is deleted even though the file is exempt -- keep the name as '
+                f'plain text and drop the link: {h[4]}')
+            continue
         blockers.append(
             f'{h[0]}:{h[1]} still references {h[2]!r} (by {h[3]}) -- '
             f'repoint or remove it, or declare that file in {REGISTRY}\'s '

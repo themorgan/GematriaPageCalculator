@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""What this account has left of GitHub's API allowances, measured.
+"""What this account has left of GitHub's API allowances and what each tool spent -- read off the X-RateLimit headers of calls already being made, because /rate_limit answers a pristine window from inside a session
+
+What this account has left of GitHub's API allowances, measured.
 
 TWO THINGS THIS MODULE IS FOR, and they are different questions:
 
@@ -151,7 +153,43 @@ def _record_limits(headers, path):
     _LIMITS[f'{resource} @ {row["pool"]}'] = row
 
 
-def call(path, timeout=TIMEOUT, auth=True, cache=True):
+# A hosted session's network proxy answers GitHub API calls for repositories
+# the session has not attached with its own refusal, not GitHub's (seen
+# 2026-10-07: "Access to this GitHub API path is not permitted through this
+# proxy", on every Update Vendors run, for public repositories too). That
+# is a fact about where the tool runs, not about the repository, and
+# nothing the person can act on; callers say it once, plainly.
+# Both of the session proxy's refusals: a path it will not let through,
+# and the numeric-ID address GitHub redirects a renamed repository to
+# ("are not supported through this proxy", 2026-10-11).
+PROXY_REFUSAL_RE = re.compile(r'(?:not permitted|not supported) through this proxy', re.I)
+
+
+# The session proxy's answer when a repository is not attached to this
+# session with GitHub API access (2026-10-10: two Update Vendors lines said
+# GitHub "could not" answer and stopped, and the session that read them had
+# to work out the remedy itself).
+NOT_ATTACHED_RE = re.compile(r'not enabled for this session', re.I)
+
+
+def attach_remedy(text, slug):
+    """-> the one sentence that fixes a not-attached refusal, or ''.
+    A read attach is not enough: add_repo's "read" serves git fetches only,
+    and GitHub's API needs the repository attached with access "push"."""
+    if not (text and NOT_ATTACHED_RE.search(str(text))):
+        return ''
+    return (f'this session has no GitHub API access to {slug or "that repository"}: '
+            f'attach it with add_repo, access "push" (a read attach does not '
+            f'reach the API), then run this again')
+
+
+def is_proxy_refusal(text):
+    """True when an error or message from call() is the session proxy's
+    refusal rather than GitHub's answer."""
+    return bool(text) and bool(PROXY_REFUSAL_RE.search(str(text)))
+
+
+def call(path, timeout=TIMEOUT, auth=True, cache=True, _hops=0):
     """-> (parsed_json, error). Never raises: the caller reports, it does not crash.
 
     CACHED BY DEFAULT. Read-only GETs about repository metadata do not change
@@ -224,6 +262,19 @@ def call(path, timeout=TIMEOUT, auth=True, cache=True):
     except ValueError:
         _SPEND['errors'] += 1
         return None, f'not JSON: {r.stdout.strip()[:120]}'
+    # A RENAMED REPOSITORY answers 301 with {"message": "Moved Permanently",
+    # "url": <its new API address>}, and curl does not follow it (2026-10-11:
+    # a retired set renamed on archiving was reported in the same run as
+    # both dropped and "could not be read (Moved Permanently)"). Followed
+    # once, to the address GitHub names, and only within the API.
+    if (isinstance(parsed, dict) and _hops < 2
+            and str(parsed.get('message') or '').lower() == 'moved permanently'
+            and str(parsed.get('url') or '').startswith(API)):
+        result = call(parsed['url'][len(API):], timeout=timeout, auth=auth,
+                      cache=cache, _hops=_hops + 1)
+        if cache:
+            _CACHE[key] = result
+        return result
     result = (parsed, None)
     if cache:
         _CACHE[key] = result

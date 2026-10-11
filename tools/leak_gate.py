@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""leak_gate.py — the hard-failing leak gate
+"""The push-time leak gate — structural rules always, private-term blocklist when configured
+
+leak_gate.py — the hard-failing leak gate
 (PRACTICE_ENGINE_PLAN.md, "The Verification Harness": "Leak gate — no
 individual- or shared-level term appears anywhere in Precedent.
 RPP's private-repo-scrub machinery generalized from words to sources,
@@ -151,9 +153,21 @@ import json, os, pathlib, re, subprocess, sys
 # the enclosing repository, which is right in both layouts without knowing
 # which one it is in. The literal parents[1] stays as the no-git fallback
 # only, matching doc_lint.py and practice_audit.py.
+#
+# AND WITHOUT A GIT HOOK'S VARIABLES (2026-10-11). A push from a worktree --
+# every Booked and Promote composes in one -- runs the pre-push hook with
+# GIT_DIR set, and with GIT_DIR set and no GIT_WORK_TREE, git takes the
+# directory it was asked from for the top. Asked from tools/, it answered
+# tools/: the gate found no precedent.json there, so it never saw that the
+# repository declares itself private, and refused two private repositories'
+# landings for naming their owner's other private repositories.
 _toplevel = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
                            cwd=pathlib.Path(__file__).resolve().parent,
-                           capture_output=True, text=True).stdout.strip()
+                           capture_output=True, text=True,
+                           env={k: v for k, v in os.environ.items()
+                                if k not in ('GIT_DIR', 'GIT_WORK_TREE',
+                                             'GIT_INDEX_FILE', 'GIT_PREFIX',
+                                             'GIT_COMMON_DIR')}).stdout.strip()
 ROOT = pathlib.Path(_toplevel) if _toplevel else pathlib.Path(__file__).resolve().parents[1]
 BLOCKLIST_ENV = 'PRECEDENT_LEAK_BLOCKLIST'
 
@@ -197,9 +211,30 @@ FORBIDDEN_PATHS = [
 # vendored where the resolver is deliberately absent.
 SOURCE_MANIFEST = 'precedent-source.json'
 DEFAULT_INDIVIDUAL_NAME = 'precedent-individual'
-# The levels whose sources are private by default. `team` is the pre-2026-09-18
-# spelling of `shared` and still reads.
-PRIVATE_LEVELS = ('shared', 'team', 'individual')
+# The levels whose sources are private by default. A level is compared only
+# through _declared_level, so the pre-2026-09-18 spelling `team` reads as
+# `shared` and the list never needs it.
+PRIVATE_LEVELS = ('shared', 'individual')
+# The resolver's alias table, for a tree this gate is vendored into without
+# the resolver. verify_harness.py asserts it still equals
+# precedent_resolve.LEVEL_ALIASES, so the two cannot drift; a leak gate that
+# read an old-word private set as public would fail open.
+_FALLBACK_LEVEL_ALIASES = {'team': 'shared'}
+
+
+def _declared_level(src):
+    """precedent_resolve.declared_level where the resolver is beside this
+    gate, else the same reading from the fallback table above."""
+    if not isinstance(src, dict):
+        return None
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_resolve as _pr
+        return _pr.declared_level(src)
+    except Exception:                                           # noqa: BLE001
+        return _FALLBACK_LEVEL_ALIASES.get(src.get('level'), src.get('level'))
+    finally:
+        sys.path.pop(0)
 
 
 def private_set_names(root=None):
@@ -213,7 +248,7 @@ def private_set_names(root=None):
     except (OSError, ValueError):
         return names
     for s in data.get('sources', []) or []:
-        if (s or {}).get('level') in PRIVATE_LEVELS and isinstance(s.get('name'), str):
+        if _declared_level(s) in PRIVATE_LEVELS and isinstance(s.get('name'), str):
             names.add(s['name'].strip().lower())
     return names
 
@@ -232,7 +267,7 @@ def _manifest_says_private(text):
     vis = str(data.get('visibility') or '').strip().lower()
     if vis == 'private':
         return True
-    return vis != 'public' and data.get('level') in PRIVATE_LEVELS
+    return vis != 'public' and _declared_level(data) in PRIVATE_LEVELS
 
 # Exactly one path is exempt from the path rules, by full path, and it is
 # not a loophole: it is the canonical SessionStart hook every consuming
@@ -681,6 +716,27 @@ def parse_repo_policy(path):
     return owners, allowed
 
 
+def with_own_repo(policy, root):
+    """-> `policy` with this repository's own owner/name allowed: a
+    repository naming itself, in itself, discloses nothing (2026-10-10, a
+    private consumer refused a commit for writing its own name)."""
+    owners, allowed = policy
+    own = _remote_ref(root)
+    if not own:
+        return policy
+    return owners, {**allowed, f'{own[0]}/{own[1]}'.lower(): 'this repository itself'}
+
+
+def own_repo_private(policy, root):
+    """-> (owner/name, True) when this repository's owner is declared
+    private-by-default, (owner/name, False) when not, (None, None) when
+    its origin cannot be read."""
+    own = _remote_ref(root)
+    if not own:
+        return None, None
+    return f'{own[0]}/{own[1]}', own[0].lower() in (policy[0] or {})
+
+
 def parse_public_email_domains(path):
     """-> {domain: reason} the blocklist declares public. A line with no
     reason does not parse, so it declares nothing."""
@@ -811,12 +867,30 @@ _REMOTE_RE = re.compile(
     r'github\.com[:/]([A-Za-z0-9][\w-]*)/([A-Za-z][\w.-]*?)(?:\.git)?/?$')
 
 
+# A GIT HOOK POINTS GIT AT ITS OWN REPOSITORY (2026-10-10). Run from a
+# pre-push or pre-commit hook, git sets GIT_DIR and friends, and every
+# `git -C <other clone>` then answers about the repository being pushed:
+# each sibling's origin read as this repository's, and the blocklist
+# clone's HEAD reported as the commit being pushed. A call about ANOTHER
+# repository runs without them (the same list as
+# precedent_regenerate.HOOK_GIT_ENV, which hit this on 2026-10-04).
+_HOOK_GIT_ENV = ('GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE', 'GIT_PREFIX',
+                 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY',
+                 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_QUARANTINE_PATH')
+
+
+def _foreign_env():
+    """-> os.environ without the variables a git hook sets."""
+    return {k: v for k, v in os.environ.items() if k not in _HOOK_GIT_ENV}
+
+
 def _remote_ref(repo_dir):
     """-> (owner, name) from a clone's origin URL, or None."""
     try:
         r = subprocess.run(['git', '-C', str(repo_dir), 'config', '--get',
                             'remote.origin.url'],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           env=_foreign_env())
     except (OSError, subprocess.SubprocessError):
         return None
     if r.returncode != 0:
@@ -937,7 +1011,22 @@ def declared_visibility(root):
     hits, assuming private costs a permanent publication.
     """
     cfg = root / 'precedent.json'
+    # A practice set declares its visibility in precedent-source.json, the
+    # file its own skeleton writes and documents ("the gate recognises a
+    # private set by this file's visibility"). Read only precedent.json, a
+    # freshly bootstrapped private individual set read as undeclared, so the
+    # gate refused every push of it for holding its own blocklist (very deep
+    # check, 2026-10-11). precedent.json still wins where both say something.
+    src = root / 'precedent-source.json'
+    src_v = None
+    try:
+        src_v = (json.loads(src.read_text(encoding='utf-8')).get('visibility')
+                 or '').strip().lower() if src.is_file() else None
+    except (OSError, ValueError, AttributeError):
+        src_v = None
     if not cfg.exists():
+        if src_v in ('public', 'private'):
+            return src_v, f'precedent-source.json declares visibility: {src_v}'
         return None, 'no precedent.json'
     try:
         data = json.loads(cfg.read_text(encoding='utf-8'))
@@ -946,6 +1035,8 @@ def declared_visibility(root):
     v = (data.get('visibility') or '').strip().lower()
     if v in ('public', 'private'):
         return v, f'precedent.json declares visibility: {v}'
+    if src_v in ('public', 'private'):
+        return src_v, f'precedent-source.json declares visibility: {src_v}'
     return None, 'precedent.json declares no visibility'
 
 
@@ -1034,7 +1125,8 @@ def _stale_blocklist_clone_note():
         and wrongly -- the most-repeated bug in this project (AGENTS.md)."""
         try:
             r = subprocess.run(['git', '-C', str(path.parent), *args],
-                               capture_output=True, text=True, timeout=15)
+                               capture_output=True, text=True, timeout=15,
+                               env=_foreign_env())
         except (OSError, subprocess.SubprocessError):
             return 1, ''
         return r.returncode, r.stdout.strip()
@@ -1108,7 +1200,8 @@ def _try_refresh_private_blocklist_clone(timeout=20):
     def git(*args):
         try:
             r = subprocess.run(['git', '-C', str(root), *args],
-                               capture_output=True, text=True, timeout=timeout)
+                               capture_output=True, text=True, timeout=timeout,
+                               env=_foreign_env())
         except (OSError, subprocess.SubprocessError):
             return 1, ''
         return r.returncode, r.stdout.strip()
@@ -1489,7 +1582,7 @@ def _private_sources_declared(root=None):
         # guessing "no private sources" here would fail open in exactly the
         # direction this function exists to close (practice: fail-gracefully).
         return True
-    return any((s or {}).get('level') in PRIVATE_LEVELS
+    return any(_declared_level(s) in PRIVATE_LEVELS
                for s in data.get('sources', []))
 
 
@@ -1536,7 +1629,7 @@ def _private_sources_resolved(root=None):
         return True, []
     missing = {(m or {}).get('name') for m in res.get('missing', [])}
     private = [s for s in sources
-               if (s or {}).get('level') in PRIVATE_LEVELS]
+               if _declared_level(s) in PRIVATE_LEVELS]
     unresolved = [s.get('name') for s in private if s.get('name') in missing]
     resolved = [s.get('name') for s in private if s.get('name') not in missing]
     return bool(resolved), unresolved
@@ -1639,7 +1732,7 @@ def main():
                      'indistinguishable from an ordinary comment, so the gate '
                      'would otherwise print OK while enforcing less than the '
                      'file says.')
-        _policy = parse_repo_policy(_bl_path)
+        _policy = with_own_repo(parse_repo_policy(_bl_path), ROOT)
     else:
         _policy = ({}, {})
     _vis, _why = declared_visibility(ROOT)
@@ -1692,7 +1785,7 @@ def main():
     if hits and not structural_only and _try_refresh_private_blocklist_clone():
         blocklist, source, configured = load_blocklist()
         if _bl_path is not None and _bl_path.is_file():
-            _policy = parse_repo_policy(_bl_path)
+            _policy = with_own_repo(parse_repo_policy(_bl_path), ROOT)
             _auto = (auto_private_name_patterns(local_clone_refs(ROOT), _policy[0],
                                                 _policy[1])
                      if (_policy[0] and auto_cover_enabled(_bl_path)) else [])
@@ -1766,9 +1859,19 @@ def main():
     scope = {'tree': 'the tracked tree', 'staged': 'the staged changes',
              'range': f'the range {rev_range}'}[mode]
     if hits:
+        own, private = own_repo_private(_policy, ROOT)
+        if private:
+            where = (f"{own} is private (its owner is declared private by default), "
+                     f"so this push publishes nothing by itself; a private name in "
+                     f"it still travels wherever its content is copied or vendored.")
+        elif own:
+            where = (f"{own}'s owner is not declared private, so this push is "
+                     f"treated as a publication, which cannot be taken back.")
+        else:
+            where = ("This repository's origin could not be read, so the push is "
+                     "treated as a publication, which cannot be taken back.")
         print(f"\nleak gate FAIL: {len(hits)} hit(s) in {scope}. Nothing is pushed. "
-              f"Precedent is a branch of a PUBLIC repo -- a push is a publication, "
-              f"and it cannot be taken back.")
+              + where)
         note = _stale_blocklist_clone_note()
         if note:
             print("Before acting on these:\n" + note)

@@ -9,7 +9,7 @@ technical work yourself.
 This conversation installs [INSTALL.md](INSTALL.md) §0 — the Precedent
 loader: the practice catalogue, the resident block and occasion index every
 session reads, and the enforced checks — with one command,
-[tools/precedent_install.py](tools/precedent_install.py), which does the file
+[tools/precedent_install.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_install.py), which does the file
 work and then lists what is left for you to adapt. **Since 2026-09-14 this is
 the default** (Morgan, on the very deep check's recommendation; `strength:
 assented`): until then this page installed §1, the classic vendored model,
@@ -24,12 +24,17 @@ nothing to choose here — this page installs §0, always.
    the project. Tell the administrator, in one sentence, what you are
    about to set up: a practice layer that gives their project durable
    memory, safe concurrent work, and a Getting Started page for members.
-2. **Ask exactly five questions** — the canonical list, in
+2. **Ask exactly five questions, on a first install only** — the canonical list, in
    [spec/INSTALL_QUESTIONS.md](https://github.com/alex137/BestPractice/blob/staging/spec/INSTALL_QUESTIONS.md) — together in one
    message, and wait:
    - *What is this project about?* (one or two sentences) — and: fill in
      `MAP.md`'s deliverables and `AGENTS.md`'s quick index now, or leave
      placeholders? (Default: placeholders, filled in a later conversation.)
+     In the same question, say what you will use for the three things the
+     installer needs and let them correct it: the project's name (from the
+     repository's name), the administrator's GitHub handle (the account
+     running this), and which folders hold what the project publishes
+     (from the tree; "none yet" is fine).
    - *Are there private names or code words that must never appear in
      anything public?* Explain why in one sentence: parts of the practice
      layer can flow back to a public repository, and this list is the
@@ -41,20 +46,36 @@ nothing to choose here — this page installs §0, always.
      facts, can each live in their own repo and be wired in too. Most
      projects have neither yet — that's a complete answer on its own — but
      it costs nothing to offer setting one up in the same conversation, so
-     ask rather than assume no. Mention the two public sets anyone can
-     declare: [precedent-shared-writing](https://github.com/themorgan/precedent-shared-writing)
-     and [precedent-shared-working-style](https://github.com/themorgan/precedent-shared-working-style);
-     a documents project usually wants both, and without working-style two
-     rules withdrawn from the universal set are in force nowhere.
+     ask rather than assume no. Then offer the two public sets by name,
+     one sentence each, and say which you would pick:
+     [precedent-shared-writing](https://github.com/themorgan/precedent-shared-writing),
+     rules for documents people read, which a project that writes for
+     anyone usually wants; and
+     [precedent-shared-ladder](https://github.com/themorgan/precedent-shared-ladder),
+     a way of working where every change moves through named stages and a
+     test branch before it reaches `main`. The ladder set goes with the
+     person, not the project, so it is wired through their own personal
+     set; if they have none, a yes to it is a yes to setting one up.
+     **Mention the ladder set this once and no more.** If they say no, or
+     let it pass, never bring it up again, nor anything that belongs to
+     it: its stages, its test branches, its commands. The rest of the
+     install, and everything after, reads as if it did not exist, which
+     for them it does not.
    - *Which AI Assistant will actually be working in this repo* — Claude
      Code, ChatGPT connected to GitHub, or something else? Explain in one
      sentence: an AI Assistant with no access to a terminal needs
      GitHub's own automated checks for things one with terminal access
-     does not.
+     does not. If it is Claude Code, ask in the same breath for the
+     go-ahead to commit its hooks and settings (`.claude/`): its auto mode
+     holds that commit until they say yes, so ask now rather than stall at
+     the end.
    - *Should the vendored GitHub Actions workflow be on or off?* **Default
      on, since 2026-09-25**: one light check that runs only on a pull
      request into `main` (about one billed minute per merge into `main`),
-     plus a leak gate that runs only in a public repository. For an AI
+     plus a leak gate that runs only in a public repository. In a private
+     repository the light check runs only on the pull request a Produce
+     opens (a branch named `to-main-…` or `…-promote-to-main-…`); any
+     other pull request shows it as skipped. For an AI
      Assistant with no terminal access (ChatGPT, or anything else with no
      local shell) it is the only place any check can run at all, so say
      so. Say the default out loud and let them override it. If they want
@@ -78,7 +99,7 @@ nothing to choose here — this page installs §0, always.
    `https://github.com/alex137/BestPractice` beside the project (a sibling
    directory, not inside it) **on its `main` branch** — every install
    takes its updates from `main` (`SOURCE_BRANCH` in
-   [tools/precedent_vendor_engine.py](tools/precedent_vendor_engine.py),
+   [tools/precedent_vendor_engine.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_vendor_engine.py),
    since 2026-09-25), so installing from any other branch makes the first
    session report the engine as behind — and run, from that clone:
 
@@ -87,20 +108,29 @@ nothing to choose here — this page installs §0, always.
        --project-name "<the project's name>" \
        --about "<their first answer, one sentence>" \
        --visibility <private or public, read from the repository, never asked> \
+       --output-paths <the published folders from their first answer, comma-separated> \
        --admin <the administrator's GitHub handle>
    ```
 
+   Leave `--output-paths` out when they said "none yet". If they said yes
+   to a shared set (the writing set, say), clone it beside the project
+   first and add `--team <name>=../<name>` for each one: the name must be
+   the set's own `name` in its `precedent-source.json`
+   (`precedent-shared-writing` for the writing set), or the sync refuses
+   it as the wrong repository.
+
    It vendors the catalogue and the engine, writes `precedent.json`
    (declaring the repo-local `"local"` source along with the universal
-   one), instantiates `AGENTS.md`, `MAP.md`, `TODO.md`, `GLOSSARY.md`,
-   `GETTING_STARTED.md`, `local/practices/project-voice.md` and
+   one), instantiates `AGENTS.md`, `MAP.source.md`, `TODO.md`,
+   `GLOSSARY.source.md` (the sync generates `MAP.md` and `GLOSSARY.md`
+   from those two), `GETTING_STARTED.md`, `local/practices/project-voice.md` and
    `local/practices/project-visual-identity.md`, the README entry
    block, the Claude Code hooks, `tools/bootstrap.sh`, the Actions check
    and the pull-request template, runs the sync, lints what it wrote, and
    then prints **the placeholders it left** — each is a `<…>` in a file it
    names, to be filled with the project's own subject matter from their
    first answer where they asked for that now, else left as placeholders
-   (a `GLOSSARY.md` row can be deleted rather than invented). The project
+   (a `GLOSSARY.source.md` row can be deleted rather than invented). The project
    comes first ([lead-with-what-it-is](practices/lead-with-what-it-is.md)):
    the README opens with what the project *is*, and the entry block sits
    under that. Their second answer goes into the leak blocklist the
@@ -111,23 +141,35 @@ nothing to choose here — this page installs §0, always.
    never write the words into the project itself. In a private repository
    the leak gate stands down, so say the list only matters for what goes
    back upstream, or if the repository is ever made public.
-   If they answered yes to the third question, follow INSTALL.md §1 step 9
+   If they answered yes to the third question, follow INSTALL.md §0 step 3
    for what to actually do with a shared or individual repo (a shared source
-   goes in a new `precedent.json`; an individual source is never touched
+   goes in the `precedent.json` the installer wrote, through `--team`
+   above or added after; an individual source is never touched
    by this session at all — it's declared in that person's own user-level
    config, not this project). If they'd like one set up now instead,
    follow [spec/BOOTSTRAP_NEW_SOURCES.md](https://github.com/alex137/BestPractice/blob/staging/spec/BOOTSTRAP_NEW_SOURCES.md) —
    it walks through creating the repository (do it yourself if the session
    can; otherwise hand them the exact command or click-path), running
-   [tools/precedent_bootstrap_source.py](tools/precedent_bootstrap_source.py),
+   [tools/precedent_bootstrap_source.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_bootstrap_source.py),
    and wiring the result in exactly
-   as INSTALL.md §1 step 9 describes for an existing repo. This is real,
+   as INSTALL.md §0 step 3 describes for an existing repo. This is real,
    working tooling, not a promise: it hands them a starter file in the
    right format and the exact config to wire in, in the same sitting.
    `local/practices/project-voice.md` and
    `local/practices/project-visual-identity.md` install as the
    templates' near-empty skeletons and **stay that way** — filling them in
    is not part of an install (see "What an install does not do" below).
+   **Now use their answer about which AI Assistant will work in the
+   repo.** The command sets the project up for Claude Code only. If they
+   named Codex, Gemini CLI or another assistant that runs in a terminal,
+   add that assistant's setup too, from
+   [templates/harness/README.md](templates/harness/README.md): it lists
+   one page per assistant, and each page says which files to copy where.
+   Keep the Claude Code files either way; the other assistants reuse its
+   checks. Tell them in one sentence which assistant you set up and that
+   more can be added later. For ChatGPT or another assistant with no
+   terminal, there is nothing to add here: the GitHub check is what
+   covers them, which is why the fifth question matters for them.
    Respect the root-hygiene rule (INSTALL.md §0 step 7): nothing from
    Precedent lands loose at the repo root except the instantiated files,
    `precedent.json`, and the sync's own `practices/` and `MANIFEST.json`.
@@ -150,12 +192,19 @@ nothing to choose here — this page installs §0, always.
    voice"*. **Do not walk them through the sections, and do not ask
    whether a brand guideline exists.** That is a good conversation and
    it is not this one.
-5. **Merge for them or with them.** If you can merge, ask "Shall I make
-   this live?" and do it on their yes. If only they can merge, give them
+5. **Merge for them or with them.** A brand-new repository with no
+   `main` yet takes no pull request: follow INSTALL.md §0's
+   [first landing](INSTALL.md#0-installing-directly-onto-the-precedent-loader)
+   instead, which puts the install straight on `main`. Otherwise, if you
+   can merge, ask "Shall I make this live?" and do it on their yes. If only they can merge, give them
    the pull-request link and tell them exactly what to press.
 6. **Verify the automatic checks, while Actions is on.** On the pull
-   request into `main`, confirm `light-check` appears and passes; in a
-   private repository nothing runs after the merge, by design. If the repository or organization has Actions disabled,
+   request into `main`, confirm `light-check` appears and passes. In a
+   private repository it runs only when the branch is named for a Produce
+   (`to-main-…`), so an install's pull request from any other branch shows
+   it as skipped: that is the design, not a fault, and the local checks in
+   step 3 are what this install was judged by. Nothing runs after the
+   merge in a private repository either. If the repository or organization has Actions disabled,
    give the administrator the exact clicks (repository **Settings →
    Actions**, or the **Actions** tab's enable button) and confirm the
    check appears afterward. Never leave this step silently unfinished —
@@ -261,7 +310,7 @@ it runs inside your ordinary work. The section references are to
 - **At install (§0).** They answer the five questions in step 2 — what
   the project is about, what private names or code words must never go
   public, and whether a team or personal practices repo exists or should be
-  set up now (§1 step 9; most projects have neither yet, and saying so is a
+  set up now (§0 step 3; most projects have neither yet, and saying so is a
   complete answer — but offer to set one up on the spot). Then they look at
   what you built and either approve it or ask for changes.
   `local/practices/project-voice.md` and
@@ -340,7 +389,7 @@ the project is wrong without them.
   least.
 - **Use Precedent's own words the way [Our
   Language](documentation/OUR_LANGUAGE.md) defines them** -- "individual
-  set", "shared set", "in force", "pre-staging" -- and point the person at
+  set", "shared set", "in force" -- and point the person at
   that page once, the first time one of them comes up.
 - One step at a time; never assume git or GitHub vocabulary. "Branch",
   "merge", "pull request", "workflow", "personal access token",

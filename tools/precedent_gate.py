@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_gate.py — the GATE-TRIGGERED loading channel.
+"""The GATE-TRIGGERED loading channel — Rules for a named moment (merge, review, push, reply)
+
+precedent_gate.py — the GATE-TRIGGERED loading channel.
 
 PRACTICE_ENGINE_PLAN.md, "How an Agent Knows Which Practices to Load", names
 four channels. This is the last one to be built:
@@ -141,6 +143,13 @@ def practices_by_gate(practices_dir=None):
         # kept serving the practice the index had already removed).
         if not bv.is_in_force(fm):
             continue
+        # Code owners only: see resolved_gate_practices().
+        try:
+            import precedent_audience as pa
+            if not pa.visible(fm, practices_dir.parent):
+                continue
+        except ImportError:
+            pass
         for g in json.loads(fm.get('gates', '[]') or '[]'):
             out.setdefault(g, []).append(fm['slug'])
     return out
@@ -150,7 +159,7 @@ def practices_by_gate(practices_dir=None):
 # repositories, and this repo is public. Imported from build_views where it
 # is declared, with a literal fallback for a partial vendor: the two
 # answering differently is the failure this whole split exists to prevent.
-PRIVATE_LEVELS = getattr(bv, 'PRIVATE_LEVELS', ('shared', 'team', 'individual'))
+PRIVATE_LEVELS = getattr(bv, 'PRIVATE_LEVELS', ('shared', 'individual'))
 
 
 def resolved_gate_practices(root, gate):
@@ -229,7 +238,7 @@ def resolved_gate_practices(root, gate):
     # See this function's own docstring: the ONE signal available here for
     # what this repo's own unresolved practices/ files actually are.
     unresolved_level = (
-        None if any(s.get('level') == 'universal' for s in sources)
+        None if any(pr.declared_level(s) == 'universal' for s in sources)
         else 'universal')
     try:
         res = pr.resolve(sources)
@@ -251,6 +260,14 @@ def resolved_gate_practices(root, gate):
         except json.JSONDecodeError:
             continue
         if gate in gates:
+            # A practice for code owners only is not printed to anyone else
+            # (tools/precedent_audience.py; Morgan, 2026-10-05).
+            try:
+                import precedent_audience as pa
+                if not pa.visible(practice['fm'], root):
+                    continue
+            except ImportError:
+                pass
             entries.append((slug, practice['level'], practice.get('source', ''),
                             pathlib.Path(practice['file'])))
     replaced = {d['slug']: d['by'].get('slug', '')
@@ -275,19 +292,21 @@ def _branches_module():
 PROMOTE_RUNNING_MARK = 'another window is already promoting pre-staging'
 
 
-def _unpromoted(repo, staging, _git):
-    """-> how many commits origin/pre-staging carries that origin/<staging>
-    does not, when their content differs; 0 otherwise. Content, not just
-    lineage, for the reason _unlanded_work gives below."""
-    if not _git(repo, 'rev-parse', '--verify', '-q', 'refs/remotes/origin/pre-staging'):
+def _unpromoted(repo, staging, _git, lower='pre-staging'):
+    """-> how many commits origin/<lower> carries that origin/<staging>
+    (the tier above it) does not, when their content differs; 0 otherwise.
+    Content, not just lineage, for the reason _unlanded_work gives below.
+    `lower` is the landing branch: pre-staging, or staging once pre-staging
+    is retired (2026-10-10)."""
+    if not _git(repo, 'rev-parse', '--verify', '-q', f'refs/remotes/origin/{lower}'):
         return 0
     # Only commits that change a file: an empty commit or a merge is never
     # a batch waiting (Morgan, 2026-09-27, strength: decided).
     ahead = _git(repo, 'rev-list', '--count', '--no-merges',
-                 f'origin/{staging}..origin/pre-staging', '--', '.')
+                 f'origin/{staging}..origin/{lower}', '--', '.')
     if not ahead or ahead == '0':
         return 0
-    if not _git(repo, 'diff', '--name-only', f'origin/{staging}', 'origin/pre-staging'):
+    if not _git(repo, 'diff', '--name-only', f'origin/{staging}', f'origin/{lower}'):
         return 0
     return int(ahead)
 
@@ -363,8 +382,12 @@ def _over_target(root, siblings=True):
         except OSError:
             continue
         for d in entries:
+            # One clone per set: a second clone of the same set (under the
+            # home directory as well as beside this checkout) measured the
+            # same file twice, and which one was meant was anyone's guess.
             if d.name.startswith('precedent-') and (d / '.git').exists() \
-                    and d.resolve() not in {r.resolve() for r in roots}:
+                    and d.resolve() not in {r.resolve() for r in roots} \
+                    and d.name not in {r.name for r in roots[1:]}:
                 roots.append(d)
     out = []
     for repo in roots:
@@ -376,26 +399,53 @@ def _over_target(root, siblings=True):
         for rel, n, target, ceiling in rows:
             hard = (f', hard ceiling {ceiling:,}' if isinstance(ceiling, int)
                     else '')
-            line = (f'{name}: {rel} is {n:,} tokens, over its {target:,}-'
-                    f'token target{hard}')
+            # Whose load it is, and where to start. Read in a consumer as the
+            # session's own load, it sent a session to trim a practice whose
+            # line was not in the file at all (2026-10-06).
+            who = ('loaded by this session' if repo == roots[0] else
+                   f'loaded by sessions rooted in {repo.name}, not this one')
+            line = (f'{name}: {repo / rel} is {n:,} tokens, over its {target:,}-'
+                    f'token target{hard} -- {who}; entry by entry: python3 '
+                    f'tools/session_load_trend.py --root {repo} --breakdown {rel}')
             # The session-start file is built from every source on disk, so
             # a reduction in any of them counts; a tracked file, only its own.
             looked = roots if rel == '.precedent/SESSION_PRACTICES.md' else [repo]
-            landed = [r for r in (_landed_reduction(x) for x in looked) if r]
+            plain = _ladder(root) is False
+            landed = [r for r in (_landed_reduction(x, plain=plain)
+                                  for x in looked) if r]
             if landed:
-                line += ('; ' + LANDED_REDUCTION_MARK + ' '
+                line += ('; ' + _landed_reduction_mark(root) + ' '
                          + '; '.join(landed))
             out.append(line)
     return out
 
 
 # The over-target line's mark when a reduction already waits on a Promote.
+# A person off the ladder reads the same fact without the ladder's word
+# (spec/LADDER_OPT_IN_PLAN.md D4); the reply gate matches either.
 LANDED_REDUCTION_MARK = 'a reduction has landed and takes effect after a Promote:'
+LANDED_REDUCTION_MARK_PLAIN = 'a reduction has landed and takes effect once it reaches main:'
 
 
-def _landed_reduction(repo):
+def _ladder(root):
+    """precedent_ladder.ladder_in_force, or None without the helper."""
+    try:
+        import precedent_ladder
+        return precedent_ladder.ladder_in_force(root)
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
+def _landed_reduction_mark(root):
+    return (LANDED_REDUCTION_MARK_PLAIN if _ladder(root) is False
+            else LANDED_REDUCTION_MARK)
+
+
+def _landed_reduction(repo, plain=False):
     """-> "<repo>: AGENTS.md ~A on main, ~B on <landing>" when the repo's
     AGENTS.md is smaller on its landing branch than on main, else None.
+    `plain` (a person off the ladder) says the same fact without naming the
+    tier branch (spec/LADDER_OPT_IN_PLAN.md D4).
 
     code-cites-practice: session-load-budget
 
@@ -426,12 +476,48 @@ def _landed_reduction(repo):
             continue
         a, b = _slt.approx_tokens(main), _slt.approx_tokens(text)
         if b < a:
-            return f'{repo.name}: AGENTS.md ~{a:,} tokens on main, ~{b:,} on {landing}'
+            where = 'on a branch not yet in main' if plain else f'on {landing}'
+            return f'{repo.name}: AGENTS.md ~{a:,} tokens on main, ~{b:,} {where}'
         return None
     return None
 
 
-def _unlanded_work(root, siblings=True):
+# THE BRANCHES NOT LANDED WHEN THE TURN BEGAN, kept for the stop hook.
+# A branch that lands during the turn is used up, and the reply that says so
+# hands the person its one-click delete link (practices the-boildown, item 6,
+# and branch-delete-links). The stop hook can tell a branch HAS landed; only
+# the turn's start can say it had NOT, so the reply gate writes it down here.
+# Found 2026-10-06: a session Booked its branch and the reply gave no link.
+TURN_START_UNLANDED = 'precedent-turn-start-unlanded.json'
+
+
+def _turn_start_file(root):
+    """-> the per-checkout file in .git where this turn's start is kept, or
+    None outside a git checkout."""
+    import subprocess as _sp
+    try:
+        r = _sp.run(['git', '-C', str(root), 'rev-parse', '--absolute-git-dir'],
+                    capture_output=True, text=True, timeout=10)
+    except Exception:                                         # noqa: BLE001
+        return None
+    return (pathlib.Path(r.stdout.strip()) / TURN_START_UNLANDED
+            if r.returncode == 0 and r.stdout.strip() else None)
+
+
+def record_turn_start_unlanded(root, records):
+    """Write `records` [{repo, branch, base}] as this turn's start; [] clears
+    it, so a branch counts only for the turn it was unlanded at. Never
+    raises."""
+    f = _turn_start_file(root)
+    if f is None:
+        return
+    try:
+        f.write_text(json.dumps(records), encoding='utf-8')
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def _unlanded_work(root, siblings=True, records=None):
     """-> [str] one line per repo in this session whose committed work is not
     on the branch that repo actually merges into -- and only where those
     commits are this session's own. Never raises.
@@ -525,14 +611,29 @@ def _unlanded_work(root, siblings=True):
                 staging = pb.staging_branch(repo)
             except Exception:                                 # noqa: BLE001
                 landing = base
-            if landing == pb.PRE_STAGING and _git(
+            # Any landing branch below main is where work lands, staging
+            # included. Until 2026-10-10 only pre-staging counted, so in a
+            # repo whose pre-staging had retired, a branch merged into
+            # staging still read NOT YET LANDED against main, and the reply
+            # check refused "you can archive this session" for it (a
+            # consumer, the first day after its pre-staging retired).
+            if landing and landing != pb.MAIN and _git(
                     repo, 'rev-parse', '--verify', '-q',
-                    f'refs/remotes/origin/{pb.PRE_STAGING}'):
+                    f'refs/remotes/origin/{landing}'):
                 base = landing
-            pending = _unpromoted(repo, staging, _git) \
-                if landing == pb.PRE_STAGING else None
+            elif landing == pb.MAIN and _ladder(repo) is False:
+                # Off the ladder there are no tiers: work has landed when it
+                # is on main, whatever branch the repository's own
+                # contributors work on (spec/LADDER_OPT_IN_PLAN.md D3).
+                base = pb.MAIN
+            # The tier a landed batch moves up to next: pre-staging into
+            # staging, staging into main.
+            above = staging if landing == pb.PRE_STAGING else \
+                pb.MAIN if landing and landing == staging and landing != pb.MAIN else None
+            pending = _unpromoted(repo, above, _git, lower=landing) \
+                if above else None
             if pending and not _range_is_this_sessions(
-                    repo, f'origin/{staging}..origin/{pb.PRE_STAGING}', own, _git):
+                    repo, f'origin/{above}..origin/{landing}', own, _git):
                 pending = None
             if pending:
                 name = repo.name if repo.resolve() != pathlib.Path(root).resolve() \
@@ -555,8 +656,8 @@ def _unlanded_work(root, siblings=True):
                 # an urgent, bolded nudge every turn had several windows
                 # promoting at once and racing each other (Morgan,
                 # 2026-09-25, strength: decided).
-                out.append(f"{name}: pre-staging is {pending} commit(s) ahead of "
-                           f"'{staging}' -- a Promote can move them whenever "
+                out.append(f"{name}: {landing} is {pending} commit(s) ahead of "
+                           f"'{above}' -- a Promote can move them whenever "
                            f"it suits")
         if head == base:
             continue
@@ -614,6 +715,9 @@ def _unlanded_work(root, siblings=True):
                     f'origin/{base}..HEAD', '--', '.')
         if real and real != '0':
             ahead = real
+        if records is not None:
+            records.append({'repo': str(repo.resolve()), 'branch': head,
+                            'base': base})
         out.append(f"{name}: {ahead} commit(s) on '{head}' that are NOT on "
                    f"'{base}' -- the branch this repo lands work on")
     return out
@@ -743,6 +847,43 @@ def _print_hard_requirements(root):
                 print(f"- [{src}] a reply saying \"{pair['if_says']}\" must "
                       f"not ALSO match /{pair['must_not_say_matching']}/i -- "
                       f"the two cannot both be true. Say the one that is.")
+        # require_section_not_repeated: the previous reply's section is
+        # knowable here, before a word is written -- and here is the only
+        # place the repeat can still be avoided, since the stop hook fires
+        # after the person has read it (2026-10-05).
+        _rep = r.get('require_section_not_repeated') or {}
+        if _rep.get('heading'):
+            _prev = None
+            _path = os.environ.get('PRECEDENT_TRANSCRIPT_PATH', '').strip()
+            if _path and os.path.isfile(_path):
+                try:
+                    _tl = prc.assistant_timeline(_path) or []
+                    _prev = prc.previous_section(_tl + [(0, '\0')], '\0',
+                                                 _rep['heading'])
+                except Exception:                            # noqa: BLE001
+                    _prev = None
+            _short = f" ({_rep['one_line']})" if _rep.get('one_line') else ''
+            if _prev:
+                print(f"- [{src}] the section under /{_rep['heading']}/i is "
+                      f"refused when every line of it repeats the last "
+                      f"reply's. The last reply's said:\n"
+                      + '\n'.join(f"    {i}" for i in _prev)
+                      + f"\n  If yours would say nothing new, write the one "
+                        f"line instead{_short}.")
+            else:
+                print(f"- [{src}] the section under /{_rep['heading']}/i is "
+                      f"refused when every line of it repeats the last "
+                      f"reply's; with nothing new, it is one line{_short}.")
+        # require_quiet_while_background_runs: printed on the turn that
+        # STARTS a batch, which is where it can still shape what follows
+        # (2026-10-05).
+        if r.get('require_quiet_while_background_runs'):
+            print(f"- [{src}] when a background job wakes a turn and another "
+                  f"background command is still running -- or the wake is a "
+                  f"Monitor's progress event -- the reply is at most ONE short "
+                  f"line, such as \"(Waiting on <what>.)\": no status report, "
+                  f"no Boildown. Report once, when the last job ends or one "
+                  f"fails. A wake that reports a failure may speak.")
         for pair in (r.get('require_paired_with') or []):
             if pair.get('if_matches') and pair.get('must_also_match'):
                 print(f"- [{src}] a reply matching /{pair['if_matches']}/ "
@@ -911,21 +1052,32 @@ def main():
         except ImportError:
             pass
 
-        # Whether anyone other than Morgan has pushed to precedent-beta-v01
-        # since he was last told -- silent except on a real alert, which is
-        # the whole point: the always-printed status line lives in
-        # .claude/hooks/session-start.sh's own call to the same module,
-        # once per session, not here on every single reply. This module is
-        # repo-local to alex137/BestPractice (its own two-branch carry
-        # model), not a vendored engine file, so a consuming repo's copy of
-        # this gate script simply has no sibling to import and stays quiet.
+        # What other people landed here since this person's own last commit,
+        # left by the session-start hook for the first prompt and printed
+        # once (the others-did practice, in the ladder set). One local file read; no fetch, so a
+        # reply with no news costs nothing. An older engine without the
+        # module stays quiet.
         try:
             sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-            import precedent_beta_watermark_check as pbw
-            alert = pbw.remind(root)
-            if alert:
-                print(f"{alert}\n")
+            import precedent_others_did as pod
+            report = pod.remind(root)
+            if report:
+                print(f"{report}\n")
         except ImportError:
+            pass
+
+        # The longest-due reminder this conversation has not shown yet, for
+        # the Boildown's Todo line, by date rather than by topic (practice:
+        # todo-reminder; Morgan, 2026-10-10: "Maybe we should have it show
+        # one BY DATE"). Local files only; quiet when nothing is due.
+        try:
+            sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+            import build_todo_index as bti
+            block = bti.remind(
+                root, os.environ.get('PRECEDENT_TRANSCRIPT_PATH', '').strip())
+            if block:
+                print(f"{block}\n")
+        except Exception:                                    # noqa: BLE001
             pass
 
     # THE MERGE MOMENT, and only it: did CI actually run on the commit about
@@ -1068,8 +1220,21 @@ def main():
               "ones do; never quote the text of one that is private into a "
               "commit message, a pull request or an issue.\n")
 
+    # ADDITIONS LOAD WITH THEIR RULE (Morgan, 2026-10-09): each practice
+    # printed here brings every addition in force that names it in
+    # `adds_to:`, right after it, whether or not the addition registers this
+    # gate itself. One that does is printed there, not twice.
+    additions = {}
+    for slug in slugs:
+        try:
+            additions[slug] = ps._additions(root, slug)
+        except Exception:                                    # noqa: BLE001
+            additions[slug] = []
+    attached = {a for adds in additions.values() for a, *_r in adds}
     print(f"# Practices for the {gate} gate — {vocab[gate]}\n")
     for slug in slugs:
+        if slug in attached:
+            continue
         level, name, path = registered[slug]
         fm, sections = sp._read_practice_file(path)
         # None means resolution did not account for this practice at all
@@ -1096,29 +1261,68 @@ def main():
                 continue
             clause = (bv._json_str(fm.get('index_clause', '')).strip()
                       or bv._json_str(fm.get('title', '')).strip())
+            clause = bv._standing_prefix(fm) + clause
             print(f"- **{slug}** ({where}) — {clause}")
+            for a_slug, a_where, a_fm, a_sections in additions.get(slug, ()):
+                a_clause = (bv._json_str(a_fm.get('index_clause', '')).strip()
+                            or bv._json_str(a_fm.get('title', '')).strip())
+                print(f"  - adds to it: **{a_slug}** ({a_where}) — "
+                      f"{bv._standing_prefix(a_fm)}{a_clause}")
             continue
-        block = f"### {slug} ({where})\n{sections.get('rule', '').strip()}"
+        block = (f"### {slug} ({where}){ps._standing_note(fm)}\n"
+                 f"{sections.get('rule', '').strip()}")
         if manifest is not None:
             note = ps._source_unreachable_note(manifest, slug)
             if note:
                 block += f"\n{note}"
+        for a_slug, a_where, a_fm, a_sections in additions.get(slug, ()):
+            block += (f"\n\n#### Addition in force here (from {a_where}): "
+                      f"{a_slug}{ps._standing_note(a_fm)}\n"
+                      f"{(a_sections.get('rule') or '').strip()}")
         print(f"{block}\n")
     if gate == 'reply':
         _print_hard_requirements(root)
+        # STALE BRANCHES, for the closing Boildown only (the ladder set's
+        # stale-branch-cleanup; Morgan, 2026-10-05). Only when that practice
+        # reached this person -- it is for code owners -- and only when there
+        # are any: "Don't do that if there aren't any."
+        if 'stale-branch-cleanup' in slugs:
+            try:
+                import precedent_stale_branches as _sb
+                _groups, _ = _sb.collect()
+                _n = sum(len(r) for *_x, r in _groups)
+            except Exception:                                 # noqa: BLE001
+                _n = 0
+            if _n:
+                # NO COUNT HERE (2026-10-10, a consumer): this reads the
+                # remote-tracking refs as they stand, without a fetch -- a
+                # fetch per repository at every turn costs too much -- while
+                # the page fetches first, so "13 branch(es) across 4" here
+                # met 16 on the page. The page's number is the one to give.
+                print(f"- For the CLOSING Boildown only (the reply that says "
+                      f"\"You can archive this session\"): some branches "
+                      f"can be deleted (the page counts them, after a fetch). "
+                      f"Build the page with `python3 tools/"
+                      f"precedent_stale_branches.py --fetch --html "
+                      f"<scratchpad>/branch-cleanup.html`, publish it as an "
+                      f"artifact, and link it in one Boildown line. In any "
+                      f"other reply, say nothing about it (practice: "
+                      f"stale-branch-cleanup).")
         # COMMITTED, BUT NOT WHERE WORK LANDS. Printed with the hard
         # requirements because for this person it is one: a reply that does
         # not say so is how a branch gets forgotten.
+        _records = []
         try:
-            _unlanded = _unlanded_work(root)
+            _unlanded = _unlanded_work(root, records=_records)
         except Exception:                                     # noqa: BLE001
             _unlanded = []
+        record_turn_start_unlanded(root, _records)
         for _line in _unlanded:
             if PROMOTE_RUNNING_MARK in _line:
                 print(f"- {_line}. Do NOT recommend, suggest or mention a "
                       f"Promote for it in this reply -- not in The Boildown, "
                       f"not as a plain line. At most say that one is already "
-                      f"running (practice: promote; Morgan, 2026-09-27).")
+                      f"running (Morgan, 2026-09-27).")
                 continue
             if 'a Promote can move them' in _line:
                 # Not a hard requirement and not a call to action: one plain
@@ -1140,10 +1344,12 @@ def main():
         except Exception:                                     # noqa: BLE001
             _over = []
         for _line in _over:
-            if LANDED_REDUCTION_MARK in _line:
+            if LANDED_REDUCTION_MARK in _line or LANDED_REDUCTION_MARK_PLAIN in _line:
+                when = ('after a Promote' if LANDED_REDUCTION_MARK in _line
+                        else 'once it reaches main')
                 print(f"- SESSION LOAD OVER TARGET: {_line}. The Boildown says "
                       f"so in one line: a reduction is already on its way and "
-                      f"takes effect after a Promote. Do NOT recommend another "
+                      f"takes effect {when}. Do NOT recommend another "
                       f"Reduction pass for it (practice: session-load-budget).")
                 continue
             print(f"- SESSION LOAD OVER TARGET: {_line}. The Boildown MUST say "

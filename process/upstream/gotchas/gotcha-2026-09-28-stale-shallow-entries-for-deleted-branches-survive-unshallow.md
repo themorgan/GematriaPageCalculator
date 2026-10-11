@@ -10,7 +10,7 @@ retires_when:    null
 
 `git rev-parse --is-shallow-repository` keeps printing `true` after
 `git fetch --unshallow` exits 0, and after a full-depth fetch of every
-branch. Promote refuses with "the clone is still shallow (the fetch did
+branch. The branch tool refuses with "the clone is still shallow (the fetch did
 not complete), so the history checks cannot run".
 
 ## Story
@@ -33,3 +33,13 @@ Confirm no entry is reachable before touching anything:
 `git fsck --connectivity-only` that every branch's history is intact.
 If any entry is reachable, the clone really is shallow: deepen it
 instead (`git fetch --depth=<large> origin`).
+
+**Prevention: nothing mechanical, deliberately**, because the recovery
+edits git's own `.git/shallow`, and is safe only after the reachability
+check above. A tool that did it unattended and misjudged one entry would
+make a really shallow clone read as complete, and the checks that read
+history would then run on history that is not there. Today the failure
+is loud and safe instead: the full check
+([tools/precedent_push_check.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_push_check.py))
+refuses to run on a clone that still reads as shallow. (Written 2026-10-06, after the 2026-10-05 very
+deep check found no answer recorded.)

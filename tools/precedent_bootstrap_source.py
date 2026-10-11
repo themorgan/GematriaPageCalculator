@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_bootstrap_source.py — give a brand-new adopter with NO
+"""Instantiates a brand-new individual or shared practice set from a skeleton, for an adopter who has neither yet
+
+precedent_bootstrap_source.py — give a brand-new adopter with NO
 individual or shared practice repo yet a real, working one in one command.
 
 THE GAP THIS CLOSES. Every source in PRACTICE_ENGINE_PLAN.md's three-source
@@ -68,6 +70,8 @@ Usage:
                                       # if anything is missing.
 
   --force true    # allow writing into a non-empty --dest
+  --off-main true # copy the engine from a checkout main does not contain
+                  # (refused otherwise; the manifest names the branch)
 
 Exit: 0 on success (prints the resulting config wiring either way); 1 on a
 refusal (existing non-empty dest without --force, missing --approver for a
@@ -91,7 +95,6 @@ import precedent_vendor_engine
 import precedent_branches
 
 LEVELS = {'individual', 'shared'}
-LEVEL_ALIASES = {'team': 'shared'}   # the pre-2026-09-18 spelling still reads
 SKELETONS = {
     'individual': ROOT / 'templates' / 'practice-set-individual',
     'shared': ROOT / 'templates' / 'practice-set-shared',
@@ -186,7 +189,11 @@ SESSION_HOOKS = ('freshness-guard.sh', 'commit-identity.sh',
                  'workflow-write-gate.sh',
                  # No wait loop on pgrep -f, which always finds itself
                  # (2026-10-01).
-                 'wait-loop-gate.sh')
+                 'wait-loop-gate.sh',
+                 # The one entry per event every hook added from 2026-10-07
+                 # on runs through (precedent_hooks.py), so a new hook never
+                 # needs a new settings.json entry, or a person's yes.
+                 'precedent-hooks.sh')
 # The third hook a set gets, kept out of SESSION_HOOKS because it is the one
 # that is NOT a verbatim copy: it is instantiated from a .template with two
 # placeholders substituted, which is write_session_hook()'s job below.
@@ -439,7 +446,7 @@ def ensure_universal_source(dest):
     cfg = pathlib.Path(dest) / 'precedent.json'
     data = _load_json(cfg) or {'format_version': 1}
     sources = data.setdefault('sources', [])
-    if any(s.get('level') == 'universal' for s in sources):
+    if any(precedent_resolve.declared_level(s) == 'universal' for s in sources):
         return cfg, False
     sources.append({'level': 'universal', 'name': UNIVERSAL_SOURCE_NAME,
                     'path': UNIVERSAL_SOURCE_PATH})
@@ -666,6 +673,14 @@ def _install_session_hooks(dest, base_branch='main'):
                 }],
             },
         }
+        # The fixed entry per event (precedent_vendor_engine.DISPATCH_WIRING):
+        # the last ones a set's settings.json ever needs.
+        for ev in ('SessionStart', 'UserPromptSubmit', 'PreToolUse',
+                   'PostToolUse', 'Stop'):
+            payload['hooks'].setdefault(ev, []).append({'hooks': [
+                {'type': 'command',
+                 'command': f'$CLAUDE_PROJECT_DIR/.claude/hooks/precedent-hooks.sh {ev}',
+                 'timeout': 900}]})
         settings.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
         written.append(settings)
     return written
@@ -716,7 +731,7 @@ def verify(level, path):
 
     An empty blocklist stays fine on purpose: an empty
     one is a deliberate state, an absent one is a gap."""
-    level = LEVEL_ALIASES.get(level, level)
+    level = precedent_resolve.normalize_level(level)
     skeleton = SKELETONS.get(level)
     if skeleton is None or not skeleton.is_dir():
         return []
@@ -766,7 +781,7 @@ def verify(level, path):
     # because bootstrap() only ever runs when a set is created -- the same
     # shape as the hook findings above, and the reason verify() exists.
     cfg = _load_json(path / 'precedent.json') or {}
-    if not any(s.get('level') == 'universal'
+    if not any(precedent_resolve.declared_level(s) == 'universal'
                for s in (cfg.get('sources') or [])):
         missing.append(
             "precedent.json declares no universal source, so this set "
@@ -1272,8 +1287,8 @@ def _git(*args):
 
 
 def bootstrap(level, name, dest, approvers=None, force=False,
-              visibility='private'):
-    level = LEVEL_ALIASES.get(level, level)
+              visibility='private', off_main=False):
+    level = precedent_resolve.normalize_level(level)
     if level not in LEVELS:
         raise BootstrapRefused(f"--level must be one of {sorted(LEVELS)}, got {level!r}")
     if visibility not in ('private', 'public'):
@@ -1291,6 +1306,15 @@ def bootstrap(level, name, dest, approvers=None, force=False,
             '--approver "Full Name:github-handle" (whoever is creating this '
             "set is its first approver, per PRACTICE_ENGINE_PLAN.md's Stage 4)")
 
+    _warn_if_clone_is_stale()
+    # Before anything is written: seed() refuses the same thing, but only
+    # after the skeleton is already on disk.
+    head = precedent_vendor_engine._head_commit(ROOT)
+    where = precedent_vendor_engine.off_source_branch(ROOT, head)
+    if where and not (off_main or precedent_vendor_engine.seed_off_main_allowed()):
+        raise BootstrapRefused(precedent_vendor_engine.off_main_refusal(where, head)
+                               .replace('--off-main', '--off-main true'))
+
     dest.mkdir(parents=True, exist_ok=True)
     mapping = {'NAME': name, 'DEST_PATH': str(dest)}
     if level == 'shared':
@@ -1298,7 +1322,6 @@ def bootstrap(level, name, dest, approvers=None, force=False,
         mapping['APPROVER_NAME'] = first['name']
         mapping['APPROVER_GITHUB'] = first['github']
 
-    _warn_if_clone_is_stale()
     written = _copy_skeleton(SKELETONS[level], dest, mapping)
     written.append(_write_source_manifest(dest, level, name, visibility))
     if level == 'shared':
@@ -1311,9 +1334,9 @@ def bootstrap(level, name, dest, approvers=None, force=False,
     _cfg, _changed = ensure_universal_source(dest)
     if _changed:
         written.append(_cfg)
-    if precedent_branches.ensure_repo_landing(dest) and _cfg not in written:
+    if precedent_branches.ensure_repo_landing(dest, new_install=True) and _cfg not in written:
         written.append(_cfg)
-    written += precedent_vendor_engine.seed(dest)
+    written += precedent_vendor_engine.seed(dest, off_main=off_main)
     # AFTER seed(), not before: seed()/_write_engine_files builds
     # ENGINE_MANIFEST.json fresh on every call, so recording the CI
     # workflow files' hashes before this point would be silently wiped the
@@ -1323,6 +1346,7 @@ def bootstrap(level, name, dest, approvers=None, force=False,
     written += precedent_vendor_engine.record_ci_workflow_files(dest, 'source')
     written += _write_instructions_and_views(dest, level, name)
     written.append(_write_session_load_budget(dest))
+    written.append(write_generated_files(dest))
     if level == 'shared':
         written.append(_write_codeowners(dest))
 
@@ -1360,7 +1384,65 @@ def _write_codeowners(dest):
     return pathlib.Path(dest) / 'CODEOWNERS'
 
 
-def _write_session_load_budget(dest):
+SET_GENERATED_FILES = (
+    ('MAP.md', None), ('GLOSSARY.md', None),
+    ('AGENTS.md', '<!-- BEGIN GENERATED: precedent-loader -->'),
+)
+
+
+def write_generated_files(dest):
+    """Write tools/generated_files.json, a practice set's own list of what
+    its tools generate: the three views build_views.py writes. -> its path.
+
+    The list is what a set's commit rebuilds and its check reads
+    (spec/GENERATED_FILES_PLAN.md step 4; Morgan, 2026-10-03: generated
+    files are never hand-edited, in every repository). It is the set's own
+    declaration, as tools/session_load_budgets.json is, never vendored.
+    Existing sets got theirs from this same function, so a set's list has
+    one definition. An entry already there is kept, so a set that lists
+    more of its own generated files does not lose them."""
+    dest = pathlib.Path(dest)
+    path = dest / 'tools' / 'generated_files.json'
+    data = _load_json(path) if path.is_file() else None
+    data = data if isinstance(data, dict) else {}
+    have = {(e.get('path'), e.get('part')) for e in data.get('files') or []}
+    files = list(data.get('files') or [])
+    for rel, part in SET_GENERATED_FILES:
+        if (rel, part) in have:
+            continue
+        entry = {'path': rel}
+        if part:
+            entry['part'] = part
+        entry.update({'generated_by': 'tools/build_views.py',
+                      'edit_instead': 'practices/*.md',
+                      'inputs': ['practices/*.md', 'tools/*.py', '*.json'],
+                      'regenerate': 'python3 tools/build_views.py',
+                      'check': ['tools/build_views.py', '--check']})
+        files.append(entry)
+    # A set may generate more than the views -- a todo index, say. Each
+    # labelled file it tracks is listed from its own label, or with the
+    # entry this engine's own list gives the same file when the label is
+    # too old to name its source (spec/GENERATED_FILES_PLAN.md G5).
+    import precedent_regenerate as _rg
+    upstream = _load_json(pathlib.Path(__file__).resolve().parent / 'generated_files.json')
+    known = {(e.get('path'), e.get('generated_by')): e
+             for e in (upstream or {}).get('files') or [] if not e.get('part')}
+    files += _rg.labelled_entries(dest, 'tools', {e.get('path') for e in files
+                                                   if not e.get('part')}, known)
+    data.setdefault('_comment', [
+        "Every file, or part of a file, a tool here writes wholesale: what",
+        "precedent_check.py's generated-files-registered checks and what the",
+        "commit backstop rebuilds when one of its inputs changes",
+        "(tools/precedent_regenerate.py). Never edit those files by hand: change",
+        "their sources and let them be rebuilt. This list is this set's own.",
+    ])
+    data['files'] = files
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+    return path
+
+
+def _write_session_load_budget(dest, occasion='bootstrap'):
     """Seed tools/session_load_budgets.json so a new set starts with the
     early-warning notice ON, instead of silently absent until someone
     remembers to opt in by hand (practice: session-load-budget).
@@ -1385,9 +1467,14 @@ def _write_session_load_budget(dest):
     own SESSION_LOAD_SURFACES checks both, not just whichever the local
     harness happens to read. A repo missing one after this seeds only
     what is actually there, same as the hand-written registries do.
+
+    Each surface is measured as every ceiling check measures it
+    (session_load_trend.charged_tokens): the session-start file less the
+    sets the person brings, which their own budget holds, so the ceiling
+    written here is the repository's and does not depend on who ran this.
     """
-    import build_views as bv
     import precedent_time
+    import session_load_trend as slt
     dest = pathlib.Path(dest)
     today = precedent_time.today(dest)
     surfaces = {}
@@ -1398,18 +1485,18 @@ def _write_session_load_budget(dest):
         f = dest / rel
         if not f.is_file():
             continue
-        measured = bv._approx_tokens(f.read_text(encoding='utf-8'))
+        measured = slt.charged_tokens(dest, rel, f.read_text(encoding='utf-8'))
         ceiling = ((int(measured * 1.2) + 49) // 50) * 50 if measured else 50
         surfaces[rel] = {
             'ceiling': ceiling,
-            '_note': f'{measured} tokens measured at bootstrap ({today}). '
-                     f'Ceiling is current + ~20%.',
+            '_note': f'{measured} tokens measured at {occasion} ({today}). '
+                     'Ceiling is current + ~20%.',
         }
     path = dest / 'tools' / 'session_load_budgets.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
         '_comment': [
-            'Seeded at bootstrap (practice: session-load-budget) so the '
+            f'Seeded at {occasion} (practice: session-load-budget) so the '
             'early-warning notice starts ON. headroom_floor_pct matches '
             "BestPractice's own value; each surface's ceiling is measured "
             'plus ~20% headroom, the convention every hand-written entry '
@@ -1680,7 +1767,7 @@ def write_repo_config(repo_config_dir, name, dest, force=False):
     data = _load_json(config_path) or {'format_version': 1, 'sources': []}
     sources = data.setdefault('sources', [])
     rel_path = os.path.relpath(dest, repo_config_dir)
-    existing = next((s for s in sources if s.get('level') in ('shared', 'team')
+    existing = next((s for s in sources if precedent_resolve.declared_level(s) == 'shared'
                       and s.get('name') == name), None)
     if existing:
         if existing.get('path') != rel_path and not force:
@@ -1727,7 +1814,7 @@ def _infer_level(path):
     """
     m = _load_json(path / precedent_resolve.SOURCE_MANIFEST) or {}
     if m.get('level'):
-        return LEVEL_ALIASES.get(m['level'], m['level'])
+        return precedent_resolve.normalize_level(m['level'])
     if (path / 'approvers.json').exists():
         return 'shared'
     for name in ('identity.json', 'config.json', 'config.json.sample'):
@@ -1750,7 +1837,7 @@ def main():
         if not target.is_dir():
             sys.exit(f"precedent_bootstrap_source FAIL: --verify {target} is "
                      f"not a directory")
-        level = LEVEL_ALIASES.get(args.get('--level'), args.get('--level')) or _infer_level(target)
+        level = precedent_resolve.normalize_level(args.get('--level')) or _infer_level(target)
         if level not in LEVELS:
             sys.exit(f"precedent_bootstrap_source FAIL: cannot tell whether "
                      f"{target} is a team or an individual set (no "
@@ -1767,7 +1854,7 @@ def main():
             print(f"  - {m}")
         return 1
 
-    level = LEVEL_ALIASES.get(args.get('--level'), args.get('--level'))
+    level = precedent_resolve.normalize_level(args.get('--level'))
     name = args.get('--name')
     dest = args.get('--dest')
 
@@ -1848,7 +1935,8 @@ def main():
 
     try:
         result = bootstrap(level, name, dest, approvers=approvers, force=force,
-                           visibility=args.get('--visibility', 'private'))
+                           visibility=args.get('--visibility', 'private'),
+                           off_main=args.get('--off-main', 'false').lower() == 'true')
     except BootstrapRefused as e:
         print(f"REFUSED: {e}")
         return 1

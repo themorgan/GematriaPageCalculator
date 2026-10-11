@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Say whether anything this repo vendors or resolves live has fallen behind
+"""Says whether anything this repo vendors or resolves live has fallen behind its upstream — every source precedent.json declares (the engine, each vendored tree, each live sibling clone), one row each; the one check that looks outward; prints, never refreshes
+
+Say whether anything this repo vendors or resolves live has fallen behind
 the upstream it came from -- every declared source, not only the engine.
 
 THE GAP THIS CLOSES. Every check in this system runs inside one repository.
@@ -69,6 +71,8 @@ import subprocess
 import sys
 
 MANIFEST = pathlib.Path('tools') / 'ENGINE_MANIFEST.json'
+# The section 0 catalogue's own sync record (precedent_update.CATALOGUE_SYNC_NAME).
+CATALOGUE_SYNC = 'CATALOGUE_SYNC.json'
 REPO_CONFIG = 'precedent.json'
 DEFAULT_USER_CONFIG = '~/.config/precedent/config.json'
 USER_CONFIG_ENV = 'PRECEDENT_USER_CONFIG'
@@ -149,20 +153,27 @@ def refresh_remedy(root, clone):
 # --------------------------------------------------------------------------
 # What this repo declares, and every way each declared source is reached.
 
+# The resolver's alias table, for a copy with no resolver beside it;
+# verify_harness.py asserts it equals precedent_resolve.LEVEL_ALIASES.
+_FALLBACK_LEVEL_ALIASES = {'team': 'shared'}
+
+
 def _normalize_level(level):
     try:
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
         import precedent_resolve as _pr
         return _pr.normalize_level(level)
     except Exception:                                        # noqa: BLE001
-        return {'team': 'shared'}.get(str(level or '').strip().lower(),
+        return _FALLBACK_LEVEL_ALIASES.get(str(level or '').strip().lower(),
                                       str(level or '').strip().lower())
 
 
-def declared_sources(root):
+def declared_sources(root, user=True):
     """-> (sources, notes): every source precedent.json declares plus the
     person's own individual set from their user config, each as
-    {level, name, path (resolved), repo (optional)}.
+    {level, name, path (resolved), repo (optional)}. user=False leaves the
+    user config out: what the repo itself declares, the same on every
+    machine.
 
     Deliberately NOT precedent_resolve.load_config(): that call self-heals
     (it may clone a missing source), and a freshness notice that clones
@@ -189,7 +200,7 @@ def declared_sources(root):
                 sources.append(src)
     user_cfg = pathlib.Path(os.environ.get(USER_CONFIG_ENV,
                                            DEFAULT_USER_CONFIG)).expanduser()
-    if user_cfg.is_file():
+    if user and user_cfg.is_file():
         cfg, why = _read_json(user_cfg)
         if cfg is None:
             notes.append(why)
@@ -205,12 +216,25 @@ def declared_sources(root):
     return sources, notes
 
 
+def _deleted_declared(root):
+    """-> ({names}, one-line note) for the shared sets precedent.json
+    declares that are deleted (precedent_resolve.declared_deleted_sets, the
+    one reader); (set(), '') where this engine copy predates it."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_resolve as _pr
+        found = _pr.declared_deleted_sets(root)
+        return {n for n, _ in found}, _pr.deleted_sets_note(found)
+    except Exception:                                        # noqa: BLE001
+        return set(), ''
+
+
 def _vendored_manifest_path(root, src):
     """process/manifest.json holds the universal tree; a named set's code
     dirs are tracked by process/manifest_<name>.json (checkin.py's
     convention)."""
     root = pathlib.Path(root)
-    if src['level'] == 'universal':
+    if _normalize_level(src['level']) == 'universal':
         return root / 'process' / 'manifest.json'
     return root / 'process' / f"manifest_{src['name']}.json"
 
@@ -268,8 +292,18 @@ def collect_targets(root='.'):
     sources, notes = declared_sources(root)
     for n in notes:
         rows.append({'label': REPO_CONFIG, 'kind': 'config', 'problem': n})
+    # A DELETED SET IS NOT AN UNVERIFIED ONE (2026-10-09). Session start
+    # never clones a set whose repository is deleted, so it has no clone to
+    # compare and was counted in "NOT VERIFIED -- N source(s)". A consumer's
+    # session read that as a clone failure and went after git and the proxy.
+    # It gets one note row instead, which report() prints and never counts.
+    deleted, note = _deleted_declared(root)
+    if note:
+        rows.append({'label': REPO_CONFIG, 'kind': 'deleted', 'note': note})
     for src in sources:
         if src['level'] == 'repo-local':
+            continue
+        if _normalize_level(src['level']) == 'shared' and src['name'] in deleted:
             continue
         who = f"{src['name']} ({src['level']})"
         reached = 0
@@ -292,6 +326,32 @@ def collect_targets(root='.'):
                 rows.append({'label': label, 'kind': 'vendored',
                              'problem': f'{mp.relative_to(root)} records no '
                                         f'upstream repo, branch and commit'})
+        # A section 0 catalogue (a copy of the universal practices inside
+        # this repository) records its own sync in CATALOGUE_SYNC.json, which
+        # precedent_update.py writes: the commit it was replaced from, of the
+        # same repository and branch the engine comes from. Until 2026-10-04
+        # nothing here read it, and a consumer holding 159 practices there
+        # was told at every session start that they were absent.
+        sync = src['path'] / CATALOGUE_SYNC
+        if not mp.is_file() and sync.is_file():
+            reached += 1
+            m, why = _read_json(sync)
+            commit = (m or {}).get('source_commit')
+            where = (str(src['path'].relative_to(root))
+                     if src['path'].is_relative_to(root) else str(src['path']))
+            label = f'{who} vendored at {where}'
+            url = (manifest or {}).get('source_repo')
+            branch = (manifest or {}).get('source_branch')
+            if m is None:
+                rows.append({'label': label, 'kind': 'vendored', 'problem': why})
+            elif commit and url and branch:
+                rows.append({'label': label, 'kind': 'vendored', 'url': url,
+                             'branch': branch, 'recorded': commit})
+            else:
+                rows.append({'label': label, 'kind': 'vendored',
+                             'problem': f'{CATALOGUE_SYNC} records no source_commit, '
+                                        f'or the engine manifest names no repository '
+                                        f'and branch to compare it with'})
         live = _live_clone(src['path'], root)
         if live is not None:
             reached += 1
@@ -315,6 +375,157 @@ def collect_targets(root='.'):
                                     'nor a git clone is there -- its practices '
                                     'are absent this session, not merely stale'})
     return rows
+
+
+# --------------------------------------------------------------------------
+# Which source a path in this repo was copied from (2026-10-06).
+#
+# A session that hits a bug in a vendored file has to fix it where the file
+# comes from, not here (practice: upstream-fix). The two tools that act on
+# that -- doc_lint.py's check on an open item that is really an upstream
+# fix, and upstream_fix.py, which sets the fix up in the source's clone --
+# both need to know which paths here are copies and of what. The answer is
+# the same manifests and declarations collect_targets() reads above, so it
+# is worked out here, once.
+
+# Fallbacks for a tree whose vendoring tool is not importable; the live
+# values are precedent_vendor_engine.HOOK_SOURCE_DIR / HOOK_DEST_DIR.
+_HOOK_DIRS_FALLBACK = ('templates/harness/claude-code/hooks', '.claude/hooks')
+
+
+def _hook_dirs():
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import precedent_vendor_engine as _pve
+        return _pve.HOOK_SOURCE_DIR, _pve.HOOK_DEST_DIR
+    except Exception:                                        # noqa: BLE001
+        return _HOOK_DIRS_FALLBACK
+
+
+def _repo_basename(repo):
+    """'https://github.com/o/Name.git' or 'Name' -> 'Name'."""
+    return str(repo or '').rstrip('/').rsplit('/', 1)[-1].removesuffix('.git')
+
+
+def _source_clone(root, src_path, repo):
+    """-> the local clone a fix to `repo` is made in, or None: the source's
+    declared path when that is a git work tree outside this repo (a live
+    sibling clone), else a clone named after the repository beside this
+    repo, the layout INSTALL.md and add_repo both produce."""
+    root = pathlib.Path(root).resolve()
+    cands = []
+    if src_path is not None and not pathlib.Path(src_path).resolve().is_relative_to(root):
+        cands.append(pathlib.Path(src_path))
+    if _repo_basename(repo):
+        cands.append(root.parent / _repo_basename(repo))
+    for c in cands:
+        if _live_clone(c, root) is not None:
+            return c.resolve()
+    return None
+
+
+def vendored_entries(root='.'):
+    """-> list of {local, upstream, source, repo, branch, clone}: one per
+    vendored engine file (`local` a file path) and one per vendored tree
+    (`local` a prefix ending in '/'). `upstream` is the matching path in the
+    source repository (a prefix for a tree). `repo`, `branch` and `clone`
+    are None when nothing here records them. Never raises."""
+    root = pathlib.Path(root).resolve()
+    out = []
+    manifest, _ = read_manifest(root)
+    eng_url = eng_branch = None
+    if isinstance(manifest, dict):
+        eng_url = manifest.get('source_repo')
+        eng_branch = manifest.get('source_branch')
+        clone = _source_clone(root, None, eng_url)
+        hook_src, hook_dest = _hook_dirs()
+        for names, here, there in ((manifest.get('files'), 'tools', 'tools'),
+                                   (manifest.get('hook_files'), hook_dest, hook_src)):
+            for n in names or []:
+                out.append({'local': f'{here}/{n}', 'upstream': f'{there}/{n}',
+                            'source': 'engine', 'repo': eng_url,
+                            'branch': eng_branch, 'clone': clone})
+    sources, _ = declared_sources(root, user=False)
+    seen = set()
+    for src in sources:
+        p = src['path']
+        if src['level'] == 'repo-local' or p == root or not p.is_relative_to(root):
+            continue
+        local = p.relative_to(root).as_posix().rstrip('/') + '/'
+        url, branch = src.get('repo'), None
+        mp = _vendored_manifest_path(root, src)
+        m, _ = _read_json(mp) if mp.is_file() else (None, None)
+        up = (m or {}).get('upstream') if isinstance(m, dict) else None
+        if isinstance(up, dict) and up.get('repo'):
+            url, branch = up['repo'], up.get('branch')
+        elif (p / CATALOGUE_SYNC).is_file():
+            url, branch = eng_url, eng_branch
+        seen.add(local)
+        out.append({'local': local, 'upstream': '', 'source': src['name'],
+                    'repo': url, 'branch': branch,
+                    'clone': _source_clone(root, None, url)})
+    # Anything else the one authority on mirrors names (a section 1 tree
+    # with no source declared for it) is a copy too, of the universal tree.
+    try:
+        import precedent_resolve as _pr
+        prefixes = _pr.mirrored_prefixes(root)
+    except Exception:                                        # noqa: BLE001
+        prefixes = ()
+    m, _ = _read_json(root / 'process' / 'manifest.json')
+    up = (m or {}).get('upstream') if isinstance(m, dict) else None
+    up = up if isinstance(up, dict) else {}
+    for local in prefixes:
+        if local not in seen:
+            url = up.get('repo') or eng_url
+            out.append({'local': local, 'upstream': '', 'source': 'precedent',
+                        'repo': url, 'branch': up.get('branch') or eng_branch,
+                        'clone': _source_clone(root, None, url)})
+    return out
+
+
+def origin_of(root, rel):
+    """-> the vendored_entries() row `rel` (a repo-relative path) was copied
+    from, with `upstream` resolved to that file's path in the source, or
+    None when `rel` is this repo's own."""
+    rel = str(rel).replace('\\', '/')
+    while rel.startswith('./'):
+        rel = rel[2:]
+    best, depth = None, -1
+    for e in vendored_entries(root):
+        if e['local'].endswith('/'):
+            if rel.startswith(e['local']) and len(e['local']) > depth:
+                best = dict(e, local=rel,
+                            upstream=e['upstream'] + rel[len(e['local']):])
+                depth = len(e['local'])
+        elif rel == e['local']:
+            return dict(e)
+    return best
+
+
+def source_mentions(root='.'):
+    """-> the strings that name, in prose, a repository this repo takes
+    something from: each declared shared or individual set's name, and the
+    name and github.com/<owner>/<repo> form of every repository a vendored
+    path comes from. The universal source's own `name` is left out: it is a
+    common word, and its repository is named through the engine manifest."""
+    root = pathlib.Path(root).resolve()
+    terms = set()
+    sources, _ = declared_sources(root, user=False)
+    repos = [e['repo'] for e in vendored_entries(root)]
+    for src in sources:
+        if src['level'] == 'repo-local' or src['path'] == root:
+            continue
+        if _normalize_level(src['level']) != 'universal':
+            terms.add(src['name'])
+        repos.append(src.get('repo'))
+    for r in repos:
+        if not r:
+            continue
+        terms.add(_repo_basename(r))
+        if 'github.com/' in r:
+            terms.add('github.com/' + r.split('github.com/', 1)[1]
+                      .rstrip('/').removesuffix('.git'))
+    return sorted(t for t in terms if t)
 
 
 # --------------------------------------------------------------------------
@@ -426,10 +637,14 @@ def _engine_detail(root, row, tip, out):
 def report(root='.', with_files=False, quiet=False, out=sys.stdout):
     """One row per way a declared source is reached. Returns 0 always."""
     rows = collect_targets(root)
-    tips = {}
+    tips, held = {}, {}           # held: the vendored rows behind, by move
     behind = unverified = current = engine_behind = 0
     unverified_sources = 0        # what --quiet reports: no engine row there
     for row in rows:              # to verify is not a source left unverified
+        if row['kind'] == 'deleted':
+            print(f"freshness: not checked, and not counted -- {row['note']}",
+                  file=out)
+            continue
         if row.get('problem'):
             unverified += 1
             if not row.get('nothing_vendored'):
@@ -450,6 +665,18 @@ def report(root='.', with_files=False, quiet=False, out=sys.stdout):
                       f"reach {row['url']} ({row['branch']}). Whether it is "
                       f"current is unknown this session.", file=out)
             continue
+        if tip != row['recorded'] and row['kind'] == 'live' and row.get('path'):
+            # RE-READ BEFORE SAYING BEHIND (2026-10-06). A consumer's session
+            # start reported three set clones BEHIND that were current minutes
+            # later, before the session itself had run anything that moves a
+            # clone. Its cause is not established (see
+            # todo-2026-10-06-freshness-notice-said-behind-for-current-clones);
+            # whatever moved them, a clone read once at the top of this run can
+            # be out of date by the time its row is printed, so the clone is
+            # read again here and judged on what it holds now.
+            again = _live_clone(row['path'], root)
+            if again and again.get('head'):
+                row['recorded'] = again['head']
         if tip == row['recorded']:
             current += 1
             if not quiet:
@@ -458,9 +685,19 @@ def report(root='.', with_files=False, quiet=False, out=sys.stdout):
             continue
         behind += 1
         engine_behind += row['kind'] == 'engine'
-        head = ('ENGINE BEHIND UPSTREAM' if row['kind'] == 'engine'
-                else 'BEHIND UPSTREAM')
-        print(f"{head}: {row['label']} has {row['recorded'][:12]}; "
+        if row['kind'] in ('engine', 'vendored'):
+            # ONE MOVE, ONE LINE (2026-10-10, a consumer's session start: one
+            # upstream move printed as "ENGINE BEHIND UPSTREAM" and "BEHIND
+            # UPSTREAM" for the same two commits). The engine and the catalogue
+            # copy are two layers that move apart, so each keeps its own line
+            # when they differ; at the same commit, both are named in one.
+            gkey = (str(row['url']), row['branch'], row['recorded'], tip)
+            if gkey in held:
+                held[gkey]['rows'].append(row)
+            else:
+                held[gkey] = {'rows': [row], 'tip': tip}
+            continue
+        print(f"BEHIND UPSTREAM: {row['label']} has {row['recorded'][:12]}; "
               f"{row['url']} {row['branch']} is now at {tip[:12]}.", file=out)
         if row['kind'] == 'live':
             print(f"  Its practices load from that clone as it stands, so "
@@ -469,21 +706,35 @@ def report(root='.', with_files=False, quiet=False, out=sys.stdout):
                   f"can, so this one has changes of its own, another branch "
                   f"or commits of its own, or the refresh has not run: "
                   f"{refresh_remedy(root, row['path'])}", file=out)
-        if row['kind'] == 'engine' and with_files:
-            _engine_detail(root, row, tip, out)
+    for group in held.values():
+        grows, tip = group['rows'], group['tip']
+        grows.sort(key=lambda r: r['kind'] != 'engine')
+        head = ('ENGINE BEHIND UPSTREAM' if grows[0]['kind'] == 'engine'
+                else 'BEHIND UPSTREAM')
+        labels = ' and '.join(r['label'] for r in grows)
+        print(f"{head}: {labels} "
+              f"{'have' if len(grows) > 1 else 'has'} "
+              f"{grows[0]['recorded'][:12]}; {grows[0]['url']} "
+              f"{grows[0]['branch']} is now at {tip[:12]}.", file=out)
+        for r in grows:
+            if r['kind'] == 'engine' and with_files:
+                _engine_detail(root, r, tip, out)
     if engine_behind:
         # "Update Vendors" moves a vendored engine or catalogue; a live
         # clone behind its own origin takes the pull named on its own line,
         # and pointing it here sent sessions to the wrong fix (2026-09-30).
-        print('  Nothing has been changed -- this is a notice. To take it: '
-              '"Update Vendors" (practices/vendor-update-runbook.md).', file=out)
+        print('  Nothing has been changed -- this is a notice. At a merge, '
+              'python3 tools/precedent_merge_vendors.py takes it as a commit '
+              'of its own; otherwise "Update Vendors". Both are in '
+              'practices/vendor-update-runbook.md.', file=out)
     if quiet and unverified_sources:
         print(f'freshness: NOT VERIFIED -- {unverified_sources} source(s) '
               f'could not be checked this session; run python3 '
               f'tools/precedent_engine_freshness.py for which (not verified '
               f'is not current)', file=out)
     if not quiet:
-        print(f'freshness: {len(rows)} row(s) -- {current} current, '
+        print(f"freshness: {sum(r['kind'] != 'deleted' for r in rows)} "
+              f'row(s) -- {current} current, '
               f'{behind} behind, {unverified} not verified (not verified is '
               f'not current)', file=out)
     return 0

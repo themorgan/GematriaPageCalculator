@@ -37,6 +37,13 @@ computes:
 When a script changes, every dependent document changes with it, in the same
 commit, by regeneration rather than by editing.
 
+4. **Published pages: only a render reaches a link.** A page published for
+   people to read is a copy of what the renderer produced from a registered
+   document, never a page written by hand, however early or rough the
+   draft. A page made outside the repository is outside every check above. A page one
+   of the engine's own generators writes, published unedited within the
+   hour, is a render too: the branch-cleanup page is one.
+
 ## Detail
 
 ## Why
@@ -59,7 +66,33 @@ found later only by a deliberate contamination sweep. The gate had worked
 perfectly on everything it was pointed at, which is precisely why the gaps were
 invisible.
 
+Rule 4 has the same shape one level out (2026-10-05, a consumer). A deck's
+review page was built by hand in a scratch folder, with its figures typed in,
+and published straight to a link so its contents could be agreed before the
+real build. Every check on script-derived figures reads files in the
+repository, so none of them ever saw that page. A model then changed one of
+the figures and the page kept the old one for nine days, until the deck was
+rebuilt from the models and the two disagreed.
+
 ## Install
+**Rule 4 is a hook.** `hooks/artifact-publish-gate.sh` runs
+[tools/artifact_publish_gate.py](https://github.com/alex137/BestPractice/blob/staging/tools/artifact_publish_gate.py) before
+every Artifact publish and refuses a page that is not byte-identical to the
+on-disk render of a registered document, or whose render is older than its
+source. The registry is the renderer's `DOCS` and `COMPOSITE_RENDERS`
+(`tools/doc_html.py`, or the host shim named in
+`tools/artifact_publish_gate_host.json`). A page that is not a deliverable is
+registered and rendered like any other; that cost is the point.
+
+**The engine's generators pass the same way** (2026-10-07). A tool listed in
+the gate's `GENERATORS` notes the sha256 of every page it writes;
+[tools/precedent_stale_branches.py](https://github.com/alex137/BestPractice/blob/staging/tools/precedent_stale_branches.py)
+`--html` is the one listed. Its page has no model behind it, so nothing can
+drift, and the gate's question -- is this exactly what the tool produced,
+recently? -- is the one it asks of a render. A consuming repository's session
+was told by one rule to publish that page and refused by this one, and fell
+back to pasting links into chat.
+
 **Enforced, not merely stated.** Rule 2 is mechanically checkable and now is:
 a script declares the figures it owns via `owned_figures()`, returning them in
 the **exact rendered forms it produces** — value and unit, formatted as the

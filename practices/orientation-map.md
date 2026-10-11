@@ -4,7 +4,7 @@ title:       An orientation map, read first
 tier:        on-demand
 severity:    default
 applies_to:  ["MAP.md", "AGENTS.md", "CLAUDE.md"]
-applies_to_why: "The map and the instructions file that sends a session to it are the files this rule is about, so editing either is the moment it fires. Reading MAP.md first does not need this rule resident: the install template's first line tells every session to, and the orientation-map check refuses an instructions file that never names MAP.md. Decided: on-demand, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)."
+applies_to_why: "The map and the instructions file that sends a session to it are the files this rule is about, so editing either is the moment it fires. Reading MAP.md first does not need this rule resident: the install template's first line tells every session to, and the orientation-map check refuses an instructions file that never names MAP.md. Decided: on-demand, Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)."
 occasion:    "orienting in a repo for the first time this session"
 gates:       []
 index_clause: "a top-level MAP.md indexes the repo; every session reads it first"
@@ -15,7 +15,7 @@ in_force_at: null
 supersedes:  []
 overrides:   null
 added:       null
-approved_by: "BestPractice (pre-fork); tier on-demand: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: decided)"
+approved_by: "BestPractice (pre-fork); tier on-demand: Morgan, 2026-10-01 (\"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)\", strength: assented -- one yes over a batch; corrected 2026-10-05)"
 source_practice_number: 2
 ---
 ## Rule
@@ -48,6 +48,20 @@ are".
 **On-demand from 2026-10-01.** The reduction pass for precedent-individual's session-start file ([the session-file open item](https://github.com/alex137/BestPractice/blob/staging/todo/todo-2026-09-30-session-file-cut-to-4000.md)) found this rule resident in every session while the install template already opens each instructions file with "read `MAP.md` first" and the orientation-map check refuses one that never names it. Morgan approved making it on-demand, reached by editing `MAP.md` or the instructions file (strength: decided): *"Booked, attach both shared sets, and do both Tier 2 items (and note as a possibility for the future in a Todo the other tier 2 items to consider)"*
 
 ## Install
-[templates/MAP.md.template](https://github.com/alex137/BestPractice/blob/staging/templates/MAP.md.template). Keep the
-deliverable→backing-docs index current: any thread that adds a document adds
-its row.
+[templates/MAP.md.template](https://github.com/alex137/BestPractice/blob/staging/templates/MAP.md.template), instantiated as
+`MAP.source.md`. `MAP.md` is generated from it, plus the practice catalogue
+and the engine, and is never edited by hand (Morgan, 2026-10-03, strength:
+decided). Keep the deliverable→backing-docs index current in `MAP.source.md`:
+any thread that adds a document adds its row there.
+
+**Where several sessions work at once, keep the source as a directory**
+(Alex, 2026-10-04: *"should we modify map.md to be a directory so we don't
+have so many collisions when multiple threads are running?"*).
+`python3 tools/precedent_migrate_views.py --repo . --split` turns
+`MAP.source.md` into `MAP.source/`, with one file per heading and one per row
+of each section's main table, and checks that it reassembles word for word.
+After that, a thread adds a row by adding a file, numbered between its
+neighbours (`0015-` goes between `0010-` and `0020-`). Two threads adding
+rows then add two files and never conflict. `GLOSSARY.source.md` splits the
+same way. The generated `MAP.md` can still conflict when such branches
+merge: take either side and rebuild it, because the directory is the truth.

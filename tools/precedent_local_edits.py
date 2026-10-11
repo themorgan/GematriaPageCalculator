@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_local_edits.py -- a consuming repo's committed edits to files it
+"""A consuming repo's committed edits to files it received (engine files in tools/, process/upstream/): resolved at Update Vendors -- kept, or replaced by upstream's with what was set aside shown and one command from coming back -- and sent upstream as a scrubbed branch by `send` (spec/LOCAL_EDITS_TO_RECEIVED_FILES_PLAN.md)
+
+precedent_local_edits.py -- a consuming repo's committed edits to files it
 received from BestPractice: found, resolved at Update Vendors, and sent
 upstream as a ready branch.
 
@@ -48,15 +50,33 @@ lives here, run from the source clone:
      recover() before the next one starts.
 
 THE RULES, per file:
+  declined  a catalogue file process/manifest.json declines: NEW, always --
+            the decline is judged against the copy, so the copy is
+            upstream's text (_declined_catalogue_paths says why)
   kept      precedent.json's kept_template_divergences names the path, with
             a reason, pinned to NEW's sha256: LOCAL stays; a pin upstream
             has since moved is left for the person, LOCAL still kept
   1         NEW == BASE: LOCAL stays, reported as still a local edit
-  2         a clean three-way merge: written, then each merged file must
-            compile or parse and the repo's tools/checks/tests/run_all.sh
-            pass; any failure puts every merged file back to NEW
+  2         upstream changed the file and LOCAL merges cleanly onto it:
+            NEW stays, because upstream's version is the default (Morgan,
+            2026-10-08, below); what was left of LOCAL on top of NEW is
+            shown as a diff, saved as a git object, and the session judges
+            it -- `keep` puts it back, checked, with the reason recorded
   (already) the merge equals NEW: upstream already carries the change
   3         a conflict: NEW stays, with the commit that holds LOCAL named
+
+RULE 2 TAKES UPSTREAM'S (2026-10-08). Until then a clean merge was written
+and kept without anyone judging it, so a quick fix outlived the upstream
+fix that replaced it. Morgan, strength: decided: "once there is a fix
+upstream, to then REPLACE our fix with the upstream fix, to replace our
+wording or version with the upstream version when we have it *EXCEPT* in
+cases where there is a substantive difference, in which case you should ASK
+THE SESSION USER or use your judgment (if it does something different and
+important, then we keep it for example). So a definite preference towards
+using the upstream wording." Taking upstream's and listing what was dropped,
+rather than stopping for a call, keeps the update from stalling; nothing is
+lost silently, since the dropped part is printed, saved and one command
+from coming back (practice: repair-cannot-discard-work).
 
 SEND. The edits that remain go to the owner's clone as a branch off its
 landing branch, three-way merged onto its tip so upstream work since
@@ -87,14 +107,19 @@ ENGINE, CATALOGUE, SECTION0 = 'engine', 'catalogue', 'section0'
 GENERATED = frozenset({'routing_scope.json'})
 JOURNAL_DIR = 'precedent-local-edits'
 
-KEPT, KEPT_STALE, STILL_LOCAL, MERGED, ALREADY, TOOK_UPSTREAM = (
+KEPT, KEPT_STALE, STILL_LOCAL, MERGED, ALREADY, TOOK_UPSTREAM, PREFERRED = (
     'kept', 'kept-stale', 'still-local', 'merged', 'already-upstream',
-    'took-upstream')
+    'took-upstream', 'upstream-preferred')
+DECLINED_WHY = ('this repo declines it (process/manifest.json), and a decline is '
+                'judged against the copy, so the copy is always upstream\'s text')
 # The closing report's groups, in this order, in plain words.
 GROUPS = (
     (KEPT, 'Kept on purpose -- precedent.json says so'),
     (STILL_LOCAL, 'Still your local edit -- upstream has not changed these files'),
     (MERGED, "Merged -- upstream's change and yours, both kept"),
+    (PREFERRED, "Upstream's version taken over what was left of yours -- "
+                "judge each: keep yours only where it does something different "
+                "and important, and ask the person when it is a close call"),
     (ALREADY, 'Upstream now carries your change -- nothing of yours was lost'),
     (TOOK_UPSTREAM, "Upstream's version taken -- yours is kept in git history"),
 )
@@ -138,18 +163,54 @@ def _git(cwd, *args, data=None):
                           capture_output=True)
 
 
+# commit -> the cache repository a commit was fetched into, when the clone
+# itself lacked it (see _has_commit).
+_FETCHED = {}
+
+
+def _where(clone, commit):
+    """-> the repository that holds `commit`: the clone, or the cache it was
+    fetched into."""
+    return _FETCHED.get(commit, clone)
+
+
 def _show(clone, commit, rel):
-    r = _git(clone, 'show', f'{commit}:{rel}')
+    r = _git(_where(clone, commit), 'show', f'{commit}:{rel}')
     return r.stdout if r.returncode == 0 else None
 
 
-def _has_commit(clone, commit):
+def _has_commit(clone, commit, url=None):
     if _git(clone, 'cat-file', '-e', f'{commit}^{{commit}}').returncode == 0:
         return True
     # A shallow or single-branch clone can lack the commit something was
     # vendored from; ask origin for it once rather than guessing a base.
     _git(clone, 'fetch', '--quiet', 'origin', commit)
-    return _git(clone, 'cat-file', '-e', f'{commit}^{{commit}}').returncode == 0
+    if _git(clone, 'cat-file', '-e', f'{commit}^{{commit}}').returncode == 0:
+        return True
+    # Run from a consuming repository, the clone is that repository, whose
+    # origin never had the upstream commit: `status` said "cannot judge" for
+    # every engine file unless a BestPractice clone sat beside it (Alex,
+    # 2026-10-04: "fold the vendor engines" into the send/take loop). The
+    # manifests record where the files came from, so fetch that one commit
+    # from there. NEVER into the clone itself: a --depth fetch there wrote
+    # the upstream commit into the clone's .git/shallow and turned a full
+    # checkout shallow, so every history check refused to run (found the
+    # same day, in the first consumer it ran in). It goes into a bare cache
+    # repository inside the clone's git directory, which nothing else reads.
+    if not url:
+        return False
+    gd = _git(clone, 'rev-parse', '--absolute-git-dir')
+    if gd.returncode != 0:
+        return False
+    gitdir = gd.stdout.decode().strip()
+    cache = pathlib.Path(gitdir) / 'precedent-upstream.git'
+    if not cache.is_dir():
+        _git(gitdir, 'init', '--quiet', '--bare', str(cache))
+    _git(cache, 'fetch', '--quiet', '--no-tags', '--depth', '1', url, commit)
+    if _git(cache, 'cat-file', '-e', f'{commit}^{{commit}}').returncode == 0:
+        _FETCHED[commit] = cache
+        return True
+    return False
 
 
 class Edit:
@@ -205,7 +266,7 @@ def engine_edits(repo, source=SOURCE):
             problems.append((rel, 'the manifest does not say which upstream file '
                              'it was vendored from'))
             continue
-        if not commit or not _has_commit(source, commit):
+        if not commit or not _has_commit(source, commit, manifest.get('source_repo')):
             problems.append((rel, f'the commit it was vendored from '
                              f'({commit[:12] or "none recorded"}) is not in '
                              f'{source}, so there is nothing to compare with'))
@@ -217,6 +278,11 @@ def engine_edits(repo, source=SOURCE):
             continue
         edits.append(Edit(ENGINE, rel, up, base, _read(repo / rel), commit))
     return edits, problems
+
+
+def _deleted_here(repo, rel):
+    """checkin.deleted_here, for a path relative to `repo`."""
+    return _checkin(repo).deleted_here(repo / rel)
 
 
 def catalogue_edits(repo, source=SOURCE):
@@ -233,10 +299,10 @@ def catalogue_edits(repo, source=SOURCE):
     if not recorded:
         return [], [('process/manifest.json', 'records no upstream.commit, so a '
                       'local change cannot be told from upstream drift')]
-    if not _has_commit(source, recorded):
+    if not _has_commit(source, recorded, up.get('repo')):
         return [], [(tree, f'the recorded upstream.commit {recorded[:12]} is not in '
                      f'{source}, so there is nothing to compare with')]
-    changed = ck.local_changes(source, recorded)
+    changed = ck.local_changes(_where(source, recorded), recorded)
     if changed is None:
         return [], [(tree, f'could not read {recorded[:12]} in {source}')]
     return [Edit(CATALOGUE, f'{tree}/{p.as_posix()}', p.as_posix(),
@@ -439,7 +505,7 @@ def merge3(ours, base, theirs):
         return r.stdout, r.returncode == 0
 
 
-def send_command(repo):
+def _this_tool(repo):
     # Beside the repo it is "../BestPractice"; anywhere else, the full path
     # reads better than a climb through every parent.
     try:
@@ -448,33 +514,73 @@ def send_command(repo):
         where = str(SOURCE)
     if where.startswith('../..'):
         where = str(SOURCE)
-    return (f'python3 {where}/tools/precedent_local_edits.py send --repo . '
-            f'--why "<what went wrong>"')
+    return f'python3 {where}/tools/precedent_local_edits.py'
+
+
+def send_command(repo):
+    return f'{_this_tool(repo)} send --repo . --why "<what went wrong>"'
+
+
+def _declined_catalogue_paths(repo):
+    """-> {upstream_path} every process/manifest.json entry declines.
+
+    A decline means "not adopted", never "not mirrored": the vendored copy
+    of a declined file is upstream's text at the recorded commit like any
+    other, because that copy is the one thing practice_audit.decline_basis()
+    judges the decline by -- in the update's own check and in the consumer's
+    audit alike. So a copy that differs from it is never kept as a local
+    edit: nothing here uses the file, and keeping it splits the basis.
+
+    2026-10-08, a consuming repository: a FAILED run's output was put back
+    to HEAD at the rerun, except process/manifest.json, which --redecide had
+    changed in between. The stale copies then read as local edits against
+    the new upstream.commit and stayed ("upstream has not changed this
+    file"), while checkin.py judged the declines inside the swap, on
+    upstream's text. Every recorded hash failed one of the two, for two
+    templates/local-practices/ templates, until the person copied upstream's
+    text in by hand."""
+    try:
+        m = json.loads((repo / 'process' / 'manifest.json').read_text(encoding='utf-8'))
+        return {str(e.get('upstream_path')) for e in m.get('entries') or []
+                if isinstance(e, dict) and e.get('status') == 'declined'
+                and e.get('upstream_path')}
+    except (OSError, ValueError, AttributeError):
+        return set()
 
 
 def _decide(repo, e, new):
-    """-> (outcome, bytes to write, why) for one edit, NEW read from disk."""
+    """-> (outcome, bytes to write, why, dropped) for one edit, NEW read
+    from disk. `dropped` is set for PREFERRED only: LOCAL merged onto NEW,
+    the version a session's `keep` would put back."""
+    if e.layer == CATALOGUE and e.upstream_rel in _declined_catalogue_paths(repo):
+        return TOOK_UPSTREAM, new, DECLINED_WHY, None
     pve = _pve()
     verdict, reason = pve._kept_divergence(repo, e.rel, _sha(new) or '')
     if verdict == 'kept':
-        return KEPT, e.local, f'"{reason}"'
+        return KEPT, e.local, f'"{reason}"', None
     if verdict == 'stale':
-        return KEPT_STALE, e.local, reason
+        return KEPT_STALE, e.local, reason, None
     note = (f' (its {pve.KEPT_DIVERGENCES_KEY} entry has no reason, so it is '
             f'not honoured)' if verdict == 'unreasoned' else '')
     if new == e.base:
-        return STILL_LOCAL, e.local, note
+        # Upstream has no fix of its own yet, so the quick fix stays.
+        return STILL_LOCAL, e.local, note, None
     if e.local is None:
-        return TOOK_UPSTREAM, new, 'deleted here, and upstream has since changed it' + note
+        return (TOOK_UPSTREAM, new, 'deleted here, and upstream has since changed it'
+                + note, None)
     if new is None:
-        return TOOK_UPSTREAM, None, 'upstream has since removed it' + note
+        return TOOK_UPSTREAM, None, 'upstream has since removed it' + note, None
     merged, clean = merge3(e.local, e.base, new)
     if not clean:
         return TOOK_UPSTREAM, new, ('upstream changed the same lines, most likely '
-                                    'fixing the same bug') + note
+                                    'fixing the same bug') + note, None
     if merged == new:
-        return ALREADY, new, note
-    return MERGED, merged, note
+        return ALREADY, new, note, None
+    # Upstream changed the file, and some of LOCAL is still not in it. The
+    # default is upstream's text (Morgan, 2026-10-08, in the module
+    # docstring): the rest of LOCAL is the session's call, never kept or
+    # dropped without one.
+    return PREFERRED, new, note, merged
 
 
 def checks_run(repo, rels):
@@ -531,26 +637,18 @@ def resolve(repo, swap):
     decisions = []
     for e in swap.edits:
         new = _read(repo / e.rel)
-        outcome, data, why = _decide(repo, e, new)
-        decisions.append([e, new, outcome, data, why])
-    swap.note({e.rel: _sha(data) for e, _n, _o, data, _w in decisions})
-    for e, _new, _outcome, data, _why in decisions:
+        outcome, data, why, dropped = _decide(repo, e, new)
+        decisions.append([e, new, outcome, data, why, dropped])
+    swap.note({e.rel: _sha(data) for e, _n, _o, data, _w, _d in decisions})
+    for e, _new, _outcome, data, _why, _dropped in decisions:
         _write(repo / e.rel, data)
-    merged = [d for d in decisions if d[2] == MERGED]
-    fails = check_merged(repo, [d[0].rel for d in merged])
-    if fails:
-        failed = '; '.join(f'{what} {why}' for what, why in fails)
-        for d in merged:
-            e, new = d[0], d[1]
-            _write(repo / e.rel, new)
-            d[2], d[3] = TOOK_UPSTREAM, new
-            d[4] = (f'your edit and upstream\'s merged cleanly as text, but the '
-                    f'result failed a check ({failed})')
     swap.resolved = True
-    swap.merges = {d[0].rel: (d[3], d[1]) for d in decisions if d[2] == MERGED}
+    # Nothing is merged in place since 2026-10-08 (rule 2 takes upstream's),
+    # so the update has no merge of its own to judge again at step 5.
+    swap.merges = {}
     cmd = send_command(repo)
     out = []
-    for e, new, outcome, _data, why in decisions:
+    for e, new, outcome, _data, why, dropped in decisions:
         if outcome == KEPT:
             text = f'kept as precedent.json records -- {why}'
         elif outcome == KEPT_STALE:
@@ -567,10 +665,123 @@ def resolve(repo, swap):
                     f'a local edit until it is sent upstream: {cmd}')
         elif outcome == ALREADY:
             text = f'upstream\'s version already contains your change{why}'
+        elif outcome == PREFERRED:
+            text = preferred_text(repo, e.rel, new, dropped, why)
+        elif why == DECLINED_WHY:
+            text = (f'{why}, so upstream\'s version was taken; what this repo held '
+                    f'is in commit {local_commit(repo, e.rel)}')
         else:
             text = took_upstream_text(repo, e.rel, why, e.local is not None)
         out.append((outcome, e.rel, text))
     return out
+
+
+# How much of a dropped difference the report shows; the rest is one
+# `git diff` away, and the saved object holds all of it.
+DROPPED_DIFF_LINES = 40
+
+
+def dropped_diff(rel, new, kept):
+    """-> [line]: what keeping this repository's version would add to
+    upstream's, as a unified diff with one line of context."""
+    import difflib
+    a = (new or b'').decode('utf-8', 'replace').splitlines()
+    b = (kept or b'').decode('utf-8', 'replace').splitlines()
+    return list(difflib.unified_diff(a, b, f'upstream/{rel}', f'yours/{rel}',
+                                     n=1, lineterm=''))
+
+
+def save_object(repo, data):
+    """Write `data` into the repo's own git object store and -> its id, or
+    None. Unreferenced, so never committed or pushed; git keeps it for at
+    least two weeks (gc.pruneExpire), the commit holding LOCAL for good."""
+    r = _git(repo, 'hash-object', '-w', '--stdin', data=data)
+    oid = r.stdout.decode().strip()
+    return oid if r.returncode == 0 and oid else None
+
+
+def keep_command(repo, rel, oid):
+    return (f'{_this_tool(repo)} keep --repo . --path {rel} --object {oid[:12]} '
+            f'--why "<what it does that upstream\'s does not>"')
+
+
+def keep(repo, rel, oid, why):
+    """Put back the version rule 2 set aside (saved as git object `oid`)
+    over upstream's, check it, and record the reason under
+    kept_template_divergences, pinned to upstream's text, so the next update
+    keeps it until upstream changes the file again. -> (ok, message).
+    Nothing is written over a change the person made since the update."""
+    why = (why or '').strip()
+    if not why:
+        return False, ('--why needs the reason: what this version does that '
+                       'upstream\'s does not')
+    path = repo / rel
+    r = _git(repo, 'cat-file', 'blob', oid)
+    if r.returncode != 0:
+        return False, (f'{oid} is not in this repo\'s git objects any more. Your '
+                       f'version is still in the commit the update named: merge '
+                       f'`git show <that commit>:{rel}` onto {rel} by hand, then '
+                       f'record why under kept_template_divergences')
+    kept, now = r.stdout, _read(path)
+    if now is None:
+        return False, f'{rel} is not here, so there is nothing to keep it over'
+    if _git(repo, 'diff', '--quiet', '--', rel).returncode != 0:
+        return False, (f'{rel} has changed since the update staged it; commit or '
+                       f'stage that first, so nothing here writes over it')
+    pve = _pve()
+    _write(path, kept)
+    fails = check_merged(repo, [rel])
+    if fails:
+        _write(path, now)
+        return False, ('not kept: with your version in place ' + '; '.join(
+            f'{what} {w}' for what, w in fails) + f'. Upstream\'s version of {rel} '
+            f'is back')
+    cfg_path = repo / 'precedent.json'
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        cfg = None
+    if not isinstance(cfg, dict):
+        _write(path, now)
+        return False, 'precedent.json is missing or unreadable, so the reason cannot be recorded'
+    entry = {'reason': why, 'template_sha256': _sha(now),
+             'kept_on': str(precedent_time.today(repo))}
+    cfg.setdefault(pve.KEPT_DIVERGENCES_KEY, {})[rel] = entry
+    cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + '\n',
+                        encoding='utf-8')
+    _git(repo, 'add', '--', rel, 'precedent.json')
+    return True, (f'KEPT: {rel} is this repository\'s version again, on top of '
+                  f'upstream\'s change, and precedent.json records why ("{why}"). '
+                  f'The next update keeps it until upstream changes the file '
+                  f'again, then asks. It is still a local edit to a received '
+                  f'file, so if it fixes something upstream still lacks, hand '
+                  f'that upstream as practice upstream-fix says (an open todo/ '
+                  f'item naming the file), or send it: {send_command(repo)}')
+
+
+def preferred_text(repo, rel, new, dropped, why=''):
+    """Rule 2's line in the report: upstream's version taken, the rest of
+    this repository's edit shown and saved, and the one command that keeps
+    it (Morgan, 2026-10-08: replace ours with upstream's "*EXCEPT* in cases
+    where there is a substantive difference")."""
+    c = local_commit(repo, rel)
+    diff = dropped_diff(rel, new, dropped)
+    shown = diff[:DROPPED_DIFF_LINES]
+    if len(diff) > len(shown):
+        shown.append(f'... and {len(diff) - len(shown)} more line(s)')
+    oid = save_object(repo, dropped)
+    keep = (f'keep it -- this writes it back over upstream\'s, checks it '
+            f'({checks_run(repo, [rel])}), and records the reason in '
+            f'precedent.json: {keep_command(repo, rel, oid)}' if oid else
+            f'keep it by merging `git show {c}:{rel}` onto upstream\'s by hand '
+            f'and recording why under kept_template_divergences')
+    return (f'upstream changed this file since it was vendored, so its version '
+            f'was taken{why}; the default is upstream\'s text. Your edit is in '
+            f'commit {c}, and this is what it would still add to upstream\'s:\n'
+            + '\n'.join(f'  {l}' for l in shown)
+            + f'\nIf it does something different and important (a fix '
+              f'upstream still lacks, a rule this repo keeps on purpose), {keep}. '
+              f'Otherwise there is nothing to do: upstream\'s version stands.')
 
 
 def took_upstream_text(repo, rel, why, had_local=True):
@@ -593,7 +804,10 @@ def report_lines(outcomes):
         rows = [(rel, text) for outcome, rel, text in outcomes if outcome == key]
         if rows:
             lines.append(title + ':')
-            lines += [f'  - {rel}: {text}' for rel, text in rows]
+            for rel, text in rows:
+                first, *rest = text.split('\n')
+                lines.append(f'  - {rel}: {first}')
+                lines += [f'    {l}' for l in rest]
     return lines
 
 
@@ -780,10 +994,9 @@ WHAT WENT WRONG THERE
 WHAT TO DO
 Read the branch's diff and decide whether the bug is real here. If it is,
 add a test that fails without the fix, then run this repository's checks
-(practice: upstream-bug-stops-here -- a fix without its test is not booked).
+(practice: upstream-bug-stops-here -- a fix without its test is not done).
 If it is not, say why, and nothing lands. Land it only when a person says
-"Booked" (step 3 of 5; "Go update" is the same word). No merge authorization
-comes with this prompt.
+to, in their own words. No merge authorization comes with this prompt.
 
 AFTER IT LANDS
 The vendoring repository keeps its local edit until its next Update Vendors,
@@ -968,6 +1181,12 @@ def main(argv=None):
     sd.add_argument('--layer', choices=(ENGINE, CATALOGUE), action='append')
     sd.add_argument('--dry-run', action='store_true',
                     help='build and check the branch, but do not push it')
+    kp = sub.add_parser('keep', help='put back a version Update Vendors set aside '
+                        'for upstream\'s, and record why it is kept')
+    kp.add_argument('--repo', default='.')
+    kp.add_argument('--path', required=True, help='the file, as the report names it')
+    kp.add_argument('--object', required=True, help='the id the report printed')
+    kp.add_argument('--why', default='', help='what it does that upstream\'s does not')
     args = ap.parse_args(argv)
     repo = pathlib.Path(args.repo).resolve()
     if repo == SOURCE.resolve() and args.cmd == 'send' and not args.owner_clone:
@@ -976,6 +1195,10 @@ def main(argv=None):
         return 2
     if args.cmd == 'status':
         return status(repo)
+    if args.cmd == 'keep':
+        ok, msg = keep(repo, args.path, args.object, args.why)
+        print(msg)
+        return 0 if ok else 1
     return send(repo, args.why, args.owner_clone,
                 tuple(args.layer or (ENGINE, CATALOGUE)), args.dry_run)
 

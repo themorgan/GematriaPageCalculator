@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""precedent_push_check.py -- run, before a push, what CI used to run after it.
+"""Everything GitHub CI used to run on a push, per kind of repository, run locally before it -- `push-check-gate.sh` refuses a push until it passes; a push to a working branch runs its basic tier only, and a push to main the full one
+
+precedent_push_check.py -- run, before a push, what CI used to run after it.
 
 WHY THIS EXISTS (Morgan, 2026-09-25, strength: decided). Three switches now
 keep GitHub Actions from running on most of his pushes: `ci_workflows`
@@ -74,7 +76,12 @@ exits at once, which is what makes "run the deep check, then push" cost one
 run rather than two (practice: slow-steps-report-and-cache). The record
 is keyed on the tree and the check list together, so any change to either
 invalidates it, and it lives in the git directory, never in the tracked
-tree.
+tree. "Nothing uncommitted" leaves out the fact ledgers the checks
+themselves write (practice: gate-ledger): fact_ledger.py reports each one it
+saves, the pass is recorded for the commit, and the refreshed ledgers are
+left in place for the person to commit. A ledger only caches facts that
+verify themselves, so its working copy changes no verdict; any other
+uncommitted edit, before or after the run, still blocks the record.
 
 AND THE PASS IS SHARED WITH EVERY CHECKOUT (Morgan, 2026-09-25, strength:
 decided). The record above lives in one checkout, and a person working in
@@ -128,6 +135,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RECORD = 'precedent-push-check.json'
+# The variable fact_ledger.py reads to report each ledger it saves
+# (fact_ledger.WRITTEN_ENV; practice: gate-ledger).
+LEDGER_WRITES_ENV = 'FACT_LEDGER_WRITTEN'
 # The shared receipts live on one branch -- a cloud session's git proxy
 # lets it push branches and nothing else, so a hidden ref namespace was
 # refused with a 403 (measured 2026-09-25). One small file per pass,
@@ -153,6 +163,16 @@ TAIL_LINES = 40
 FINDING = re.compile(r'^\s*(?:[\w.-]+ )?(VIOLATION|ERROR|FAIL(ED|URE)?)\b')
 FINDING_LINES = 30
 
+
+
+def _ladder_off():
+    """True only when tools/precedent_ladder.py is here and says the ladder
+    is not in force for this person; without it, the old wording stands."""
+    try:
+        import precedent_ladder
+        return precedent_ladder.ladder_in_force(Path(__file__).resolve().parent.parent) is False
+    except Exception:                                       # noqa: BLE001
+        return False
 
 def _finding_lines(out):
     """The finding headers in `out`, each with the indented lines under it
@@ -200,7 +220,8 @@ SKIP_IS_FINE_WITHOUT_IDENTITY = {'commit_author', 'commit_dates'}
 # same tree in four repositories, and the bot-authored merge commits it had
 # just made went out unjudged; one of those repositories' own full sweep
 # failed on its staging afterwards (practice: upstream-fix).
-HISTORY_CHECKS = {'commit_author', 'commit_dates', 'session_trailer'}
+HISTORY_CHECKS = {'commit_author', 'commit_dates', 'session_trailer',
+                  'leak_gate_commits'}
 # session_trailer (2026-09-29): a repository that declares the shared set
 # carrying check_session_trailer.py gets it materialized beside the other
 # two, and it judges only the commits origin does not have yet -- what this
@@ -223,22 +244,40 @@ PUSH_TIME_SINCE = {'session_trailer': '--all-history'}
 # old to know the variable ignores it and behaves as before.
 STANDIN_COMMIT_ENV = 'PRECEDENT_STANDIN_COMMIT'
 IDENTITY_CHECKS = (
-    ('commit_author', ['{engine}/checks/check_commit_author.py'],
+    ('commit_author', ['{engine}/check_commit_author.py'],
      "precedent-individual's commit-identity.yml, retired 2026-09-21"),
-    ('commit_dates', ['{engine}/checks/check_buenos_aires_dates.py'],
+    ('commit_dates', ['{engine}/check_commit_dates.py'],
      "precedent-individual's commit-identity.yml, retired 2026-09-21"),
     ('session_trailer', ['{engine}/checks/check_session_trailer.py'],
      'nothing -- the trailer was judged only inside a full sweep'),
 )
+# The practice each identity check enforces, for not_binding: the two
+# engine copies in tools/ cite no practice (theirs live in a person's own
+# set), so the slug is written here rather than read from a `# practice:`
+# line; check_session_trailer.py, materialized, carries its own.
+IDENTITY_SLUGS = {'commit_author': 'commit-author',
+                  'commit_dates': 'buenos-aires-dates'}
 # Every workflow file is the engine's own untouched copy or carries the
 # person's approval pinned to its content (practice: ci-workflow-approved).
+# Every file a tool writes is current with its tool: basic tier
+# (BASIC_CHECKS says why). The full sweep runs it too.
+GENERATED_FILES_CHECK = (
+    'generated_files', ['{engine}/precedent_check.py', '--only',
+                        'generated-files-registered'],
+    'nothing -- it ran only inside the full sweep')
+# A reference left pointing at a path this branch renamed away: basic tier
+# (BASIC_CHECKS says why). The full sweep runs it too.
+RENAME_LINKS_CHECK = (
+    'rename_links', ['{engine}/precedent_check.py', '--only',
+                     'rename-updates-links'],
+    'nothing -- it ran only inside the full sweep, at the landing')
 CI_WORKFLOWS_CHECK = (
     'ci_workflows', ['{engine}/precedent_check.py', '--only',
                      'ci-workflow-approved'],
     'no workflow -- the check that keeps workflows from being added unasked')
 # Entries a repo may simply not have: skipped with a note, never a failure.
 OPTIONAL = {'deep_check', 'commit_author', 'commit_dates', 'session_trailer',
-            'light_check'}
+            'light_check', 'views_sync'}
 # The BASIC tier: what a push to pre-staging or any other working branch
 # runs. Everything else in a kind's list is FULL-only. The leak gate is
 # here because a push IS publication in a public repository, and cannot
@@ -248,9 +287,34 @@ OPTIONAL = {'deep_check', 'commit_author', 'commit_dates', 'session_trailer',
 # reaches ANY branch GitHub runs it on; light_check is the repo's own fast
 # check, and its secret scan wants every push (practice: ci-workflow-approved;
 # Morgan, 2026-09-25, "we need to absolutely put a hard stop to this").
-BASIC_CHECKS = {'doc_lint', 'leak_gate', 'commit_author', 'commit_dates',
-                'session_trailer', 'ci_workflows', 'light_check'}
+# build_views joins it for a practice set (2026-10-03, spec/
+# GENERATED_FILES_PLAN.md step 4): a stale or hand-edited view used to pass
+# the push to pre-staging and fail only at the Debut. It takes under a second.
+# The practice audit's two checks join it for a consumer (2026-10-02): a
+# classic install migrated onto the loader carried stale manifest baselines
+# and no scrub blocklist, both full-tier findings, so its pre-staging pushes
+# passed and the first Debut failed on both. They run in seconds.
+# generated_files joins a consumer's and a practice set's basic tier
+# (2026-10-04): an Update Vendors that refreshed build_todo_index.py left
+# todo/TODO.md stale, the push to pre-staging passed, and only the full
+# check said so. Two seconds. Not upstream's: there precedent_check.py is
+# full-only by design, and BestPractice's commit backstop rebuilds these.
+# rename_links joins a consumer's and a practice set's basic tier
+# (2026-10-08): a branch renamed a page and repointed the references a
+# search for *.py and *.md found, but not a key in a tool's table or lines
+# in two ledgers. Every push of the branch passed, and the landing's full
+# check failed on them. It judges only what this branch renamed or deleted
+# against its base -- a finding no push but this branch's could bring --
+# and takes seconds.
+BASIC_CHECKS = {'doc_lint', 'leak_gate', 'leak_gate_commits', 'commit_author', 'commit_dates',
+                'session_trailer', 'ci_workflows', 'light_check', 'build_views',
+                'views_sync',
+                'scrub_gate', 'practice_export_loop', 'generated_files',
+                'rename_links'}
 BASIC, FULL = 'basic', 'full'
+# The commits a push would publish: everything HEAD has that no remote
+# ref does (leak_gate.py's own documented form for a new branch).
+LEAK_COMMITS_RANGE = 'HEAD --not --remotes'
 # A PUSH TO A WORKING BRANCH IS JUDGED ON WHAT IT BRINGS (2026-09-28). A
 # consumer session could not push its claude/* branch: commit_author refused
 # over two old commits already on main, ci_workflows over a workflow file
@@ -263,7 +327,14 @@ BASIC, FULL = 'basic', 'full'
 # check prints at the commit this push forked from -- is printed and does
 # not refuse. A finding the push brings still refuses, and a push to a tier
 # branch is judged exactly as before.
-RANGE_JUDGED = {'commit_author', 'commit_dates', 'ci_workflows'}
+# views_sync joined 2026-10-06: a practice source this repository declares
+# moved, every generated view went stale, and a one-line content push to a
+# feature branch was refused for it. A stale view the fork point shows too
+# is the source's doing, refreshed as a commit of its own at Booked
+# (precedent_merge_vendors.py); a view this push edits by hand still refuses,
+# and a push to a tier branch is judged exactly as before.
+RANGE_JUDGED = {'commit_author', 'commit_dates', 'ci_workflows',
+                'scrub_gate', 'practice_export_loop', 'views_sync'}
 COMMIT_IN_FINDING = re.compile(r'\bcommit ([0-9a-f]{7,40})\b')
 PUSH_CHECKS = {
     'upstream': (
@@ -271,13 +342,16 @@ PUSH_CHECKS = {
         # siblings, an empty $HOME and no source credentials -- what the
         # runner has -- and a check that could not run there runs here. It
         # cost 12.8 min against 18.3 for the plain run, in one container.
+        # --because: the harness refuses a full run nobody asked for
+        # (2026-10-07); this tier was asked for, by the push or the Promote.
         ('verify_harness', ['{engine}/verify_harness.py', '--as-ci',
-                            '--isolated'],
-         'deep-check.yml, both verify_harness jobs'),
+                            '--isolated', '--because',
+                            'precedent_push_check.py, full tier'],
+         'deep-check.yml, its verify_harness --as-ci step'),
         ('precedent_check', ['{engine}/precedent_check.py', '--full-sweep'],
-         'deep-check.yml, precedent_check + doc_sync job'),
+         'deep-check.yml, its precedent_check and doc_sync steps'),
         ('doc_sync', ['{engine}/doc_sync.py'],
-         'deep-check.yml, precedent_check + doc_sync job'),
+         'deep-check.yml, its precedent_check and doc_sync steps'),
         ('leak_gate', ['{engine}/leak_gate.py'],
          'leak-gate.yml (structural half only in CI)'),
         ('doc_lint', ['{engine}/doc_lint.py'],
@@ -294,6 +368,8 @@ PUSH_CHECKS = {
          'leak-gate.yml, retired 2026-09-21'),
         ('doc_lint', ['{engine}/doc_lint.py'],
          'doc-lint.yml, retired 2026-09-21'),
+        GENERATED_FILES_CHECK,
+        RENAME_LINKS_CHECK,
         CI_WORKFLOWS_CHECK,
         DEEP_CHECK_SUITE,
         CONSUMER_SHAPE_SUITE,
@@ -306,11 +382,29 @@ PUSH_CHECKS = {
          'leak-gate.yml (structural half only in CI)'),
         ('doc_lint', ['{engine}/doc_lint.py'],
          'bestpractice-docs.yml, retired 2026-09-21'),
+        GENERATED_FILES_CHECK,
+        RENAME_LINKS_CHECK,
         CI_WORKFLOWS_CHECK,
+        # Whether the generated views still match the practice sources
+        # (2026-10-03): a reduction pass retired practices in the shared sets,
+        # a consumer's views were never re-synced, and nothing said so until a
+        # Debut's full check -- whose message sent the session after missing
+        # sources. Basic tier, so the push to pre-staging says it; sources
+        # that cannot be resolved here are said and skipped, never failed.
+        ('views_sync', ['{engine}/precedent_sync_views.py', '--repo', '.',
+                        '--check', '--skip-unresolved'],
+         'nothing -- a stale view surfaced only at the full check'),
         # The repo's OWN light check, where it has one: what its
         # light-check.yml ran on GitHub, run here instead of there.
         ('light_check', ['tools/light_check.py'],
          "the repo's own light-check.yml"),
+        # The practice audit, at every tier (BASIC_CHECKS says why); also
+        # inside the full sweep, where it always ran.
+        ('scrub_gate', ['{engine}/precedent_check.py', '--only', 'scrub-gate'],
+         'nothing -- it ran only inside the full sweep, at the Debut'),
+        ('practice_export_loop', ['{engine}/precedent_check.py', '--only',
+                                  'practice-export-loop'],
+         'nothing -- it ran only inside the full sweep, at the Debut'),
         DEEP_CHECK_SUITE,
         *IDENTITY_CHECKS,
     ),
@@ -364,8 +458,15 @@ GUARDS = {'precedent_check': _guard_precedent_check,
 # marker is the tool's own wording; the note replaces "passed".
 STAND_DOWNS = {'leak_gate': ('NOT APPLICABLE', 'stood down -- it inspected '
                              'nothing (a private repository)'),
+               'leak_gate_commits': ('NOT APPLICABLE', 'stood down -- it '
+                                     'inspected nothing (a private repository)'),
                'doc_lint': ('NOTHING IS BEING GATED', 'stood down -- no '
-                            'Markdown file was in scope')}
+                            'Markdown file was in scope'),
+               # The views were generated with a person's individual set,
+               # and none resolves here (build_views.individual_not_verifiable).
+               'views_sync': ('NOT VERIFIABLE', 'not verified -- the views '
+                              'carry practices from an individual set this '
+                              'machine cannot reach')}
 
 
 def git(root, *args):
@@ -391,6 +492,194 @@ def repo_kind(engine=HERE):
     return None
 
 
+# A REPOSITORY'S OWN APPROVED WORKFLOWS RUN HERE TOO (2026-10-10). A consumer
+# keeps workflows of its own through Update Vendors, recorded in
+# precedent.json's github_ci_approved, and this list ran none of what they
+# run: every local tier passed a change that platform-docs-check.yml then
+# failed as GitHub's test on the pull request into main, a fix and a second
+# Produce later. The workflow file stays the one record of its commands: each
+# step that is a plain `python3 tools/<x>.py [args]` call runs here, at every
+# tier, as the repo's own light check does; a workflow the engine installs
+# (ENGINE_MANIFEST's ci_workflow_files) is skipped, since this list already
+# carries what it runs, and so is a step calling an engine file. Any other
+# step is named by Update Vendors, once per update (the second answer of
+# approved_workflow_checks), so nobody reads a pass as covering it.
+#
+# ONLY TESTS, NEVER THE PRODUCT (2026-10-10, a consumer whose workflows ARE
+# its deliverable -- a live calendar sync run on GitHub with secrets). Its
+# Update Vendors called every step of them a missed check and said to run it
+# on every push, which would have run the live sync on every push. So a
+# workflow counts only when GitHub runs it on a change (push, pull_request,
+# merge_group), never one an entry marks `"role": "deliverable"`; a step
+# counts only when it looks like a check (its name or command says check,
+# test, lint, audit, verify or validate); and a step reading GitHub's own
+# environment (`$VAR`) is never run here, only named.
+APPROVED_WORKFLOWS_KEY = 'github_ci_approved'
+DELIVERABLE_ROLE = 'deliverable'
+_LOCAL_STEP_RE = re.compile(r'^(python3?)\s+(tools/[\w./-]+\.py)(\s.*)?$')
+_CHECK_LIKE_RE = re.compile(
+    r'(?<![a-z])(check|checks|checker|test|tests|lint|linter|audit|verify|'
+    r'validate|validation|phpunit|pytest|unittest|doc_lint)(?![a-z])', re.I)
+_CHANGE_EVENTS = {'push', 'pull_request', 'pull_request_target', 'merge_group'}
+_SETUP_STEP_RE = re.compile(r'^(?:python3?\s+-m\s+pip|pip3?|echo|set|cd|export|git\s+config|true)\b')
+
+
+def _workflow_steps(text):
+    """-> [(step name, command, condition)] for every `run:` line in a
+    workflow, a block's lines one by one; `condition` is the step's own
+    `if:`, '' when it has none. Read line by line, not as YAML: nothing here
+    may need PyYAML, and a run step's shape is regular enough."""
+    out, name, cond, block, indent = [], '', '', False, 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        lead = len(line) - len(line.lstrip())
+        if block:
+            if stripped and lead <= indent:
+                block = False
+            elif stripped and not stripped.startswith('#'):
+                out.append((name, stripped, cond))
+                continue
+            else:
+                continue
+        if re.match(r'^\s*-\s+[\w-]+:', line):        # a new step begins
+            name, cond = '', ''
+        m = re.match(r'^\s*-?\s*name:\s*(.+?)\s*$', line)
+        if m:
+            name = m.group(1).strip('"\'')
+        m = re.match(r'^\s*-?\s*if:\s*(.+?)\s*$', line)
+        if m:
+            cond = m.group(1)
+        m = re.match(r'^(\s*)-?\s*run:\s*(.*?)\s*$', line)
+        if m:
+            if m.group(2) in ('|', '>', '|-', '>-'):
+                block, indent = True, len(m.group(1))
+            elif m.group(2):
+                out.append((name, m.group(2), cond))
+    return out
+
+
+def _workflow_commands(text):
+    """-> [(step name, command)] for every `run:` line (_workflow_steps)."""
+    return [(n, c) for n, c, _ in _workflow_steps(text)]
+
+
+# A STEP NO CHANGE CAN RUN IS NO TEST OF ONE (2026-10-10, a consumer's
+# product workflow). Its alarm drill files a todo item and opens an issue
+# only when the job has already failed, and only when started by hand with
+# an input set; the detector counted both as GitHub-only checks because
+# their names said "alerting test". A step whose `if:` runs it only after a
+# failure (failure() or cancelled(), and not always()), or only on a manual
+# input (inputs.X required, never negated or or-ed), is skipped.
+def _never_tests_a_change(cond):
+    c = (cond or '').replace(' ', '')
+    if not c:
+        return False
+    if re.search(r'\b(?:failure|cancelled)\(\)', c) and 'always()' not in c \
+            and not re.search(r'\bsuccess\(\)', c):
+        return True
+    return bool(re.search(r'(?<![!\w.])inputs\.\w+', c)) and '||' not in c
+
+
+def _unquoted(cmd):
+    """-> `cmd` with its quoted strings blanked: words a script prints or
+    stores are not what it runs (2026-10-10: "Commit state" matched on
+    'file the alerting test as a todo item', a string it appends)."""
+    return re.sub(r'"(?:[^"\\]|\\.)*"|\'[^\']*\'', ' ', cmd)
+
+
+def _workflow_events(text):
+    """-> the set of events a workflow's `on:` names, or None when there is
+    no `on:` to read (then it is treated as running on a change)."""
+    events, seen, inside = set(), False, False
+    for line in text.splitlines():
+        body = line.split(' #', 1)[0].rstrip()
+        if not body.strip() or body.lstrip().startswith('#'):
+            continue
+        ind = len(body) - len(body.lstrip(' '))
+        if ind == 0:
+            m = re.match(r'["\']?on["\']?:\s*(.*)$', body)
+            inside = bool(m) and not m.group(1).strip()
+            if m:
+                seen = True
+                events |= set(re.findall(r'[\w-]+', m.group(1)))
+            continue
+        if inside and ind == 2:
+            m = re.match(r'\s*-?\s*["\']?([\w-]+)["\']?', body)
+            if m:
+                events.add(m.group(1))
+    return events if seen else None
+
+
+def _local_argv(cmd):
+    """-> the argv of a `python3 tools/<x>.py ARGS` line, quoted arguments
+    unquoted, or None when it is not one, cannot be split, or reads
+    GitHub's environment ($VAR), which only GitHub has."""
+    m = _LOCAL_STEP_RE.match(cmd)
+    if not m or '$' in cmd or '`' in cmd:
+        return None
+    try:
+        import shlex
+        rest = shlex.split(m.group(3) or '')
+    except ValueError:
+        return None
+    if any(t in ('|', '||', '&&', ';', '>', '>>', '<') or t.startswith(('>', '<', '|'))
+           for t in rest):
+        return None
+    return [m.group(2), *rest]
+
+
+def approved_workflow_checks(root):
+    """-> (checks, unrun): `checks` [(name, argv, replaces)] for each local
+    step of each workflow precedent.json's github_ci_approved keeps; `unrun`
+    [(workflow, step, command)] for the steps this cannot run here."""
+    root = Path(root)
+    try:
+        approved = json.loads((root / 'precedent.json').read_text(
+            encoding='utf-8')).get(APPROVED_WORKFLOWS_KEY) or {}
+    except (OSError, ValueError, AttributeError):
+        return [], []
+    try:
+        man = json.loads((root / 'tools' / 'ENGINE_MANIFEST.json').read_text(
+            encoding='utf-8'))
+    except (OSError, ValueError):
+        man = {}
+    engine_wf = set(man.get('ci_workflow_files') or [])
+    try:                    # the engine's own workflows, by name, whatever an
+        import precedent_vendor_engine as _pve      # older manifest recorded
+        engine_wf |= {d for rows in _pve.CI_WORKFLOW_TEMPLATES.values()
+                      for _t, d in rows}
+    except Exception:                                          # noqa: BLE001
+        pass
+    engine_tools = {f'tools/{f}' for f in man.get('files') or []}
+    checks, unrun = [], []
+    for rel in sorted(approved if isinstance(approved, dict) else []):
+        wf = root / rel
+        entry = approved.get(rel)
+        if rel in engine_wf or not wf.is_file() or (
+                isinstance(entry, dict) and entry.get('role') == DELIVERABLE_ROLE):
+            continue
+        text = wf.read_text(encoding='utf-8', errors='replace')
+        events = _workflow_events(text)
+        if events is not None and not events & _CHANGE_EVENTS:
+            continue            # a button or a schedule: never a change's test
+        for step, cmd, cond in _workflow_steps(text):
+            if _never_tests_a_change(cond):
+                continue
+            if not (_CHECK_LIKE_RE.search(step) or _CHECK_LIKE_RE.search(_unquoted(cmd))):
+                continue
+            argv = _local_argv(cmd)
+            if argv:
+                if argv[0] in engine_tools:
+                    continue
+                checks.append((f'workflow {Path(rel).name}: {argv[0]}',
+                               [sys.executable, *argv],
+                               f'its step "{step}" on GitHub'))
+            elif not _SETUP_STEP_RE.match(cmd) and \
+                    not any(u[:2] == (rel, step) for u in unrun):
+                unrun.append((rel, step, cmd))       # one line per step
+    return checks, unrun
+
+
 def plan(root, engine=HERE, tier=FULL):
     """-> (kind, [(name, argv, replaces)]) with {engine} resolved relative
     to `root`, so the commands print the way a person would type them.
@@ -407,6 +696,23 @@ def plan(root, engine=HERE, tier=FULL):
         if argv[0].endswith('.py'):
             argv = [sys.executable, *argv]
         out.append((name, argv, replaces))
+        # A push publishes every commit it carries, not only the tree they
+        # end at. 2026-10-10: one commit named a private repository in a
+        # test, the next scrubbed it, the tree passed, and the first commit
+        # went out to a public branch with the name in it. So the leak gate
+        # also walks the commits no remote has yet, messages included.
+        if name == 'leak_gate':
+            out.append(('leak_gate_commits',
+                        [*argv, '--range', LEAK_COMMITS_RANGE],
+                        'nothing: the tree check alone let a commit that a '
+                        'later one scrubbed go out (2026-10-10)'))
+    # A workflow step calling a tool this list already runs is left to this
+    # list, which owns its tier: BestPractice's own deep-check.yml runs the
+    # full suite, which a basic push must not.
+    planned = {Path(a[0].replace('{engine}', str(rel))).as_posix()
+               for _n, a, _r in PUSH_CHECKS[kind] if a}
+    out.extend(c for c in approved_workflow_checks(root)[0]
+               if Path(c[1][1]).as_posix() not in planned)
     return kind, out
 
 
@@ -424,13 +730,129 @@ def record_path(root):
     return (root / p) if p else None
 
 
-def clean_tree(root):
+# A FAILED TREE IS NOT PUSHED (2026-10-10). A session working in a
+# repository it was not started in loads none of that repository's harness
+# hooks, push-check-gate.sh among them, and pushed a branch right after this
+# tool had printed "FAILED ... do not push past it". Nothing stopped it. A
+# failure is now written down against the tree it judged, in the git
+# directory every worktree shares, and the global pre-push hook
+# (commit-identity.sh, _write_pre_push) refuses a push of that tree, from
+# any repository, under any harness. A pass of the same tree clears it. The
+# hook runs no check itself: on a ladder push it would re-run the full
+# suite a session's own gate has already run.
+FAILED_TREES = 'precedent-push-check-failed.json'
+FAILED_TREES_KEPT = 50
+
+
+def failed_trees_path(root):
+    p = git(root, 'rev-parse', '--path-format=absolute', '--git-common-dir')
+    return Path(p) / FAILED_TREES if p else None
+
+
+def _failed_trees(path):
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def note_failed_tree(root, tree, failed):
+    """Record that `tree` failed `failed` (check names). Never raises."""
+    path = failed_trees_path(root)
+    if not (tree and path):
+        return
+    try:
+        data = _failed_trees(path)
+        data.pop(tree, None)
+        data[tree] = {'failed': list(failed),
+                      'at': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+        keep = dict(list(data.items())[-FAILED_TREES_KEPT:])
+        path.write_text(json.dumps(keep, indent=2) + '\n', encoding='utf-8')
+    except OSError:
+        pass
+
+
+def clear_failed_tree(root, tree):
+    """A pass of `tree` clears any failure recorded for it. Never raises."""
+    path = failed_trees_path(root)
+    if not (tree and path and path.is_file()):
+        return
+    data = _failed_trees(path)
+    if data.pop(tree, None) is not None:
+        try:
+            path.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+        except OSError:
+            pass
+
+
+def dirty_paths(root):
+    """-> the repo-relative tracked paths with uncommitted changes (both
+    sides of a rename), or None when git cannot say."""
+    p = subprocess.run(['git', '-C', str(root), 'status', '--porcelain', '-z',
+                        '--untracked-files=no'], capture_output=True, text=True)
+    if p.returncode != 0:
+        return None
+    out, parts = set(), p.stdout.split('\0')
+    i = 0
+    while i < len(parts):
+        entry = parts[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        out.add(entry[3:])
+        if entry[0] in 'RC' or entry[1] in 'RC':
+            if i < len(parts) and parts[i]:
+                out.add(parts[i])
+            i += 1
+    return out
+
+
+def clean_tree(root, ledgers=()):
     """-> the HEAD tree hash when nothing tracked is uncommitted, else None.
     A run over uncommitted edits checked something the push will not send,
-    so it is never recorded as a pass for the commit."""
-    if git(root, 'status', '--porcelain', '--untracked-files=no') != '':
+    so it is never recorded as a pass for the commit.
+
+    `ledgers`: fact-ledger files (practice: gate-ledger) whose uncommitted
+    state does not count. A ledger only caches facts that verify themselves
+    -- a stale or foreign line costs one re-run, never a skipped unit -- so
+    no verdict depends on its working copy, and the push sends the
+    committed one. Without this the check dirtied the very tree it judged:
+    the model audit refreshed its ledger as it ran, and a 799 s pass was
+    never recorded, so the push gate ran the suite again and timed out
+    (consumer repo, 2026-10-02)."""
+    dirty = dirty_paths(root)
+    if dirty is None or not dirty <= set(ledgers):
         return None
     return git(root, 'rev-parse', 'HEAD^{tree}')
+
+
+def known_ledgers(root):
+    """The fact-ledger paths an earlier run here saw the ledger engine
+    write, kept in the local record; empty when there is none."""
+    path = record_path(root)
+    try:
+        rec = json.loads(path.read_text(encoding='utf-8')) if path else {}
+    except (OSError, ValueError):
+        return []
+    got = rec.get('ledgers') if isinstance(rec, dict) else None
+    return [x for x in got if isinstance(x, str)] if isinstance(got, list) else []
+
+
+def ledgers_written(root, listing):
+    """The repo-relative ledger paths fact_ledger.py reported saving into
+    `listing` (its WRITTEN_ENV file) during the run."""
+    try:
+        lines = Path(listing).read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return set()
+    base, out = Path(root).resolve(), set()
+    for ln in lines:
+        try:
+            out.add(Path(ln.strip()).resolve().relative_to(base).as_posix())
+        except ValueError:
+            continue                  # a ledger in some other repository
+    return out
 
 
 def already_passed(root, checks, also=()):
@@ -438,7 +860,7 @@ def already_passed(root, checks, also=()):
     of the check lists in `also`, which is how a FULL pass satisfies a BASIC
     gate -- else None. The record names the list it passed by signature, so
     a BASIC pass can never satisfy a FULL gate."""
-    tree = clean_tree(root)
+    tree = clean_tree(root, known_ledgers(root))
     path = record_path(root)
     if not tree or not path or not path.is_file():
         return None
@@ -558,6 +980,38 @@ def publish_pass(root, rec):
           f'other checkouts ({why}); they will run the suite themselves.')
 
 
+def _branch_name_refusal(root, argv):
+    """-> why a push that CREATES a session branch with a hand-made name is
+    refused, or None. Only a branch origin does not have yet is judged, so
+    a branch already pushed, a tier branch and every other name pass; an
+    engine copy without the naming tool refuses nothing (Morgan,
+    2026-10-06: always use the new format for temporary branches)."""
+    if '--push-command' not in argv:
+        return None
+    i = argv.index('--push-command')
+    cmd = argv[i + 1] if i + 1 < len(argv) else ''
+    sys.path.insert(0, str(HERE))
+    try:
+        import precedent_branches
+        import precedent_branch_name
+    except ImportError:
+        return None
+    finally:
+        sys.path.pop(0)
+    judge = getattr(precedent_branch_name, 'name_refusal', None)
+    if judge is None:
+        return None
+    for name in precedent_branches.push_targets(root, cmd) or []:
+        if subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', '-q',
+                           f'refs/remotes/origin/{name}'],
+                          capture_output=True).returncode == 0:
+            continue
+        why = judge(name)
+        if why:
+            return why
+    return None
+
+
 def _promote_only_refusal(root, argv):
     """-> why the named push is refused before any check runs, or None.
     Only a person who turned promote_only on is ever refused here
@@ -588,18 +1042,60 @@ def _promote_only_refusal(root, argv):
 # still waits for staging.
 # What a step prints when a session-load size cap is exceeded but not
 # refused: precedent_check.py's pre-staging WARNING, build_views.py's.
-SIZE_CAP_WARNINGS = ('over a size cap. Allowed onto pre-staging',
+SIZE_CAP_WARNINGS = ('over a size cap. The quick check',
+                     # precedent_check.py's wording until 2026-10-02, kept
+                     # so a check vendored before then is still recognised
+                     'over a size cap. Allowed onto pre-staging',
                      'build_views WARNING:')
 CAP_WARNED = []           # the steps that printed one, this run
+CAP_DETAILS = []          # what each said: file, measure and limit
+_CAP_BLOCK = re.compile(r'^WARNING\s+(\S+)\s+\S+\s+over a size cap')
 
 
-def _cap_warning_last():
+def _cap_details(text):
+    """-> one short line per cap a step's output says is over: the file, its
+    measured size and its limit, in the check's own words, cut at the first
+    sentence. The findings under precedent_check.py's WARNING block, and
+    build_views.py's own WARNING line.
+
+    WHY (2026-10-08, from a consumer's Update Vendors). The closing line
+    said only "over a session-load size cap (changed_practice, above)": a
+    passing step's output is never printed, so "above" pointed at nothing,
+    and the person was told a cap was over without which file, how far, or
+    which limit."""
+    got, block = [], False
+    for line in text.splitlines():
+        if _CAP_BLOCK.match(line):
+            block = True
+            continue
+        if block and line.startswith('    ') and line.strip():
+            got.append(re.split(r'\. | -- ', line.strip(), maxsplit=1)[0])
+            continue
+        block = False
+        if line.startswith('build_views WARNING:') and 'Written anyway' in line:
+            msg = line[len('build_views WARNING:'):].split(' Written anyway')[0]
+            got.append('the AGENTS.md loader block: '
+                       + re.split(r'\. | -- ', msg.strip(), maxsplit=1)[0])
+    return list(dict.fromkeys(got))
+
+
+def _cap_warning_last(tier=None):
     """Say it last, where the push gate's short tail of a pass shows it:
     a size cap is over, allowed onto pre-staging, refused at the Debut
-    (Morgan, 2026-09-30: warn on pre-staging, no change for staging)."""
-    if CAP_WARNED:
-        print(f'WARNING: over a session-load size cap ({", ".join(CAP_WARNED)}, '
-              f'above). Allowed onto pre-staging; the Debut into staging '
+    (Morgan, 2026-09-30: warn on pre-staging, no change for staging).
+    One line that carries the file, its size, the limit and the check that
+    measured it, since Update Vendors repeats this line and nothing else."""
+    if not CAP_WARNED:
+        return
+    what = '; '.join(CAP_DETAILS) or 'the step did not say which file'
+    by = (f'measured by the {tier} check\'s {", ".join(CAP_WARNED)} step'
+          if tier else f'measured by the {", ".join(CAP_WARNED)} step')
+    head = f'WARNING: over a session-load size cap -- {what} ({by}).'
+    if _ladder_off():
+        print(f'{head} Allowed onto this branch; the full check refuses it, '
+              f'so bring it under first (a Reduction pass). Tell the person.')
+    else:
+        print(f'{head} Allowed onto pre-staging; the Debut into staging '
               f'refuses it, so bring it under first (a Reduction pass). Tell '
               f'the person.')
 
@@ -781,13 +1277,13 @@ def changed_files_check(root, since):
                 f'tests/test_{name}.sh, invoking check_{name}.py by name; '
                 f'run_all.sh runs only test_*.sh, so without it the deep '
                 f'check never runs this check and check_deep_check.py '
-                f'refuses the next Promote')
+                f'refuses the next full check')
         elif f'check_{name}.py' not in (root / test).read_text(
                 encoding='utf-8', errors='replace'):
             problems.append(
                 f'{test}: never names check_{name}.py -- a check\'s test must '
                 f'invoke it by name, or check_deep_check.py refuses the next '
-                f'Promote')
+                f'full check')
         text = path.read_text(encoding='utf-8', errors='replace')
         if not re.search(r'^SOURCE_ROOT\s*=', text, re.M) \
                 or not re.search(r'PRECEDENT_CHECK_ROOT["\']', text):
@@ -798,7 +1294,7 @@ def changed_files_check(root, since):
                 f'.parent` and `ROOT = pathlib.Path(os.environ.get('
                 f'"PRECEDENT_CHECK_ROOT") or SOURCE_ROOT)`, and resolve '
                 f'PRACTICE_FILE against SOURCE_ROOT, or check_deep_check.py '
-                f'refuses the next Promote')
+                f'refuses the next full check')
     if repo_kind(HERE) == 'upstream' and any(
             rel in ('tools/precedent_check.py', 'tools/verify_harness.py')
             or re.match(r'(?:local/)?tools/checks/check_\w+\.py$', rel)
@@ -809,7 +1305,28 @@ def changed_files_check(root, since):
                 f"case('{slug}', <plant>) to check_precedent_check_fires in "
                 f'tools/verify_harness.py, planting the violation it exists '
                 f'to catch; the harness refuses a check without one, and '
-                f'the full check at the next Debut runs it')
+                f'the next full check runs it')
+    # GITHUB AND A SESSION RUN ONE SPLIT (2026-10-07). The workflow runs the
+    # suite with `verify_harness.py --as-ci`, the command a session runs;
+    # until then each kept its own copy of the split, and only the local one
+    # got faster, so GitHub ran on one core for a week
+    # (gotcha-2026-10-07-a-speed-fix-to-a-mirrored-test-reached-only-the-local-copy).
+    # The two checks that hold that together take about a second, so every
+    # push touching either side runs them here, not only the full tier.
+    if (root / 'tools' / 'verify_harness.py').is_file() and any(
+            rel in ('tools/verify_harness.py', 'tools/harness_check_times.json')
+            or rel.startswith('.github/workflows/') for rel in files):
+        sync = ('check_as_ci_shards_match_the_workflow,'
+                'check_as_ci_parts_partition_the_suite')
+        r = subprocess.run([sys.executable, 'tools/verify_harness.py'], cwd=root,
+                           capture_output=True, text=True, timeout=300,
+                           env=dict(os.environ, PRECEDENT_CHECK_ONLY=sync))
+        if r.returncode != 0:
+            said = [l for l in r.stdout.splitlines() if l.startswith('FAIL:')]
+            said = said or (r.stdout + r.stderr).strip().splitlines()[-1:]
+            problems.append('GitHub\'s test and --as-ci no longer run one '
+                            'split: ' + (' | '.join(said) or 'the sync checks '
+                                         'failed')[:600])
     for test in tests:
         try:
             r = subprocess.run(['bash', test], cwd=root, capture_output=True,
@@ -884,6 +1401,10 @@ def _changed_since(root, argv):
     finally:
         sys.path.pop(0)
     targets = precedent_branches.push_targets(root, cmd) or []
+    since_for = getattr(precedent_branches, 'changed_since_for', None)
+    if since_for:
+        # pre-staging, or staging for a person who lands straight on it.
+        return since_for(root, targets)
     if precedent_branches.PRE_STAGING in targets:
         return f'origin/{precedent_branches.PRE_STAGING}'
     return None
@@ -915,9 +1436,15 @@ def _default_destination(root, argv):
         sys.path.pop(0)
     if not landing:
         return argv
-    print(f'precedent_push_check: no destination named, so this checks what '
-          f'a push to {landing}, your landing branch, gets. The full check is the Debut\'s: '
-          f'--tier full --because "<reason>".', flush=True)
+    if _ladder_off():
+        # Off the ladder a person lands on main, which IS the full check
+        # (spec/LADDER_OPT_IN_PLAN.md D3) -- there is no later step to name.
+        print(f'precedent_push_check: no destination named, so this checks what '
+              f'a push to {landing}, your landing branch, gets.', flush=True)
+    else:
+        print(f'precedent_push_check: no destination named, so this checks what '
+              f'a push to {landing}, your landing branch, gets. The full check is the Debut\'s: '
+              f'--tier full --because "<reason>".', flush=True)
     return list(argv) + ['--push-command', f'origin HEAD:{landing}']
 
 
@@ -953,11 +1480,73 @@ def _full_tier_refusal(root, argv):
         sys.path.pop(0)
     if tier != BASIC:
         return None
+    if landing != precedent_branches.PRE_STAGING:
+        # A person who lands straight on staging asks for the full suite
+        # with --run-tests, which records it for the move into main.
+        return (f'--tier full asks for the ~12-minute suite, and your landing '
+                f'branch, {landing}, takes the quick check: run this bare. The '
+                f'full suite is `python3 tools/precedent_branches.py --run-tests`, '
+                f'which records its result for the move into main. If you really '
+                f'mean this, say why: --tier full --because "<reason>".')
     return (f'--tier full asks for the ~12-minute suite, and your landing '
             f'branch, {landing}, takes the quick check: run this bare, which '
             f'is what Booked needs. The full check is the Debut\'s, and it '
             f'runs it for you. If you really mean it, say why: '
             f'--tier full --because "<reason>".')
+
+
+# Highest first: a push writing to several branches is judged by the one
+# that needs the most.
+_RUNG_ORDER = ('main', 'staging', 'precedent-beta-v01', 'pre-staging')
+
+
+def _destination(root, argv):
+    """-> the branch this push goes to, as far as it can be read: --destination
+    (Promote names it), else the highest-rung branch --push-command writes
+    to; None when neither says."""
+    if '--destination' in argv:
+        i = argv.index('--destination')
+        return argv[i + 1] if i + 1 < len(argv) else None
+    if '--push-command' not in argv:
+        return None
+    i = argv.index('--push-command')
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_branches
+        targets = precedent_branches.push_targets(
+            root, argv[i + 1] if i + 1 < len(argv) else '') or []
+    except Exception:                                        # noqa: BLE001
+        return None
+    finally:
+        sys.path.pop(0)
+    for rung in _RUNG_ORDER:
+        if rung in targets:
+            return rung
+    return targets[0] if targets else None
+
+
+def _rung_refusal(root, kind, dest):
+    """-> the refusal text when this push would put `dest` (pre-staging,
+    staging or main) ahead of a shared set it takes from, else None.
+
+    Its own step, outside the recorded passes, on purpose: whether a set
+    has landed a commit on a rung changes with no change to this tree, and
+    putting the destination into the views step's argv (the first version,
+    2026-10-05) changed every pass's signature, so a Promote stopped reusing
+    the full check the same tree had already passed. It is git ancestry
+    only, and takes seconds. A source that cannot be resolved here is
+    skipped, as the views step skips it."""
+    if kind != 'consumer' or not dest:
+        return None
+    tool = HERE / 'precedent_sync_views.py'
+    if not tool.is_file():
+        return None
+    p = subprocess.run([sys.executable, str(tool), '--repo', str(root),
+                        '--rung-only', '--for-branch', dest],
+                       cwd=root, capture_output=True, text=True)
+    if p.returncode == 0:
+        return None
+    return (p.stdout + p.stderr).strip()
 
 
 def _tier_from_args(root, argv):
@@ -1205,8 +1794,9 @@ def run(root, checks, landed=None, reported=None):
             print(f'[{i}/{len(checks)}] {name}: not here -- this repo has no '
                   f'{argv[1]}', flush=True)
             continue
-        slug = _practice_of(script) if script.is_file() and \
-            'checks' in Path(argv[1]).parts else None
+        slug = IDENTITY_SLUGS.get(name) or (
+            _practice_of(script) if script.is_file() and
+            'checks' in Path(argv[1]).parts else None)
         if slug and slug in not_binding():
             print(f'[{i}/{len(checks)}] {name}: EXEMPT -- this repo declares '
                   f'{slug} not binding in precedent.json: '
@@ -1250,10 +1840,24 @@ def run(root, checks, landed=None, reported=None):
         if p.returncode == 0 and any(m in p.stdout + p.stderr
                                      for m in SIZE_CAP_WARNINGS):
             CAP_WARNED.append(name)
+            CAP_DETAILS.extend(d for d in _cap_details(p.stdout + p.stderr)
+                               if d not in CAP_DETAILS)
         if p.returncode == 0:
             marker, note = STAND_DOWNS.get(name, (None, None))
             if marker and marker in p.stdout + p.stderr:
                 print(f'      {note} ({took:.0f}s)', flush=True)
+                continue
+            # An identity check passes with a WARNING for a bot-authored
+            # commit -- an emergency fallback, never refused (Morgan,
+            # 2026-10-06) -- and the warning is shown, not swallowed.
+            warned = [ln for ln in p.stdout.splitlines()
+                      if ln.startswith('WARNING:')] \
+                if name in {c[0] for c in IDENTITY_CHECKS} else []
+            if warned:
+                print(f'      passed in {took:.0f}s, WITH A WARNING -- tell '
+                      f'the person, and record an open item:', flush=True)
+                for line in warned:
+                    print(f'      | {line}')
                 continue
             print(f'      passed in {took:.0f}s', flush=True)
             continue
@@ -1301,6 +1905,64 @@ def run(root, checks, landed=None, reported=None):
 # precedent_session_check.py's "the packages the gates import" row.
 GATE_PACKAGES = ('cmarkgfm', 'markdown')
 
+# The one gate package that is not every repository's: `markdown` is
+# tools/doc_html.py's alone (tabular-shared-renderer's renderer), and a
+# practice set gets no doc_html.py at all, while a consumer receives one it
+# may never run. Until 2026-10-08 both checks asked for it everywhere, so a
+# repository with no use for the renderer was told a package was missing,
+# and a push check without network to install it stopped on it.
+DOC_HTML_PACKAGE = 'markdown'
+
+
+def doc_html_in_use(root):
+    """True where tools/doc_html.py is present and something here runs it.
+
+    In BestPractice, or wherever doc_html.py is the repository's own (no
+    tools/ENGINE_MANIFEST.json lists it), presence is use. Where the engine
+    vendored it, it is in use when a file the repository wrote itself -- a
+    tracked .py or .sh outside the vendored engine and the mirrored
+    catalogue -- names it, which is how a host shim loads it. Unreadable
+    state answers True: asking for a package that is not needed costs a
+    line, and missing one that is costs a check that degrades unseen."""
+    root = Path(root)
+    if not (root / 'tools' / 'doc_html.py').is_file():
+        return False
+    try:
+        m = json.loads((root / 'tools' / 'ENGINE_MANIFEST.json')
+                       .read_text(encoding='utf-8'))
+    except (OSError, ValueError):       # no manifest: doc_html.py is ours
+        return True
+    names = m.get('files') if isinstance(m, dict) else None
+    vendored = {f'tools/{n}' for n in (names or []) if isinstance(n, str)}
+    if 'tools/doc_html.py' not in vendored:
+        return True
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_resolve
+        mirrored = tuple(precedent_resolve.mirrored_prefixes(root))
+    except Exception:                                        # noqa: BLE001
+        mirrored = ('process/upstream/',)
+    r = subprocess.run(['git', '-C', str(root), 'ls-files', '-z', '--',
+                        '*.py', '*.sh'], capture_output=True, text=True)
+    if r.returncode != 0:
+        return True
+    for rel in filter(None, r.stdout.split('\0')):
+        if rel in vendored or rel.startswith(mirrored):
+            continue
+        try:
+            if 'doc_html' in (root / rel).read_text(encoding='utf-8',
+                                                    errors='ignore'):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def gate_packages(root):
+    """GATE_PACKAGES this repository's gates actually import."""
+    return tuple(p for p in GATE_PACKAGES
+                 if p != DOC_HTML_PACKAGE or doc_html_in_use(root))
+
 
 def _importable(mod):
     return subprocess.run([sys.executable, '-c', f'import {mod}'],
@@ -1332,6 +1994,17 @@ def ensure_gate_packages(packages=GATE_PACKAGES, importable=_importable,
     return True, f'installed {", ".join(missing)}, which the gates import'
 
 
+def _test_session_refusal():
+    """The No ladders test session pushes nothing (precedent_ladder.py).
+    A repository without the helper has no such session: None."""
+    try:
+        sys.path.insert(0, str(HERE))
+        import precedent_ladder
+    except Exception:                                        # noqa: BLE001
+        return None
+    return precedent_ladder.test_session_refusal()
+
+
 def main(argv):
     root_s = git(HERE, 'rev-parse', '--show-toplevel')
     if not root_s:
@@ -1339,6 +2012,11 @@ def main(argv):
               'check.', file=sys.stderr)
         return 2
     root = Path(root_s)
+    if '--gate' in argv:
+        refusal = _test_session_refusal()
+        if refusal:
+            print(f'precedent_push_check: {refusal}')
+            return 1
     # A run from inside a different repo reads THIS repo, silently -- say so
     # (precedent_which_repo.py; gotcha-2026-09-29). Warn only; never fatal.
     try:
@@ -1361,6 +2039,23 @@ def main(argv):
     if refused:
         print(f'precedent_push_check: REFUSED -- {refused}', file=sys.stderr)
         return 1
+    refused = _branch_name_refusal(root, argv)
+    if refused:
+        print(f'precedent_push_check: REFUSED -- {refused}', file=sys.stderr)
+        return 1
+    if '--tier' in argv:
+        i = argv.index('--tier')
+        value = argv[i + 1] if i + 1 < len(argv) else ''
+        if value not in (BASIC, FULL):
+            # Refused, not run full: a misspelt tier used to run the full
+            # suite silently and so skipped the --because refusal --tier
+            # full has (found by a consumer rehearsal, 2026-10-03, which ran
+            # "--tier main" believing it named a tier).
+            print(f'precedent_push_check: REFUSED -- --tier {value!r} is not '
+                  f'a tier. The tiers are {BASIC} and {FULL}; a branch name '
+                  f'such as main is not one. Run this bare to get the tier '
+                  f'your landing branch takes.', file=sys.stderr)
+            return 1
     tier, why = _tier_from_args(root, argv)
     kind, checks = plan(root, tier=tier)
     if '--changed-files-check' in argv:
@@ -1388,7 +2083,7 @@ def main(argv):
 
     if '--list' in argv:
         print(f'{root.name} is {"an" if kind[0] in "aeiou" else "a"} {kind} '
-              f'repository. Before a push to staging or main (full); a push '
+              f'repository. Before a push to {"main" if _ladder_off() else "staging or main"} (full); a push '
               f'to any other branch runs only the checks marked basic:')
         for name, a, replaces in plan(root, tier=FULL)[1]:
             mark = 'basic' if name in BASIC_CHECKS else 'full '
@@ -1396,6 +2091,10 @@ def main(argv):
             print(f'  {"":16}         replaces {replaces}')
         return 0
 
+    refused = _rung_refusal(root, kind, _destination(root, argv))
+    if refused:
+        print(f'precedent_push_check: REFUSED -- {refused}', file=sys.stderr)
+        return 1
     also = [plan(root, tier=FULL)[1]] if tier == BASIC else []
     landed, reported = None, []
     if tier == BASIC and working_branch_push(root, argv):
@@ -1409,14 +2108,17 @@ def main(argv):
     where = ''
     if '--gate' in argv and not rec:
         sigs = [signature(checks), *(signature(c) for c in also)]
-        rec = shared_pass(root, clean_tree(root), sigs)
+        known = known_ledgers(root)
+        rec = shared_pass(root, clean_tree(root, known), sigs)
         if rec:
             where = ', in another checkout'
             path = record_path(root)
             if path:
-                path.write_text(json.dumps(
-                    {k: v for k, v in rec.items() if k != 'shared'},
-                    indent=2) + '\n', encoding='utf-8')
+                kept = {k: v for k, v in rec.items() if k != 'shared'}
+                if known:
+                    kept['ledgers'] = known
+                path.write_text(json.dumps(kept, indent=2) + '\n',
+                                encoding='utf-8')
     if rec:
         when = f' at {rec["at"]}' if rec.get('at') else ''
         history = [c for c in checks if c[0] in HISTORY_CHECKS]
@@ -1426,6 +2128,7 @@ def main(argv):
               + (' but the checks that judge commits rather than files.'
                  if history else '.'), flush=True)
         if not history:
+            clear_failed_tree(root, rec.get('tree'))
             return 0
         failed, _missing, total, findings = run(root, history, landed)
         if failed:
@@ -1436,7 +2139,9 @@ def main(argv):
                   f'({total:.0f}s). The files passed before, but a commit '
                   f'here since then did not. Fix the commit and run this '
                   f'again; do not push past it.')
+            note_failed_tree(root, rec.get('tree'), failed)
             return 1
+        clear_failed_tree(root, rec.get('tree'))
         return 0
 
     if git(root, 'rev-parse', '--is-shallow-repository') == 'true':
@@ -1446,12 +2151,19 @@ def main(argv):
         subprocess.run(['git', '-C', str(root), 'fetch', '-q', '--unshallow'],
                        capture_output=True, text=True)
         if git(root, 'rev-parse', '--is-shallow-repository') == 'true':
-            print('precedent_push_check: FAILED -- the clone is still shallow '
-                  '(the fetch did not complete), so the history checks '
-                  'cannot run. Run `git fetch --unshallow` and try again.')
+            # A second --unshallow cannot help when the clone stays shallow
+            # only because .git/shallow still names commits of branches
+            # deleted upstream; the gotcha carries the safe recovery.
+            print('precedent_push_check: FAILED -- the clone is still shallow, '
+                  'so the history checks cannot run. If `git fetch '
+                  '--unshallow` has not finished, run it again; if it '
+                  'completes and the clone still says shallow, .git/shallow '
+                  'names commits of deleted branches -- follow gotchas/'
+                  'gotcha-2026-09-28-stale-shallow-entries-for-deleted-'
+                  'branches-survive-unshallow.md.')
             return 1
 
-    ok_pkgs, note = ensure_gate_packages()
+    ok_pkgs, note = ensure_gate_packages(gate_packages(root))
     if note:
         print(f'precedent_push_check: {"" if ok_pkgs else "FAILED -- "}{note}.',
               flush=True)
@@ -1472,9 +2184,35 @@ def main(argv):
     # the isolated harness had copied the commit before it, so a new check
     # with no planted case (whats-new, 2026-10-01) went green in the full
     # check and was refused minutes later by the merge gate's quick one.
-    tree_before = clean_tree(root)
-    failed, missing, total, findings = run(root, checks, landed, reported)
-    tree = clean_tree(root)
+    #
+    # Fact ledgers the checks write (practice: gate-ledger) are the one kind
+    # of edit a run makes to the tree it judges. fact_ledger.py reports each
+    # ledger it saves into the file FACT_LEDGER_WRITTEN names; those paths,
+    # and the ones an earlier run here saw, are left out of "uncommitted".
+    # Anything else dirty, before or after, still refuses the record.
+    dirty_before = dirty_paths(root)
+    head_before = git(root, 'rev-parse', 'HEAD^{tree}')
+    fd, listing = tempfile.mkstemp(prefix='precedent-ledgers-')
+    os.close(fd)
+    prior_env = os.environ.get(LEDGER_WRITES_ENV)
+    os.environ[LEDGER_WRITES_ENV] = listing
+    try:
+        failed, missing, total, findings = run(root, checks, landed, reported)
+    finally:
+        if prior_env is None:
+            os.environ.pop(LEDGER_WRITES_ENV, None)
+        else:
+            os.environ[LEDGER_WRITES_ENV] = prior_env
+        written = ledgers_written(root, listing)
+        try:
+            os.unlink(listing)
+        except OSError:
+            pass
+    ledgers = sorted(set(known_ledgers(root)) | written)
+    tree_before = head_before if (dirty_before is not None and
+                                  dirty_before <= set(ledgers)) else None
+    tree = clean_tree(root, ledgers)
+    refreshed = sorted((dirty_paths(root) or set()) & set(ledgers))
     moved = tree is not None and tree != tree_before
     if moved:
         tree = None
@@ -1487,11 +2225,15 @@ def main(argv):
         print(f'\nprecedent_push_check: FAILED -- {", ".join(failed)} '
               f'({total:.0f}s). Fix the finding and run this again; do not '
               f'push past it.')
+        # Only a tree the run judged exactly: over uncommitted edits it
+        # judged something no push sends.
+        note_failed_tree(root, tree or (tree_before if not moved else None), failed)
         return 1
     if missing:
         print(f'\nprecedent_push_check: passed, but {", ".join(missing)} '
               f'could not run here -- this repo does not carry the tool. '
               f'Refresh the vendored engine to get it.')
+    clear_failed_tree(root, tree)
     path = record_path(root)
     if reported:
         # Not recorded: the pass stood only because this push goes to a
@@ -1500,12 +2242,20 @@ def main(argv):
               f'to a working branch; {", ".join(reported)} found only what is '
               f'already on origin\'s tier branches (above). NOT recorded as a '
               f'pass, since a push to a tier branch judges those findings.')
-        _cap_warning_last()
+        _cap_warning_last(tier)
         return 0
     if tree and path:
         rec = {'tree': tree, 'checks': signature(checks), 'kind': kind,
                'tier': tier, 'at': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
-        path.write_text(json.dumps(rec, indent=2) + '\n', encoding='utf-8')
+        local = dict(rec, ledgers=ledgers) if ledgers else rec
+        path.write_text(json.dumps(local, indent=2) + '\n', encoding='utf-8')
+        if refreshed:
+            print(f'\nprecedent_push_check: the run refreshed '
+                  f'{len(refreshed)} fact ledger(s), left in place and '
+                  f'uncommitted: {", ".join(refreshed)}. They only cache '
+                  f'facts that verify themselves, so the pass below holds for '
+                  f'the commit; commit them when convenient so the next run '
+                  f'starts warm.')
         print(f'\nprecedent_push_check: all passed in {total:.0f}s; recorded '
               f'for tree {tree[:12]} ({tier}), so a push of this commit will '
               f'not re-run them.')
@@ -1521,7 +2271,81 @@ def main(argv):
               f'working tree with uncommitted changes -- NOT recorded, since '
               f'the push sends the commit, not these edits. Commit, then run '
               f'it again or let the push gate do it.')
-    _cap_warning_last()
+    _cap_warning_last(tier)
+    return 0
+
+
+# THE PUSH GATE'S REFUSAL IS WRITTEN HERE, NOT IN THE HOOK (2026-10-07), for
+# the reason doc_lint.py's hook_reason gives: a reworded hook is a question
+# for a person in every repository at its next Update Vendors, and a
+# reworded tool is not. .claude/hooks/push-check-gate.sh pipes the run's
+# output back in with --hook-reason and passes on what comes out.
+# A hook refuses the WHOLE Bash command before any of it starts, so in
+# `git add ... && git commit ... && git push` the commit never happened
+# either. Twice (2026-10-03 and 2026-10-05) a session in a consumer
+# repository read a bare "REFUSED this push" as "committed, push refused"
+# and told its person the work was committed when it was not.
+NOTHING_RAN = ('Nothing in the refused command ran -- not the push, and not any step\n'
+               'before it in the same command (a commit or an add included). Make those\n'
+               'steps in a call of their own, check `git status`, then push separately.')
+
+
+def hook_reason(outcome, out, top='', tool='tools/precedent_push_check.py'):
+    """-> the whole text the push gate refuses with: `outcome` the run's exit
+    status ('1' a check failed, '124' the hook's deadline killed it), `out`
+    what it printed, `top` the repository pushed. 'identity' is the
+    commit-identity push gate's refusal, `out` its findings. None for any
+    other outcome, which the gate does not refuse on."""
+    if outcome == 'identity':
+        return identity_hook_reason(out)
+    if outcome == '1':
+        why = ('A check failed. Fix it before pushing -- this list is what GitHub\n'
+               'CI used to run on this push, and CI is not going to run it now.')
+    elif outcome == '124':
+        why = ('The checks did not finish within 14 minutes, so nothing was\n'
+               'verified. Run them directly with a long Bash timeout, then push again --\n'
+               'a pass is recorded against the tree, so the push will not re-run them:\n\n'
+               f'    cd {top or "."} && python3 {tool}')
+    else:
+        return None
+    tail = '\n'.join(out.rstrip().splitlines()[-120:])
+    return (f'The push check REFUSED this push of {top or "this repository"}.\n\n'
+            f'{NOTHING_RAN}\n\n{why}\n\n{tail}\n\n'
+            'Nothing lets a push past this, and nothing should: fix what it found and\n'
+            'push again. If the check itself is wrong, fix the check where it lives.')
+
+
+def identity_hook_reason(findings):
+    """-> the whole text commit-identity-push-gate.sh refuses with,
+    `findings` being what tools/check_commit_author.py and
+    tools/check_commit_dates.py reported. Written here, not in the hook,
+    for the reason hook_reason() gives (moved 2026-10-07)."""
+    return ('The commit-identity push gate REFUSED this push.\n\n'
+            f'{NOTHING_RAN}\n\n'
+            'These two checks are scope `tree`: they audit every commit reachable from\n'
+            'HEAD, not just the ones this push adds. They ran in GitHub Actions until\n'
+            '2026-09-21, when a practice source stopped running CI at all; this hook is\n'
+            'what replaced them, which makes it the only thing standing between a\n'
+            'mis-authored commit and a published branch.\n'
+            f'{findings.rstrip()}\n\n'
+            'Fix it before the commit is published. On an UNPUSHED commit this is one\n'
+            '`git commit --amend --reset-author` (re-run under\n'
+            'TZ=America/Argentina/Buenos_Aires for the offset); once it is on a shared\n'
+            'branch, no-rewrite-for-warnings applies and the only honest route left is a\n'
+            'grandfathered_commit_shas entry in identity.json with a reason. That\n'
+            'asymmetry is the whole reason this gate sits before the push rather than\n'
+            'after it.\n\n'
+            'Nothing lets a push past this: fix the commit as above, then push again.')
+
+
+def _hook_reason_main(argv):
+    """`--hook-reason OUTCOME [--top DIR]`, the run's output on stdin: print
+    the refusal, exit 0; exit 2 for an outcome this tool does not word."""
+    val = lambda f: argv[argv.index(f) + 1] if f in argv and argv.index(f) + 1 < len(argv) else ''
+    text = hook_reason(val('--hook-reason'), sys.stdin.read(), top=val('--top'))
+    if text is None:
+        return 2
+    print(text)
     return 0
 
 
@@ -1529,7 +2353,8 @@ def main(argv):
 # than ignored: a PR template naming a flag this file never had
 # (--changed-files-only) ran the full ~14-minute suite twice, silently
 # (2026-09-30).
-VALUE_OPTIONS = ('--tier', '--changed-since', '--push-command', '--because')
+VALUE_OPTIONS = ('--tier', '--changed-since', '--push-command', '--because',
+                 '--destination')
 OPTIONAL_VALUE_OPTIONS = ('--changed-files-check',)
 FLAG_OPTIONS = ('--gate', '--list', '--help', '-h')
 
@@ -1555,6 +2380,8 @@ if __name__ == '__main__':
     if any(a in ('--help', '-h') for a in sys.argv[1:]):
         print((__doc__ or '').strip())
         sys.exit(0)
+    if '--hook-reason' in sys.argv[1:]:
+        sys.exit(_hook_reason_main(sys.argv[1:]))
     unknown = unknown_arguments(sys.argv[1:])
     if unknown:
         print(f'precedent_push_check: unknown argument(s): {" ".join(unknown)}. '
