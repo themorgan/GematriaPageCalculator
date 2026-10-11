@@ -37,7 +37,7 @@
     "chose them. The individual set is never declared here: it resolves",
     "through the user-level config the session hook writes."
   ],
-  "landing_branch": "pre-staging",
+  "landing_branch": "staging",
   "declined_adapters": [
     {
       "path": ".claude/hooks/precedent-universal-catalogue.sh",
